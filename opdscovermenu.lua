@@ -64,12 +64,13 @@ function OPDSCoverMenu:updateItems(select_number)
         -- Use OPDSListMenu for items with covers
         logger.warn("OPDS+: Using OPDSListMenu (covers present)")
 
-        -- Set up cover properties
-        self.cover_width = OPDSListMenu.cover_width
-        self.cover_height = OPDSListMenu.cover_height
+        -- Set up cover properties and methods
+        self.setCoverDimensions = OPDSListMenu.setCoverDimensions
+        self:setCoverDimensions()  -- Calculate and set cover dimensions
+
         self._items_to_update = {}
 
-        -- Make sure we have the _loadVisibleCovers and _recalculateDimen methods
+        -- Make sure we have the necessary methods
         self._loadVisibleCovers = OPDSListMenu._loadVisibleCovers
         self._recalculateDimen = OPDSListMenu._recalculateDimen
 
@@ -87,7 +88,8 @@ function OPDSCoverMenu:updateItems(select_number)
         self.cover_height = nil
         self._items_to_update = nil
         self._loadVisibleCovers = nil
-        self._recalculateDimen = nil  -- Important: remove the custom recalculate method
+        self._recalculateDimen = nil
+        self.setCoverDimensions = nil
 
         -- Remember we're in standard mode
         self._last_mode_had_covers = false

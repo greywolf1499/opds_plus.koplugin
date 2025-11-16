@@ -26,6 +26,48 @@ logger.warn("========================================")
 logger.warn("OPDS+ opdslistmenu.lua IS LOADING")
 logger.warn("========================================")
 
+-- ============================================
+-- CONFIGURATION - Easy to modify
+-- ============================================
+local COVER_CONFIG = {
+    -- Cover height as a fraction of screen height
+    -- Values: 0.05 to 0.25 (5% to 25% of screen height)
+    -- Smaller = more items per page, Larger = bigger covers
+    cover_height_ratio = 0.10,  -- 10% of screen height (default)
+
+    -- Minimum and maximum cover dimensions (in pixels)
+    min_cover_height = 48,
+    max_cover_height = 200,
+
+    -- Standard book aspect ratio (portrait orientation)
+    -- Most books are roughly 2:3 (width:height)
+    book_aspect_ratio = 2/3,  -- 0.666... (width is 66% of height)
+}
+
+-- Calculate cover dimensions based on screen and settings
+local function calculateCoverDimensions()
+    local screen_height = Screen:getHeight()
+
+    -- Calculate desired cover height
+    local cover_height = math.floor(screen_height * COVER_CONFIG.cover_height_ratio)
+
+    -- Clamp to min/max values
+    cover_height = math.max(COVER_CONFIG.min_cover_height, cover_height)
+    cover_height = math.min(COVER_CONFIG.max_cover_height, cover_height)
+
+    -- Calculate width maintaining aspect ratio
+    local cover_width = math.floor(cover_height * COVER_CONFIG.book_aspect_ratio)
+
+    logger.warn("OPDS+: Cover dimensions calculated:")
+    logger.warn("OPDS+:   Screen height:", screen_height)
+    logger.warn("OPDS+:   Cover height:", cover_height, "(" .. (COVER_CONFIG.cover_height_ratio * 100) .. "% of screen)")
+    logger.warn("OPDS+:   Cover width:", cover_width, "(aspect ratio " .. COVER_CONFIG.book_aspect_ratio .. ")")
+
+    return cover_width, cover_height
+end
+
+-- ============================================
+
 -- Get the plugin directory path
 local function getPluginPath()
     local info = debug.getinfo(1, "S")
@@ -103,8 +145,8 @@ end
 -- This is a simplified menu that displays OPDS catalog items with cover images
 local OPDSListMenuItem = InputContainer:extend{
     entry = nil,
-    cover_width = Screen:scaleBySize(48),
-    cover_height = Screen:scaleBySize(64),
+    cover_width = nil,
+    cover_height = nil,
     width = nil,
     height = nil,
     show_parent = nil,
@@ -170,8 +212,8 @@ function OPDSListMenuItem:init()
         text_height = math.max(text_height, 50)
     end
 
-    -- Add "[OPDS+]" prefix to make it obvious this is our custom widget
-    local display_text = "[OPDS+] " .. (self.entry.text or self.entry.title or _("Unknown"))
+    -- Remove the debug "[OPDS+]" prefix now that it's working
+    local display_text = self.entry.text or self.entry.title or _("Unknown")
 
     local title_widget = TextBoxWidget:new{
         text = display_text,
@@ -207,23 +249,25 @@ function OPDSListMenuItem:init()
         })
     end
 
-    -- Add debug info showing cover status
-    local debug_text = "Cover: "
-    if self.entry.cover_bb then
-        debug_text = debug_text .. "✓ LOADED"
-    elseif self.entry.cover_url then
-        debug_text = debug_text .. "Loading..."
-    else
-        debug_text = debug_text .. "NONE"
-    end
+    -- Optional: Add debug info showing cover status (can be removed later)
+    if false then  -- Set to true to show debug info
+        local debug_text = "Cover: "
+        if self.entry.cover_bb then
+            debug_text = debug_text .. "✓ LOADED"
+        elseif self.entry.cover_url then
+            debug_text = debug_text .. "Loading..."
+        else
+            debug_text = debug_text .. "NONE"
+        end
 
-    table.insert(text_group, VerticalSpan:new{ width = padding })
-    table.insert(text_group, TextWidget:new{
-        text = debug_text,
-        face = Font:getFace("smallinfofont", 11),
-        fgcolor = Blitbuffer.COLOR_DARK_GRAY,
-        max_width = text_width,
-    })
+        table.insert(text_group, VerticalSpan:new{ width = padding })
+        table.insert(text_group, TextWidget:new{
+            text = debug_text,
+            face = Font:getFace("smallinfofont", 11),
+            fgcolor = Blitbuffer.COLOR_DARK_GRAY,
+            max_width = text_width,
+        })
+    end
 
     -- Assemble the complete item
     self[1] = FrameContainer:new{
@@ -285,58 +329,72 @@ end
 
 -- Main OPDS List Menu that extends the standard Menu
 local OPDSListMenu = Menu:extend{
-    cover_width = Screen:scaleBySize(48),
-    cover_height = Screen:scaleBySize(64),
+    cover_width = nil,   -- Will be calculated
+    cover_height = nil,  -- Will be calculated
     _items_to_update = {},
 }
 
+-- Calculate and set cover dimensions
+function OPDSListMenu:setCoverDimensions()
+    self.cover_width, self.cover_height = calculateCoverDimensions()
+    logger.warn("OPDS+: Set cover dimensions to", self.cover_width, "x", self.cover_height)
+end
+
+-- Override _recalculateDimen to properly calculate items per page with cover heights
 function OPDSListMenu:_recalculateDimen()
-    logger.warn("========================================")
     logger.warn("OPDS+: OPDSListMenu:_recalculateDimen() called")
-    logger.warn("========================================")
+
+    -- Make sure we have cover dimensions
+    if not self.cover_width or not self.cover_height then
+        self:setCoverDimensions()
+    end
 
     -- Calculate available height for menu items
-    local available_height = self.dimen.h
+    local available_height = self.inner_dimen.h
 
     -- Subtract height of other UI elements
-    if self.title_bar then
+    if not self.is_borderless then
+        available_height = available_height - 2  -- borders
+    end
+    if not self.no_title and self.title_bar then
         available_height = available_height - self.title_bar.dimen.h
     end
     if self.page_info then
         available_height = available_height - self.page_info:getSize().h
     end
 
-    -- Account for borders if not borderless
-    if not self.is_borderless then
-        available_height = available_height - 4  -- top and bottom borders
-    end
-
-    -- Each item needs: cover_height + margins + border
+    -- Each item height = cover height + margins (top and bottom)
     local margin = Size.margin.default or 4
-    local item_height = self.cover_height + (margin * 2) + (Size.border.thin or 1)
+    self.item_height = self.cover_height + (margin * 2)
 
-    -- Calculate how many items fit per page
-    self.perpage = math.floor(available_height / item_height)
+    -- Calculate how many items fit in available height
+    self.perpage = math.floor(available_height / self.item_height)
 
     -- Make sure we have at least 1 item per page
     if self.perpage < 1 then
         self.perpage = 1
     end
 
-    logger.warn("OPDS+: available_height =", available_height)
-    logger.warn("OPDS+: item_height =", item_height)
-    logger.warn("OPDS+: perpage =", self.perpage)
+    logger.warn("OPDS+: Available height:", available_height)
+    logger.warn("OPDS+: Item height:", self.item_height)
+    logger.warn("OPDS+: Items per page:", self.perpage)
 
-    -- Recalculate page count
+    -- Calculate total pages
     self.page_num = math.ceil(#self.item_table / self.perpage)
 
-    -- Ensure current page is valid
+    -- Fix current page if out of range
     if self.page_num > 0 and self.page > self.page_num then
         self.page = self.page_num
     end
 
-    logger.warn("OPDS+: page_num =", self.page_num)
-    logger.warn("OPDS+: current page =", self.page)
+    -- Set item width and dimensions
+    self.item_width = self.inner_dimen.w
+    self.item_dimen = Geom:new{
+        x = 0,
+        y = 0,
+        w = self.item_width,
+        h = self.item_height
+    }
 end
 
 function OPDSListMenu:updateItems(select_number)
@@ -373,7 +431,7 @@ function OPDSListMenu:updateItems(select_number)
 
         if entry then
             local item_width = self.content_width or Screen:getWidth()
-            local item_height = self.cover_height + (Size.margin.default or 4) * 2
+            local item_height = self.item_height
 
             local item = OPDSListMenuItem:new{
                 entry = entry,
@@ -486,7 +544,7 @@ function OPDSListMenu:_loadVisibleCovers()
 
             logger.warn("OPDS+: Rendering cover for:", entry.text:sub(1, 40))
 
-            -- Render the cover image
+            -- Render the cover image maintaining aspect ratio
             local ok, cover_bb = pcall(function()
                 return RenderImage:renderImageData(
                     content,
@@ -508,7 +566,7 @@ function OPDSListMenu:_loadVisibleCovers()
                 logger.warn("OPDS+: ✗ Failed to render cover:", tostring(cover_bb))
             end
         end
-    end, username, password)  -- Pass credentials here!
+    end, username, password)
 
     logger.warn("OPDS+: ImageLoader started, batch:", batch ~= nil, "halt:", halt ~= nil)
 
