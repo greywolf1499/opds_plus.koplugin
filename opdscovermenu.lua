@@ -49,6 +49,7 @@ function OPDSCoverMenu:updateItems(select_number)
         self.onCloseWidget = OPDSListMenu.onCloseWidget
         self._loadVisibleCovers = OPDSListMenu._loadVisibleCovers
         self._updateItemsBuildUI = OPDSListMenu._updateItemsBuildUI
+        self._recalculateDimen = OPDSListMenu._recalculateDimen
 
         -- Set OPDSListMenu properties
         self.cover_width = OPDSListMenu.cover_width

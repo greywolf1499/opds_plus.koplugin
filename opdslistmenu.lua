@@ -290,6 +290,55 @@ local OPDSListMenu = Menu:extend{
     _items_to_update = {},
 }
 
+function OPDSListMenu:_recalculateDimen()
+    logger.warn("========================================")
+    logger.warn("OPDS+: OPDSListMenu:_recalculateDimen() called")
+    logger.warn("========================================")
+
+    -- Calculate available height for menu items
+    local available_height = self.dimen.h
+
+    -- Subtract height of other UI elements
+    if self.title_bar then
+        available_height = available_height - self.title_bar.dimen.h
+    end
+    if self.page_info then
+        available_height = available_height - self.page_info:getSize().h
+    end
+
+    -- Account for borders if not borderless
+    if not self.is_borderless then
+        available_height = available_height - 4  -- top and bottom borders
+    end
+
+    -- Each item needs: cover_height + margins + border
+    local margin = Size.margin.default or 4
+    local item_height = self.cover_height + (margin * 2) + (Size.border.thin or 1)
+
+    -- Calculate how many items fit per page
+    self.perpage = math.floor(available_height / item_height)
+
+    -- Make sure we have at least 1 item per page
+    if self.perpage < 1 then
+        self.perpage = 1
+    end
+
+    logger.warn("OPDS+: available_height =", available_height)
+    logger.warn("OPDS+: item_height =", item_height)
+    logger.warn("OPDS+: perpage =", self.perpage)
+
+    -- Recalculate page count
+    self.page_num = math.ceil(#self.item_table / self.perpage)
+
+    -- Ensure current page is valid
+    if self.page_num > 0 and self.page > self.page_num then
+        self.page = self.page_num
+    end
+
+    logger.warn("OPDS+: page_num =", self.page_num)
+    logger.warn("OPDS+: current page =", self.page)
+end
+
 function OPDSListMenu:updateItems(select_number)
     logger.warn("========================================")
     logger.warn("OPDS+: OPDSListMenu:updateItems() CALLED")
