@@ -1,5 +1,6 @@
 local Menu = require("ui/widget/menu")
 local OPDSListMenu = require("opdslistmenu")
+local UIManager = require("ui/uimanager")
 local logger = require("logger")
 
 logger.warn("========================================")
@@ -8,12 +9,11 @@ logger.warn("========================================")
 
 local OPDSCoverMenu = Menu:extend{
     title_shrink_font_to_fit = true,
-    _opds_cover_mode = false,  -- Track if we're in cover mode
+    _last_mode_had_covers = nil,  -- Track what mode we were in last time
 }
 
 function OPDSCoverMenu:init()
     logger.warn("OPDS+: OPDSCoverMenu:init() called")
-    -- Just call Menu init, we'll check for covers in updateItems
     Menu.init(self)
 end
 
@@ -21,6 +21,20 @@ function OPDSCoverMenu:updateItems(select_number)
     logger.warn("========================================")
     logger.warn("OPDS+: OPDSCoverMenu:updateItems() called")
     logger.warn("OPDS+: item_table exists:", self.item_table ~= nil)
+
+    -- Cancel any scheduled cover loading from previous page
+    if self._scheduled_cover_load then
+        logger.warn("OPDS+: Cancelling scheduled cover load from previous page")
+        UIManager:unschedule(self._scheduled_cover_load)
+        self._scheduled_cover_load = nil
+    end
+
+    -- Cancel any ongoing image loading
+    if self.halt_image_loading then
+        logger.warn("OPDS+: Halting ongoing image loading")
+        self.halt_image_loading()
+        self.halt_image_loading = nil
+    end
 
     -- Check if any items have cover URLs
     local has_covers = false
@@ -31,50 +45,85 @@ function OPDSCoverMenu:updateItems(select_number)
             if item.cover_url then
                 has_covers = true
                 cover_count = cover_count + 1
-                logger.warn("OPDS+: Item", i, "has cover_url:", item.cover_url:sub(1, 60))
             end
         end
     end
 
     logger.warn("OPDS+: Found", cover_count, "items with covers")
     logger.warn("OPDS+: has_covers =", has_covers)
+    logger.warn("OPDS+: _last_mode_had_covers =", self._last_mode_had_covers)
 
-    if has_covers and not self._opds_cover_mode then
-        -- Switch to cover mode
-        logger.warn("OPDS+: SWITCHING TO OPDSListMenu mode!")
-        self._opds_cover_mode = true
+    -- Check if we're switching modes
+    local mode_changed = (self._last_mode_had_covers ~= nil) and (self._last_mode_had_covers ~= has_covers)
+    if mode_changed then
+        logger.warn("OPDS+: !!! MODE CHANGED - was", self._last_mode_had_covers and "covers" or "no covers",
+                    "now", has_covers and "covers" or "no covers")
+    end
 
-        -- Replace methods with OPDSListMenu versions
-        self.updateItems = OPDSListMenu.updateItems
-        self.onCloseWidget = OPDSListMenu.onCloseWidget
-        self._loadVisibleCovers = OPDSListMenu._loadVisibleCovers
-        self._updateItemsBuildUI = OPDSListMenu._updateItemsBuildUI
-        self._recalculateDimen = OPDSListMenu._recalculateDimen
+    if has_covers then
+        -- Use OPDSListMenu for items with covers
+        logger.warn("OPDS+: Using OPDSListMenu (covers present)")
 
-        -- Set OPDSListMenu properties
+        -- Set up cover properties
         self.cover_width = OPDSListMenu.cover_width
         self.cover_height = OPDSListMenu.cover_height
         self._items_to_update = {}
 
-        -- Call OPDSListMenu updateItems
-        return OPDSListMenu.updateItems(self, select_number)
+        -- Make sure we have the _loadVisibleCovers and _recalculateDimen methods
+        self._loadVisibleCovers = OPDSListMenu._loadVisibleCovers
+        self._recalculateDimen = OPDSListMenu._recalculateDimen
 
-    elseif has_covers and self._opds_cover_mode then
-        -- Already in cover mode, use OPDSListMenu
-        logger.warn("OPDS+: Using OPDSListMenu (already in cover mode)")
-        return OPDSListMenu.updateItems(self, select_number)
+        -- Remember we're in cover mode
+        self._last_mode_had_covers = true
 
+        -- Call OPDSListMenu's updateItems directly
+        return OPDSListMenu.updateItems(self, select_number)
     else
-        -- No covers, use standard Menu
+        -- Use standard Menu for items without covers
         logger.warn("OPDS+: Using standard Menu (no covers)")
-        self._opds_cover_mode = false
+
+        -- Clean up any cover-related properties and methods
+        self.cover_width = nil
+        self.cover_height = nil
+        self._items_to_update = nil
+        self._loadVisibleCovers = nil
+        self._recalculateDimen = nil  -- Important: remove the custom recalculate method
+
+        -- Remember we're in standard mode
+        self._last_mode_had_covers = false
+
+        -- Call standard Menu's updateItems directly
         return Menu.updateItems(self, select_number)
     end
 end
 
 function OPDSCoverMenu:onCloseWidget()
     logger.warn("OPDS+: OPDSCoverMenu:onCloseWidget()")
-    if self._opds_cover_mode then
+
+    -- Cancel any scheduled cover loading
+    if self._scheduled_cover_load then
+        UIManager:unschedule(self._scheduled_cover_load)
+        self._scheduled_cover_load = nil
+    end
+
+    -- Clean up image loading
+    if self.halt_image_loading then
+        self.halt_image_loading()
+        self.halt_image_loading = nil
+    end
+
+    -- Check if we have cover-related items
+    local has_cover_items = false
+    if self.item_table then
+        for _, item in ipairs(self.item_table) do
+            if item.cover_url then
+                has_cover_items = true
+                break
+            end
+        end
+    end
+
+    if has_cover_items then
         OPDSListMenu.onCloseWidget(self)
     else
         Menu.onCloseWidget(self)

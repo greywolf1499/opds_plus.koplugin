@@ -413,9 +413,15 @@ function OPDSListMenu:updateItems(select_number)
     -- Schedule cover loading
     if #self._items_to_update > 0 then
         logger.warn("OPDS+: Scheduling cover loading in 1 second...")
-        UIManager:scheduleIn(1, function()
-            self:_loadVisibleCovers()
-        end)
+
+        -- Store the scheduled function so it can be cancelled if needed
+        self._scheduled_cover_load = function()
+            if self._loadVisibleCovers then
+                self:_loadVisibleCovers()
+            end
+        end
+
+        UIManager:scheduleIn(1, self._scheduled_cover_load)
     end
 end
 
