@@ -1,7 +1,7 @@
 -- Utility to fetch content from URLs
 local logger = require("logger")
 
-local function getUrlContent(url, timeout, maxtime)
+local function getUrlContent(url, timeout, maxtime, username, password)
     local http = require("socket.http")
     local ltn12 = require("ltn12")
     local socket = require("socket")
@@ -20,6 +20,8 @@ local function getUrlContent(url, timeout, maxtime)
         url     = url,
         method  = "GET",
         sink    = maxtime and socketutil.table_sink(sink) or ltn12.sink.table(sink),
+        user    = username,      -- Add username
+        password = password,     -- Add password
     }
 
     local code, headers, status = socket.skip(1, http.request(request))
@@ -39,6 +41,11 @@ local function getUrlContent(url, timeout, maxtime)
     end
     if not code or code < 200 or code > 299 then
         logger.warn("HTTP status not okay:", status or code or "network unreachable")
+        if code == 401 then
+            return false, "Authentication required (401)"
+        elseif code == 403 then
+            return false, "Authentication failed (403)"
+        end
         return false, "Remote server error or unavailable"
     end
     if headers and headers["content-length"] then

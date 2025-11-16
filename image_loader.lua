@@ -8,7 +8,9 @@ local ImageLoader = {}
 local Batch = {
     loading = false,
     url_map = {},
-    callback = nil
+    callback = nil,
+    username = nil,
+    password = nil,
 }
 Batch.__index = Batch
 
@@ -32,12 +34,16 @@ function Batch:loadImages(urls)
 
             local url = table.remove(url_queue, 1)
 
+            logger.dbg("OPDS+: Fetching cover with auth:", self.username and "yes" or "no")
+
             local completed, success, content = Trapper:dismissableRunInSubprocess(function()
-                return getUrlContent(url, 10, 30)
+                return getUrlContent(url, 10, 30, self.username, self.password)
             end)
 
             if completed and success then
                 self.callback(url, content)
+            elseif completed and not success then
+                logger.warn("OPDS+: Failed to download cover:", content or "unknown error")
             end
 
             if #url_queue > 0 then
@@ -62,8 +68,11 @@ function Batch:loadImages(urls)
     return halt
 end
 
-function ImageLoader:loadImages(urls, callback)
-    local batch = Batch:new()
+function ImageLoader:loadImages(urls, callback, username, password)
+    local batch = Batch:new{
+        username = username,
+        password = password,
+    }
     batch.callback = callback
     local halt = batch:loadImages(urls)
     return batch, halt

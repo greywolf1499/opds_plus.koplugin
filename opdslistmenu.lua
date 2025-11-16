@@ -454,6 +454,12 @@ function OPDSListMenu:_loadVisibleCovers()
     -- Load covers asynchronously
     local ImageLoader = require("image_loader")
 
+    -- Get credentials from the menu (these are set in OPDSBrowser)
+    local username = self.root_catalog_username
+    local password = self.root_catalog_password
+
+    logger.warn("OPDS+: Using credentials:", username and "yes" or "no")
+
     local batch, halt = ImageLoader:loadImages(urls, function(url, content)
         logger.warn("========================================")
         logger.warn("OPDS+: Cover downloaded from:", url)
@@ -496,7 +502,7 @@ function OPDSListMenu:_loadVisibleCovers()
                 logger.warn("OPDS+: ✗ Failed to render cover:", tostring(cover_bb))
             end
         end
-    end)
+    end, username, password)  -- Pass credentials here!
 
     logger.warn("OPDS+: ImageLoader started, batch:", batch ~= nil, "halt:", halt ~= nil)
 
