@@ -7,7 +7,6 @@ local Device = require("device")
 local DocumentRegistry = require("document/documentregistry")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
-local Menu = require("ui/widget/menu")
 local MultiInputDialog = require("ui/widget/multiinputdialog")
 local NetworkMgr = require("ui/network/manager")
 local Notification = require("ui/widget/notification")
@@ -30,13 +29,17 @@ local _ = require("gettext")
 local N_ = _.ngettext
 local T = ffiUtil.template
 
+-- Import the custom cover menu for displaying book covers
+local OPDSCoverMenu = require("opdscovermenu")
+
 -- cache catalog parsed from feed xml
 local CatalogCache = Cache:new{
     -- Make it 20 slots, with no storage space constraints
     slots = 20,
 }
 
-local OPDSBrowser = Menu:extend{
+-- Changed from Menu:extend to OPDSCoverMenu:extend to support cover images
+local OPDSBrowser = OPDSCoverMenu:extend{
     catalog_type         = "application/atom%+xml",
     search_type          = "application/opensearchdescription%+xml",
     search_template_type = "application/atom%+xml",
@@ -71,7 +74,7 @@ function OPDSBrowser:init()
         self:showOPDSMenu()
     end
     self.facet_groups = nil -- Initialize facet groups storage
-    Menu.init(self) -- call parent's init()
+    OPDSCoverMenu.init(self) -- call parent's init() - changed from Menu.init
 end
 
 function OPDSBrowser:showOPDSMenu()
@@ -416,7 +419,7 @@ function OPDSBrowser:fetchFeed(item_url, headers_only)
     elseif headers and code == 302
         and item_url:match("^https")
         and headers.location:match("^http[^s]") then
-        text = T(_("Insecure HTTPS → HTTP downgrade attempted by redirect from:\n\n'%1'\n\nto\n\n'%2'.\n\nPlease inform the server administrator that many clients disallow this because it could be a downgrade attack."),
+        text = T(_("Insecure HTTPS → HTTP downgrade attempted by redirect from:\n\n'%1'\n\nto\n\n'%2'.\n\nPlease inform the server administrator that many clients disallow this because it could be used to intercept credentials."),
             BD.url(item_url), BD.url(headers.location))
             icon = "notice-warning"
     else
@@ -699,10 +702,23 @@ function OPDSBrowser:genItemTableFromCatalog(catalog, item_url)
                 item.text = title .. " - " .. author
             end
         end
-        -- Add cover indicator icon if cover is available
-        if item.thumbnail or item.image then
+
+        -- Add cover information for display
+        -- Only show indicator and add cover URL for actual books (items with acquisitions)
+        if (item.thumbnail or item.image) and item.acquisitions and #item.acquisitions > 0 then
             item.text = "\u{1F5BC} " .. item.text  -- 🖼 Frame with picture emoji
+
+            -- Add cover URL for lazy loading
+            -- Prefer thumbnail over full image for performance
+            if item.thumbnail then
+                item.cover_url = item.thumbnail
+                item.lazy_load_cover = true
+            elseif item.image then
+                item.cover_url = item.image
+                item.lazy_load_cover = true
+            end
         end
+
         item.title = title
         item.author = author
         item.content = entry.content or entry.summary

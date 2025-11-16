@@ -11,8 +11,8 @@ local _ = require("gettext")
 local T = require("ffi/util").template
 
 local OPDS = WidgetContainer:extend{
-    name = "opdscovers",
-    opds_settings_file = DataStorage:getSettingsDir() .. "/opdscovers.lua",
+    name = "opdsplus",
+    opds_settings_file = DataStorage:getSettingsDir() .. "/opdsplus.lua",
     settings = nil,
     servers = nil,
     downloads = nil,
@@ -58,15 +58,15 @@ function OPDS:init()
 end
 
 function OPDS:onDispatcherRegisterActions()
-    Dispatcher:registerAction("opdscovers_show_catalog",
-        {category="none", event="ShowOPDSCoversCatalog", title=_("OPDS Catalog with Covers"), filemanager=true,}
+    Dispatcher:registerAction("opdsplus_show_catalog",
+        {category="none", event="ShowOPDSPlusCatalog", title=_("OPDS Plus Catalog"), filemanager=true,}
     )
 end
 
 function OPDS:addToMainMenu(menu_items)
     if not self.ui.document then -- FileManager menu only
-        menu_items.opdscovers = {
-            text = _("OPDS catalog with covers"),
+        menu_items.opdsplus = {
+            text = _("OPDS Plus Catalog"),
             callback = function()
                 self:onShowOPDSCatalog()
             end,
@@ -80,7 +80,7 @@ function OPDS:onShowOPDSCatalog()
         downloads = self.downloads,
         settings = self.settings,
         pending_syncs = self.pending_syncs,
-        title = _("OPDS catalog with covers"),
+        title = _("OPDS Plus Catalog"),
         is_popout = false,
         is_borderless = true,
         title_bar_fm_style = true,
