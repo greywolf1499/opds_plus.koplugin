@@ -1252,7 +1252,7 @@ function OPDSBrowser:onNextPage(fill_only)
     end
     if not fill_only then
         -- We also *do* want to paginate, so call the base class.
-        Menu.onNextPage(self)
+        OPDSCoverMenu.onNextPage(self)
     end
     return true
 end

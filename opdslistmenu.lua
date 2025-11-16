@@ -4,6 +4,7 @@ local Device = require("device")
 local Font = require("ui/font")
 local FrameContainer = require("ui/widget/container/framecontainer")
 local Geom = require("ui/geometry")
+local GestureRange = require("ui/gesturerange")
 local HorizontalGroup = require("ui/widget/horizontalgroup")
 local HorizontalSpan = require("ui/widget/horizontalspan")
 local ImageWidget = require("ui/widget/imagewidget")
@@ -107,6 +108,7 @@ local OPDSListMenuItem = InputContainer:extend{
     width = nil,
     height = nil,
     show_parent = nil,
+    menu = nil,  -- Reference to parent menu
 }
 
 function OPDSListMenuItem:init()
@@ -115,6 +117,22 @@ function OPDSListMenuItem:init()
     self.dimen = Geom:new{
         w = self.width,
         h = self.height,
+    }
+
+    -- Set up gesture events for tap and hold
+    self.ges_events = {
+        TapSelect = {
+            GestureRange:new{
+                ges = "tap",
+                range = self.dimen,
+            },
+        },
+        HoldSelect = {
+            GestureRange:new{
+                ges = "hold",
+                range = self.dimen,
+            },
+        },
     }
 
     local cover_widget
@@ -241,7 +259,23 @@ function OPDSListMenuItem:update()
     end)
 end
 
-function OPDSListMenuItem:onTap()
+-- Handle tap events - delegate to parent menu
+function OPDSListMenuItem:onTapSelect(arg, ges)
+    logger.warn("OPDS+: OPDSListMenuItem:onTapSelect called for:", self.entry.text)
+    if self.menu and self.menu.onMenuSelect then
+        self.menu:onMenuSelect(self.entry)
+        return true
+    end
+    return false
+end
+
+-- Handle hold events - delegate to parent menu
+function OPDSListMenuItem:onHoldSelect(arg, ges)
+    logger.warn("OPDS+: OPDSListMenuItem:onHoldSelect called for:", self.entry.text)
+    if self.menu and self.menu.onMenuHold then
+        self.menu:onMenuHold(self.entry)
+        return true
+    end
     return false
 end
 
@@ -299,17 +333,11 @@ function OPDSListMenu:updateItems(select_number)
                 cover_width = self.cover_width,
                 cover_height = self.cover_height,
                 show_parent = self.show_parent,
+                menu = self,  -- Pass reference to parent menu so tap events work
             }
 
-            -- Set up tap handler
-            item.onTap = function()
-                logger.warn("OPDS+: Item tapped:", entry.text)
-                self:onMenuSelect(entry)
-                return true
-            end
-
             table.insert(self.item_group, item)
-            table.insert(self.layout, item.dimen)
+            table.insert(self.layout, {item})  -- Wrap in table for focus manager
 
             -- Track items that need cover loading
             if entry.cover_url and entry.lazy_load_cover and not entry.cover_bb then
