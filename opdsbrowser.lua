@@ -29,6 +29,10 @@ local _ = require("gettext")
 local N_ = _.ngettext
 local T = ffiUtil.template
 
+logger.warn("========================================")
+logger.warn("OPDS+ opdsbrowser.lua IS LOADING")
+logger.warn("========================================")
+
 -- Import the custom cover menu for displaying book covers
 local OPDSCoverMenu = require("opdscovermenu")
 
@@ -706,16 +710,24 @@ function OPDSBrowser:genItemTableFromCatalog(catalog, item_url)
         -- Add cover information for display
         -- Only show indicator and add cover URL for actual books (items with acquisitions)
         if (item.thumbnail or item.image) and item.acquisitions and #item.acquisitions > 0 then
-            item.text = "\u{1F5BC} " .. item.text  -- 🖼 Frame with picture emoji
+            -- REMOVE THIS LINE:
+            -- item.text = "\u{1F5BC} " .. item.text  -- 🖼 Frame with picture emoji
+
+            logger.warn("OPDS+: Book entry found with cover!")
+            logger.warn("OPDS+:   Title:", item.text)
+            logger.warn("OPDS+:   Thumbnail:", item.thumbnail or "none")
+            logger.warn("OPDS+:   Image:", item.image or "none")
 
             -- Add cover URL for lazy loading
             -- Prefer thumbnail over full image for performance
             if item.thumbnail then
                 item.cover_url = item.thumbnail
                 item.lazy_load_cover = true
+                logger.warn("OPDS+:   Set cover_url to thumbnail:", item.thumbnail)
             elseif item.image then
                 item.cover_url = item.image
                 item.lazy_load_cover = true
+                logger.warn("OPDS+:   Set cover_url to image:", item.image)
             end
         end
 
@@ -732,7 +744,24 @@ end
 
 -- Requests and shows updated list of catalog entries
 function OPDSBrowser:updateCatalog(item_url, paths_updated)
+    logger.warn("========================================")
+    logger.warn("OPDS+: updateCatalog called")
+    logger.warn("OPDS+:   URL:", item_url)
+    logger.warn("========================================")
+
     local menu_table = self:genItemTableFromURL(item_url)
+
+    logger.warn("OPDS+: Generated", #menu_table, "items")
+
+    -- Count how many have covers
+    local cover_count = 0
+    for _, item in ipairs(menu_table) do
+        if item.cover_url then
+            cover_count = cover_count + 1
+        end
+    end
+    logger.warn("OPDS+:", cover_count, "items have cover_url")
+
     if #menu_table > 0 or self.facet_groups or self.search_url then
         if not paths_updated then
             table.insert(self.paths, {
@@ -761,6 +790,7 @@ function OPDSBrowser:updateCatalog(item_url, paths_updated)
         end
     end
 end
+
 
 -- Requests and adds more catalog entries to fill out the page
 function OPDSBrowser:appendCatalog(item_url)
