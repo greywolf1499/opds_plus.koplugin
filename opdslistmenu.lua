@@ -18,6 +18,7 @@ local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
+local CenterContainer = require("ui/widget/container/centercontainer")
 local Screen = Device.screen
 local logger = require("logger")
 local _ = require("gettext")
@@ -73,81 +74,72 @@ end
 
 -- ============================================
 
--- Get the plugin directory path
-local function getPluginPath()
-    local info = debug.getinfo(1, "S")
-    local path = info.source:match("@(.*/)")
-    return path
+-- Create a placeholder cover widget with text
+local function createPlaceholderCover(width, height, status)
+    -- status can be: "loading", "no_cover", "error"
+
+    local placeholder_bg_color = Blitbuffer.COLOR_LIGHT_GRAY
+    local border_color = Blitbuffer.COLOR_DARK_GRAY
+    local text_color = Blitbuffer.COLOR_DARK_GRAY
+
+    -- Determine text to display
+    local display_text = ""
+    local icon = ""
+
+    if status == "loading" then
+        icon = "⏳"  -- Hourglass emoji
+        display_text = _("Loading...")
+    elseif status == "error" then
+        icon = "⚠"  -- Warning emoji
+        display_text = _("Failed to load")
+    else  -- "no_cover" or default
+        icon = "📖"  -- Book emoji
+        display_text = _("No Cover")
+    end
+
+    -- Create text widgets
+    local font_size = math.floor(height / 8)  -- Scale font with cover size
+    if font_size < 10 then font_size = 10 end
+    if font_size > 16 then font_size = 16 end
+
+    local icon_widget = TextWidget:new{
+        text = icon,
+        face = Font:getFace("infofont", font_size * 2),  -- Icon is larger
+        fgcolor = text_color,
+    }
+
+    local text_widget = TextWidget:new{
+        text = display_text,
+        face = Font:getFace("smallinfofont", font_size),
+        fgcolor = text_color,
+    }
+
+    -- Assemble the placeholder
+    local placeholder = FrameContainer:new{
+        width = width,
+        height = height,
+        padding = 0,
+        margin = 0,
+        bordersize = Size.border.default or 2,
+        background = placeholder_bg_color,
+        CenterContainer:new{
+            dimen = Geom:new{
+                w = width,
+                h = height,
+            },
+            VerticalGroup:new{
+                align = "center",
+                icon_widget,
+                VerticalSpan:new{ width = font_size / 2 },
+                text_widget,
+            },
+        },
+    }
+
+    return placeholder
 end
 
--- Load placeholder cover image from file
-local placeholder_cover_bb = nil
-local function getPlaceholderCover(width, height)
-    if placeholder_cover_bb then
-        return placeholder_cover_bb
-    end
-
-    -- Try to load placeholder.png from plugin directory
-    local plugin_path = getPluginPath()
-    local placeholder_path = plugin_path .. "placeholder.png"
-
-    logger.dbg("OPDS+: Looking for placeholder at:", placeholder_path)
-
-    -- Check if file exists
-    local f = io.open(placeholder_path, "r")
-    if f then
-        f:close()
-        logger.dbg("OPDS+: Found placeholder file, loading...")
-
-        -- Load and render the image
-        local ok, image = pcall(function()
-            return RenderImage:renderImageFile(placeholder_path, width, height)
-        end)
-
-        if ok and image then
-            logger.dbg("OPDS+: Successfully loaded placeholder image")
-            placeholder_cover_bb = image
-            return placeholder_cover_bb
-        else
-            logger.warn("OPDS+: Failed to load placeholder image:", tostring(image))
-        end
-    else
-        logger.dbg("OPDS+: Placeholder file not found at:", placeholder_path)
-    end
-
-    -- Fallback: create a simple solid color placeholder
-    logger.dbg("OPDS+: Creating simple fallback placeholder")
-    local bb = Blitbuffer.new(width, height, Blitbuffer.TYPE_BB8)
-
-    -- Fill with gray (value between 0-255, where 255 is white)
-    local gray_value = 200  -- Light gray
-    for y = 0, height - 1 do
-        for x = 0, width - 1 do
-            bb:setPixel(x, y, gray_value)
-        end
-    end
-
-    -- Draw a border (black = 0)
-    for x = 0, width - 1 do
-        bb:setPixel(x, 0, 0)
-        bb:setPixel(x, height - 1, 0)
-        bb:setPixel(x, 1, 0)
-        bb:setPixel(x, height - 2, 0)
-    end
-    for y = 0, height - 1 do
-        bb:setPixel(0, y, 0)
-        bb:setPixel(width - 1, y, 0)
-        bb:setPixel(1, y, 0)
-        bb:setPixel(width - 2, y, 0)
-    end
-
-    placeholder_cover_bb = bb
-
-    logger.dbg("OPDS+: Created fallback placeholder", width, "x", height)
-    return placeholder_cover_bb
-end
-
--- Parse title and author from combined text field
+-- Parse title and author from entry data
 -- OPDS provides title and author separately, but sometimes they're combined in text
 local function parseTitleAuthor(entry)
     local title = entry.title  -- Try dedicated title field first
@@ -198,7 +190,7 @@ local OPDSListMenuItem = InputContainer:extend{
     width = nil,
     height = nil,
     show_parent = nil,
-    menu = nil,
+    menu = nil,  -- Reference to parent menu
     font_settings = nil,  -- Table with all font settings
 }
 
@@ -230,19 +222,26 @@ function OPDSListMenuItem:init()
 
     -- Check if we should use real cover or placeholder
     if self.entry.cover_bb then
+        -- Cover has been loaded - use it!
+        logger.dbg("OPDS+: Displaying LOADED cover for:", self.entry.text)
         cover_widget = ImageWidget:new{
             image = self.entry.cover_bb,
             width = self.cover_width,
             height = self.cover_height,
             alpha = true,
         }
+    elseif self.entry.cover_url and self.entry.lazy_load_cover then
+        -- Cover is being loaded - show loading placeholder
+        logger.dbg("OPDS+: Showing LOADING placeholder for:", self.entry.text)
+        cover_widget = createPlaceholderCover(self.cover_width, self.cover_height, "loading")
+    elseif self.entry.cover_url and self.entry.cover_failed then
+        -- Cover failed to load - show error placeholder
+        logger.dbg("OPDS+: Showing ERROR placeholder for:", self.entry.text)
+        cover_widget = createPlaceholderCover(self.cover_width, self.cover_height, "error")
     else
-        local placeholder_bb = getPlaceholderCover(self.cover_width, self.cover_height)
-        cover_widget = ImageWidget:new{
-            image = placeholder_bb,
-            width = self.cover_width,
-            height = self.cover_height,
-        }
+        -- No cover available - show no cover placeholder
+        logger.dbg("OPDS+: Showing NO COVER placeholder for:", self.entry.text)
+        cover_widget = createPlaceholderCover(self.cover_width, self.cover_height, "no_cover")
     end
 
     -- Calculate spacing and dimensions
@@ -401,7 +400,7 @@ function OPDSListMenuItem:onHoldSelect(arg, ges)
 end
 
 function OPDSListMenuItem:free()
-    -- Nothing to free since we use shared placeholder
+    -- Nothing to free for dynamic placeholders
 end
 
 -- Main OPDS List Menu that extends the standard Menu
@@ -536,7 +535,7 @@ function OPDSListMenu:updateItems(select_number)
         logger.dbg("OPDS+: Using font settings from self.settings")
     end
 
-    -- Handle title_bold default
+    -- Handle defaults
     if font_settings.title_bold == nil then
         font_settings.title_bold = true
     end
@@ -566,12 +565,12 @@ function OPDSListMenu:updateItems(select_number)
                 cover_height = self.cover_height,
                 show_parent = self.show_parent,
                 menu = self,
-                font_settings = font_settings,  -- Pass all font settings
+                font_settings = font_settings,
             }
 
             table.insert(self.item_group, item)
 
-            -- Add separator line between items
+            -- Add separator line between items (but not after the last one)
             if i < self.perpage and entry_idx < #self.item_table then
                 local LineWidget = require("ui/widget/linewidget")
                 table.insert(self.item_group, LineWidget:new{
@@ -580,7 +579,7 @@ function OPDSListMenu:updateItems(select_number)
                 })
             end
 
-            table.insert(self.layout, {item})
+            table.insert(self.layout, {item})  -- Wrap in table for focus manager
 
             -- Track items that need cover loading
             if entry.cover_url and entry.lazy_load_cover and not entry.cover_bb then
@@ -608,6 +607,7 @@ function OPDSListMenu:updateItems(select_number)
     if #self._items_to_update > 0 then
         logger.dbg("OPDS+: Scheduling cover loading in 1 second...")
 
+        -- Store the scheduled function so it can be cancelled if needed
         self._scheduled_cover_load = function()
             if self._loadVisibleCovers then
                 self:_loadVisibleCovers()
@@ -629,7 +629,7 @@ function OPDSListMenu:_loadVisibleCovers()
     local urls = {}
     local items_by_url = {}
 
-    for _, item_data in ipairs(self._items_to_update) do
+    for i, item_data in ipairs(self._items_to_update) do
         local url = item_data.entry.cover_url
         if url and not items_by_url[url] then
             table.insert(urls, url)
@@ -665,7 +665,7 @@ function OPDSListMenu:_loadVisibleCovers()
             return
         end
 
-        for _, item_data in ipairs(items) do
+        for j, item_data in ipairs(items) do
             local entry = item_data.entry
             local widget = item_data.widget
 
@@ -687,12 +687,18 @@ function OPDSListMenu:_loadVisibleCovers()
             if ok and cover_bb then
                 logger.dbg("OPDS+: ✓ Cover rendered successfully!")
                 entry.cover_bb = cover_bb
+                entry.cover_failed = false
 
                 -- Update the widget to show the new cover
                 widget.entry = entry
                 widget:update()
             else
                 logger.warn("OPDS+: ✗ Failed to render cover:", tostring(cover_bb))
+                entry.cover_failed = true
+
+                -- Update the widget to show error placeholder
+                widget.entry = entry
+                widget:update()
             end
         end
     end, username, password)
@@ -712,20 +718,14 @@ function OPDSListMenu:onCloseWidget()
         self.halt_image_loading = nil
     end
 
-    -- Free cover images
+    -- Free cover images (but no need to free dynamic placeholders)
     if self.item_table then
-        for _, entry in ipairs(self.item_table) do
+        for k, entry in ipairs(self.item_table) do
             if entry.cover_bb then
                 entry.cover_bb:free()
                 entry.cover_bb = nil
             end
         end
-    end
-
-    -- Free shared placeholder
-    if placeholder_cover_bb then
-        placeholder_cover_bb:free()
-        placeholder_cover_bb = nil
     end
 
     -- Call parent cleanup
