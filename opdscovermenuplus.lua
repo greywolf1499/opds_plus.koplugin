@@ -1,5 +1,5 @@
 local Menu = require("ui/widget/menu")
-local OPDSListMenu = require("opdslistmenu")
+local OPDSListMenu = require("opdslistmenuplus")
 local UIManager = require("ui/uimanager")
 local logger = require("logger")
 

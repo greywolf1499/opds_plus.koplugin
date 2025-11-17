@@ -34,7 +34,7 @@ logger.warn("OPDS+ opdsbrowser.lua IS LOADING")
 logger.warn("========================================")
 
 -- Import the custom cover menu for displaying book covers
-local OPDSCoverMenu = require("opdscovermenu")
+local OPDSCoverMenu = require("opdscovermenuplus")
 
 -- cache catalog parsed from feed xml
 local CatalogCache = Cache:new{
