@@ -198,7 +198,8 @@ local OPDSListMenuItem = InputContainer:extend{
     width = nil,
     height = nil,
     show_parent = nil,
-    menu = nil,  -- Reference to parent menu
+    menu = nil,
+    font_settings = nil,  -- Table with all font settings
 }
 
 function OPDSListMenuItem:init()
@@ -229,8 +230,6 @@ function OPDSListMenuItem:init()
 
     -- Check if we should use real cover or placeholder
     if self.entry.cover_bb then
-        -- Cover has been loaded - use it!
-        logger.dbg("OPDS+: Displaying LOADED cover for:", self.entry.text)
         cover_widget = ImageWidget:new{
             image = self.entry.cover_bb,
             width = self.cover_width,
@@ -238,8 +237,6 @@ function OPDSListMenuItem:init()
             alpha = true,
         }
     else
-        -- Use placeholder cover
-        logger.dbg("OPDS+: Using PLACEHOLDER for:", self.entry.text)
         local placeholder_bb = getPlaceholderCover(self.cover_width, self.cover_height)
         cover_widget = ImageWidget:new{
             image = placeholder_bb,
@@ -267,20 +264,40 @@ function OPDSListMenuItem:init()
     -- Parse title and author from entry
     local title, author = parseTitleAuthor(self.entry)
 
-    logger.dbg("OPDS+: Parsed - Title:", title, "Author:", author)
+    -- Get font settings from font_settings table
+    local title_font = (self.font_settings and self.font_settings.title_font) or "smallinfofont"
+    local title_size = (self.font_settings and self.font_settings.title_size) or 16
+    local title_bold = (self.font_settings and self.font_settings.title_bold)
+    if title_bold == nil then title_bold = true end
+
+    local info_font = title_font  -- Default to same as title
+    if self.font_settings and not self.font_settings.use_same_font then
+        info_font = self.font_settings.info_font or "smallinfofont"
+    end
+    local info_size = (self.font_settings and self.font_settings.info_size) or 14
+    local info_bold = (self.font_settings and self.font_settings.info_bold) or false
+    local info_color_name = (self.font_settings and self.font_settings.info_color) or "dark_gray"
+
+    -- Convert color name to Blitbuffer color
+    local info_color = Blitbuffer.COLOR_DARK_GRAY
+    if info_color_name == "black" then
+        info_color = Blitbuffer.COLOR_BLACK
+    end
+
+    logger.dbg("OPDS+: Font settings - Title:", title_font, title_size, "Info:", info_font, info_size)
 
     -- Build text information widgets
     local text_group = VerticalGroup:new{
         align = "left",
     }
 
-    -- Title (bold, larger)
+    -- Title
     local title_widget = TextBoxWidget:new{
         text = title,
-        face = Font:getFace("smallinfofont", 16),
+        face = Font:getFace(title_font, title_size),
         width = text_width,
         alignment = "left",
-        bold = true,
+        bold = title_bold,
     }
     table.insert(text_group, title_widget)
 
@@ -289,9 +306,10 @@ function OPDSListMenuItem:init()
         table.insert(text_group, VerticalSpan:new{ width = text_padding })
         table.insert(text_group, TextWidget:new{
             text = author,
-            face = Font:getFace("smallinfofont", 14),
+            face = Font:getFace(info_font, info_size),
             max_width = text_width,
-            fgcolor = Blitbuffer.COLOR_DARK_GRAY,
+            fgcolor = info_color,
+            bold = info_bold,
         })
     end
 
@@ -300,10 +318,11 @@ function OPDSListMenuItem:init()
     if series_text then
         table.insert(text_group, VerticalSpan:new{ width = text_padding })
         table.insert(text_group, TextWidget:new{
-            text = "📚 " .. series_text,  -- Book emoji prefix
-            face = Font:getFace("smallinfofont", 13),
+            text = "📚 " .. series_text,
+            face = Font:getFace(info_font, info_size - 1),  -- Slightly smaller
             max_width = text_width,
-            fgcolor = Blitbuffer.COLOR_DARK_GRAY,
+            fgcolor = info_color,
+            bold = info_bold,
         })
     end
 
@@ -312,14 +331,14 @@ function OPDSListMenuItem:init()
         table.insert(text_group, VerticalSpan:new{ width = text_padding })
         table.insert(text_group, TextWidget:new{
             text = self.entry.mandatory,
-            face = Font:getFace("smallinfofont", 12),
+            face = Font:getFace(info_font, info_size - 2),  -- Even smaller
             max_width = text_width,
             fgcolor = Blitbuffer.COLOR_LIGHT_GRAY,
+            bold = false,
         })
     end
 
     -- Assemble the complete item with proper spacing
-    -- KEY CHANGE: Use TopContainer instead of default (center) alignment for text
     local TopContainer = require("ui/widget/container/topcontainer")
 
     self[1] = FrameContainer:new{
@@ -331,15 +350,12 @@ function OPDSListMenuItem:init()
         background = Blitbuffer.COLOR_WHITE,
         VerticalGroup:new{
             align = "left",
-            -- Top padding
             VerticalSpan:new{ width = top_padding },
-            -- Main content
             HorizontalGroup:new{
-                align = "top",  -- This aligns cover and text to top
+                align = "top",
                 HorizontalSpan:new{ width = cover_left_margin },
                 cover_widget,
                 HorizontalSpan:new{ width = cover_right_margin },
-                -- Use TopContainer to align text content to top
                 TopContainer:new{
                     dimen = Geom:new{
                         w = text_width,
@@ -348,7 +364,6 @@ function OPDSListMenuItem:init()
                     text_group,
                 },
             },
-            -- Bottom padding
             VerticalSpan:new{ width = bottom_padding },
         }
     }
@@ -493,6 +508,42 @@ function OPDSListMenu:updateItems(select_number)
     self.page_info:resetLayout()
     self.return_button:resetLayout()
 
+    -- Get font settings
+    local font_settings = {}
+    if self._manager and self._manager.settings then
+        font_settings = {
+            title_font = self._manager.settings.title_font or "smallinfofont",
+            title_size = self._manager.settings.title_size or 16,
+            title_bold = self._manager.settings.title_bold,
+            info_font = self._manager.settings.info_font or "smallinfofont",
+            info_size = self._manager.settings.info_size or 14,
+            info_bold = self._manager.settings.info_bold or false,
+            info_color = self._manager.settings.info_color or "dark_gray",
+            use_same_font = self._manager.settings.use_same_font,
+        }
+        logger.dbg("OPDS+: Using font settings from _manager")
+    elseif self.settings then
+        font_settings = {
+            title_font = self.settings.title_font or "smallinfofont",
+            title_size = self.settings.title_size or 16,
+            title_bold = self.settings.title_bold,
+            info_font = self.settings.info_font or "smallinfofont",
+            info_size = self.settings.info_size or 14,
+            info_bold = self.settings.info_bold or false,
+            info_color = self.settings.info_color or "dark_gray",
+            use_same_font = self.settings.use_same_font,
+        }
+        logger.dbg("OPDS+: Using font settings from self.settings")
+    end
+
+    -- Handle title_bold default
+    if font_settings.title_bold == nil then
+        font_settings.title_bold = true
+    end
+    if font_settings.use_same_font == nil then
+        font_settings.use_same_font = true
+    end
+
     -- Build items for current page
     self._items_to_update = {}
     local idx_offset = (self.page - 1) * self.perpage
@@ -514,12 +565,13 @@ function OPDSListMenu:updateItems(select_number)
                 cover_width = self.cover_width,
                 cover_height = self.cover_height,
                 show_parent = self.show_parent,
-                menu = self,  -- Pass reference to parent menu so tap events work
+                menu = self,
+                font_settings = font_settings,  -- Pass all font settings
             }
 
             table.insert(self.item_group, item)
 
-            -- Add separator line between items (but not after the last one)
+            -- Add separator line between items
             if i < self.perpage and entry_idx < #self.item_table then
                 local LineWidget = require("ui/widget/linewidget")
                 table.insert(self.item_group, LineWidget:new{
@@ -528,7 +580,7 @@ function OPDSListMenu:updateItems(select_number)
                 })
             end
 
-            table.insert(self.layout, {item})  -- Wrap in table for focus manager
+            table.insert(self.layout, {item})
 
             -- Track items that need cover loading
             if entry.cover_url and entry.lazy_load_cover and not entry.cover_bb then
@@ -556,7 +608,6 @@ function OPDSListMenu:updateItems(select_number)
     if #self._items_to_update > 0 then
         logger.dbg("OPDS+: Scheduling cover loading in 1 second...")
 
-        -- Store the scheduled function so it can be cancelled if needed
         self._scheduled_cover_load = function()
             if self._loadVisibleCovers then
                 self:_loadVisibleCovers()
