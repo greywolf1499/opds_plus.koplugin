@@ -118,6 +118,9 @@ function OPDS:init()
     if not self.settings.grid_cover_height_ratio then
         self.settings.grid_cover_height_ratio = 0.20  -- 20% for grid view
     end
+    if not self.settings.grid_size_preset then
+        self.settings.grid_size_preset = "Balanced"  -- Default preset
+    end
 
     self:onDispatcherRegisterActions()
     self.ui.menu:registerToMainMenu(self)
@@ -309,9 +312,9 @@ function OPDS:addToMainMenu(menu_items)
                             text = _("Grid View Settings"),
                             sub_item_table = {
                                 {
-                                    text = _("Grid Columns"),
+                                    text = _("Grid Layout"),
                                     callback = function()
-                                        self:showGridColumnsMenu()
+                                        self:showGridLayoutMenu()
                                     end,
                                 },
                             },
@@ -610,6 +613,131 @@ function OPDS:showSizeSelectionMenu(setting_key, title, min_size, max_size, defa
         end,
     }
     UIManager:show(spin_widget)
+end
+
+function OPDS:showGridLayoutMenu()
+    local current_columns = self.settings.grid_columns or 3
+    local current_preset = self.settings.grid_size_preset or "Balanced"
+
+    local buttons = {}
+
+    -- Preset buttons with column counts
+    local presets = {
+        {name = "Compact", columns = 4, desc = _("More books per page, smaller covers")},
+        {name = "Balanced", columns = 3, desc = _("Good balance of size and quantity")},
+        {name = "Spacious", columns = 2, desc = _("Fewer books, larger covers")},
+    }
+
+    for idx, preset in ipairs(presets) do  -- Changed from "_, preset" to "idx, preset"
+        local is_current = (current_preset == preset.name and current_columns == preset.columns)
+        local button_text = preset.name .. " (" .. preset.columns .. " " .. _("cols") .. ")"
+        if is_current then
+            button_text = "✓ " .. button_text
+        end
+
+        table.insert(buttons, {
+            {
+                text = button_text,
+                callback = function()
+                    UIManager:close(self.grid_layout_dialog)
+                    self.settings.grid_columns = preset.columns
+                    self.settings.grid_size_preset = preset.name
+                    self.opds_settings:saveSetting("settings", self.settings)
+                    self.opds_settings:flush()
+                    UIManager:show(InfoMessage:new{
+                        text = T(_("Grid layout set to %1\n\n%2\n\nChanges will apply when you next browse a catalog in grid view."),
+                            preset.name, preset.desc),
+                        timeout = 2.5,
+                    })
+                end,
+            },
+        })
+    end
+
+    -- Add separator
+    table.insert(buttons, {})
+
+    -- Custom option
+    local custom_text = _("Custom")
+    local is_custom = (current_preset ~= "Compact" and current_preset ~= "Balanced" and current_preset ~= "Spacious")
+    if is_custom then
+        custom_text = "✓ " .. custom_text .. " (" .. current_columns .. " " .. _("cols") .. ")"
+    end
+
+    table.insert(buttons, {
+        {
+            text = custom_text,
+            callback = function()
+                UIManager:close(self.grid_layout_dialog)
+                self:showGridColumnsMenu()
+            end,
+        },
+    })
+
+    self.grid_layout_dialog = ButtonDialog:new{
+        title = _("Grid Layout Presets\n\nChoose how books are displayed in grid view"),
+        title_align = "center",
+        buttons = buttons,
+    }
+    UIManager:show(self.grid_layout_dialog)
+end
+
+function OPDS:showGridColumnsMenu()
+    local current_columns = self.settings.grid_columns or 3
+
+    local buttons = {}
+
+    for cols = 2, 4 do
+        local is_current = (current_columns == cols)
+        local button_text = tostring(cols)
+        if cols == 2 then
+            button_text = button_text .. " " .. _("columns (wider)")
+        elseif cols == 3 then
+            button_text = button_text .. " " .. _("columns (balanced)")
+        else
+            button_text = button_text .. " " .. _("columns (compact)")
+        end
+
+        if is_current then
+            button_text = "✓ " .. button_text
+        end
+
+        table.insert(buttons, {
+            {
+                text = button_text,
+                callback = function()
+                    UIManager:close(self.grid_columns_dialog)
+                    self.settings.grid_columns = cols
+                    self.settings.grid_size_preset = "Custom"  -- NEW: Mark as custom
+                    self.opds_settings:saveSetting("settings", self.settings)
+                    self.opds_settings:flush()
+                    UIManager:show(InfoMessage:new{
+                        text = T(_("Grid columns set to %1 (Custom).\n\nChanges will apply when you next browse a catalog in grid mode."), cols),
+                        timeout = 2,
+                    })
+                end,
+            },
+        })
+    end
+
+    -- NEW: Add separator and back button
+    table.insert(buttons, {})
+    table.insert(buttons, {
+        {
+            text = "← " .. _("Back to Presets"),
+            callback = function()
+                UIManager:close(self.grid_columns_dialog)
+                self:showGridLayoutMenu()
+            end,
+        },
+    })
+
+    self.grid_columns_dialog = ButtonDialog:new{
+        title = _("Custom Grid Columns\n\nManually choose column count"),
+        title_align = "center",
+        buttons = buttons,
+    }
+    UIManager:show(self.grid_columns_dialog)
 end
 
 function OPDS:showGridColumnsMenu()
