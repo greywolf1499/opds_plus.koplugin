@@ -199,6 +199,7 @@ local OPDSListMenuItem = InputContainer:extend{
     height = nil,
     show_parent = nil,
     menu = nil,  -- Reference to parent menu
+    font_name = nil,  -- Font to use for text display
 }
 
 function OPDSListMenuItem:init()
@@ -269,6 +270,10 @@ function OPDSListMenuItem:init()
 
     logger.dbg("OPDS+: Parsed - Title:", title, "Author:", author)
 
+    -- Get font settings (use custom font if specified)
+    local font_name = self.font_name or "smallinfofont"
+    logger.dbg("OPDS+: Using font:", font_name)
+
     -- Build text information widgets
     local text_group = VerticalGroup:new{
         align = "left",
@@ -277,7 +282,7 @@ function OPDSListMenuItem:init()
     -- Title (bold, larger)
     local title_widget = TextBoxWidget:new{
         text = title,
-        face = Font:getFace("smallinfofont", 16),
+        face = Font:getFace(font_name, 16),
         width = text_width,
         alignment = "left",
         bold = true,
@@ -289,7 +294,7 @@ function OPDSListMenuItem:init()
         table.insert(text_group, VerticalSpan:new{ width = text_padding })
         table.insert(text_group, TextWidget:new{
             text = author,
-            face = Font:getFace("smallinfofont", 14),
+            face = Font:getFace(font_name, 14),
             max_width = text_width,
             fgcolor = Blitbuffer.COLOR_DARK_GRAY,
         })
@@ -301,7 +306,7 @@ function OPDSListMenuItem:init()
         table.insert(text_group, VerticalSpan:new{ width = text_padding })
         table.insert(text_group, TextWidget:new{
             text = "📚 " .. series_text,  -- Book emoji prefix
-            face = Font:getFace("smallinfofont", 13),
+            face = Font:getFace(font_name, 13),
             max_width = text_width,
             fgcolor = Blitbuffer.COLOR_DARK_GRAY,
         })
@@ -312,14 +317,13 @@ function OPDSListMenuItem:init()
         table.insert(text_group, VerticalSpan:new{ width = text_padding })
         table.insert(text_group, TextWidget:new{
             text = self.entry.mandatory,
-            face = Font:getFace("smallinfofont", 12),
+            face = Font:getFace(font_name, 12),
             max_width = text_width,
             fgcolor = Blitbuffer.COLOR_LIGHT_GRAY,
         })
     end
 
     -- Assemble the complete item with proper spacing
-    -- KEY CHANGE: Use TopContainer instead of default (center) alignment for text
     local TopContainer = require("ui/widget/container/topcontainer")
 
     self[1] = FrameContainer:new{
@@ -493,6 +497,16 @@ function OPDSListMenu:updateItems(select_number)
     self.page_info:resetLayout()
     self.return_button:resetLayout()
 
+    -- Get font from settings
+    local font_name = "smallinfofont"  -- default
+    if self._manager and self._manager.settings and self._manager.settings.catalog_font then
+        font_name = self._manager.settings.catalog_font
+        logger.dbg("OPDS+: Using catalog font from settings:", font_name)
+    elseif self.settings and self.settings.catalog_font then
+        font_name = self.settings.catalog_font
+        logger.dbg("OPDS+: Using catalog font from self.settings:", font_name)
+    end
+
     -- Build items for current page
     self._items_to_update = {}
     local idx_offset = (self.page - 1) * self.perpage
@@ -514,7 +528,8 @@ function OPDSListMenu:updateItems(select_number)
                 cover_width = self.cover_width,
                 cover_height = self.cover_height,
                 show_parent = self.show_parent,
-                menu = self,  -- Pass reference to parent menu so tap events work
+                menu = self,
+                font_name = font_name,  -- Pass the font name to the item
             }
 
             table.insert(self.item_group, item)

@@ -3,14 +3,16 @@ local ButtonDialog = require("ui/widget/buttondialog")
 local ConfirmBox = require("ui/widget/confirmbox")
 local DataStorage = require("datastorage")
 local Dispatcher = require("dispatcher")
+local Font = require("ui/font")
 local InfoMessage = require("ui/widget/infomessage")
 local LuaSettings = require("luasettings")
 local OPDSBrowser = require("opdsbrowser")
 local SpinWidget = require("ui/widget/spinwidget")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
+local lfs = require("libs/libkoreader-lfs")
 local util = require("util")
-local _ = require("gettext")  -- Keep this as is - it works fine here
+local _ = require("gettext")
 local T = require("ffi/util").template
 
 local OPDS = WidgetContainer:extend{
@@ -87,6 +89,9 @@ function OPDS:init()
     if not self.settings.cover_size_preset then
         self.settings.cover_size_preset = "Regular"
     end
+    if not self.settings.catalog_font then
+        self.settings.catalog_font = "smallinfofont"  -- Default KOReader UI font
+    end
 
     self:onDispatcherRegisterActions()
     self.ui.menu:registerToMainMenu(self)
@@ -105,6 +110,112 @@ end
 
 function OPDS:getCurrentPresetName()
     return self.settings.cover_size_preset or "Regular"
+end
+
+function OPDS:getCatalogFont()
+    return self.settings.catalog_font or "smallinfofont"
+end
+
+function OPDS:setCatalogFont(font_name)
+    self.settings.catalog_font = font_name
+    self.opds_settings:saveSetting("settings", self.settings)
+    self.opds_settings:flush()
+end
+
+function OPDS:getAvailableFonts()
+    local fonts = {}
+
+    -- Add KOReader's built-in UI fonts first
+    table.insert(fonts, {name = "Default UI (Noto Sans)", value = "smallinfofont"})
+    table.insert(fonts, {name = "Alternative UI", value = "infofont"})
+
+    -- Scan font directories for available fonts
+    local font_dirs = {
+        "./fonts",  -- KOReader's font directory
+    }
+
+    -- Add user's font directory if it exists
+    local user_font_dir = DataStorage:getDataDir() .. "/fonts"
+    if lfs.attributes(user_font_dir, "mode") == "directory" then
+        table.insert(font_dirs, user_font_dir)
+    end
+
+    local font_extensions = {
+        [".ttf"] = true,
+        [".otf"] = true,
+        [".ttc"] = true,
+    }
+
+    -- Scan directories for font files
+    local seen_fonts = {}
+    for i, font_dir in ipairs(font_dirs) do
+        if lfs.attributes(font_dir, "mode") == "directory" then
+            for entry in lfs.dir(font_dir) do
+                if entry ~= "." and entry ~= ".." then
+                    local path = font_dir .. "/" .. entry
+                    local mode = lfs.attributes(path, "mode")
+
+                    -- Check if it's a font file
+                    if mode == "file" then
+                        local ext = entry:match("%.([^.]+)$")
+                        if ext then
+                            ext = "." .. ext:lower()
+                            if font_extensions[ext] then
+                                -- Extract clean name without extension
+                                local font_name = entry:match("^(.+)%.")
+
+                                -- Avoid duplicates
+                                if font_name and not seen_fonts[font_name] then
+                                    seen_fonts[font_name] = true
+
+                                    -- Create display name (make it more readable)
+                                    local display_name = font_name
+                                    -- Replace common patterns for better readability
+                                    display_name = display_name:gsub("%-", " ")
+                                    display_name = display_name:gsub("_", " ")
+
+                                    table.insert(fonts, {
+                                        name = display_name,
+                                        value = font_name,
+                                    })
+                                end
+                            end
+                        end
+                    -- Also check subdirectories (like fonts/noto/)
+                    elseif mode == "directory" then
+                        local subdir_path = path
+                        for subentry in lfs.dir(subdir_path) do
+                            if subentry ~= "." and subentry ~= ".." then
+                                local subpath = subdir_path .. "/" .. subentry
+                                if lfs.attributes(subpath, "mode") == "file" then
+                                    local ext = subentry:match("%.([^.]+)$")
+                                    if ext then
+                                        ext = "." .. ext:lower()
+                                        if font_extensions[ext] then
+                                            local font_name = subentry:match("^(.+)%.")
+                                            if font_name and not seen_fonts[font_name] then
+                                                seen_fonts[font_name] = true
+                                                local display_name = font_name:gsub("%-", " "):gsub("_", " ")
+                                                table.insert(fonts, {
+                                                    name = display_name,
+                                                    value = font_name,
+                                                })
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- Sort alphabetically by display name
+    table.sort(fonts, function(a, b) return a.name < b.name end)
+
+    return fonts
 end
 
 function OPDS:onDispatcherRegisterActions()
@@ -126,16 +237,27 @@ function OPDS:addToMainMenu(menu_items)
                 },
                 {
                     text = _("Settings"),
-                    callback = function()
-                        self:showSettingsMenu()
-                    end,
+                    sub_item_table = {
+                        {
+                            text = _("Cover Size"),
+                            callback = function()
+                                self:showCoverSizeMenu()
+                            end,
+                        },
+                        {
+                            text = _("Catalog Font"),
+                            callback = function()
+                                self:showFontSelectionMenu()
+                            end,
+                        },
+                    },
                 },
             },
         }
     end
 end
 
-function OPDS:showSettingsMenu()
+function OPDS:showCoverSizeMenu()
     local current_preset = self:getCurrentPresetName()
     local current_ratio = self:getCoverHeightRatio()
 
@@ -143,7 +265,6 @@ function OPDS:showSettingsMenu()
     local buttons = {}
 
     -- Add preset buttons
-    -- Use a different loop variable name to avoid shadowing _
     for i = 1, #self.cover_size_presets do
         local preset = self.cover_size_presets[i]
         local is_current = (current_preset == preset.name)
@@ -156,10 +277,10 @@ function OPDS:showSettingsMenu()
             {
                 text = button_text,
                 callback = function()
-                    UIManager:close(self.settings_dialog)
+                    UIManager:close(self.cover_size_dialog)
                     self:setCoverHeightRatio(preset.ratio, preset.name)
                     UIManager:show(InfoMessage:new{
-                        text = T(_("Cover size set to %1 (%2%).\n\n%3\n\nChanges will apply when you next browse a catalog."),
+                        text = T(_("Cover size set to %1 (%2%%).\n\n%3\n\nChanges will apply when you next browse a catalog."),
                             preset.name,
                             math.floor(preset.ratio * 100),
                             preset.description),
@@ -183,19 +304,19 @@ function OPDS:showSettingsMenu()
         {
             text = custom_button_text,
             callback = function()
-                UIManager:close(self.settings_dialog)
+                UIManager:close(self.cover_size_dialog)
                 self:showCustomSizeDialog()
             end,
         },
     })
 
     -- Create and show dialog
-    self.settings_dialog = ButtonDialog:new{
+    self.cover_size_dialog = ButtonDialog:new{
         title = _("Cover Size Settings\n\nSelect a preset or choose custom size"),
         title_align = "center",
         buttons = buttons,
     }
-    UIManager:show(self.settings_dialog)
+    UIManager:show(self.cover_size_dialog)
 end
 
 function OPDS:showCustomSizeDialog()
@@ -225,10 +346,55 @@ function OPDS:showCustomSizeDialog()
         extra_text = _("Back to Presets"),
         extra_callback = function()
             UIManager:close(spin_widget)
-            self:showSettingsMenu()
+            self:showCoverSizeMenu()
         end,
     }
     UIManager:show(spin_widget)
+end
+
+function OPDS:showFontSelectionMenu()
+    local current_font = self:getCatalogFont()
+    local available_fonts = self:getAvailableFonts()
+
+    -- Build button list with available fonts
+    local buttons = {}
+
+    for i = 1, #available_fonts do
+        local font_info = available_fonts[i]
+        local is_current = (current_font == font_info.value)
+        local button_text = font_info.name
+        if is_current then
+            button_text = "✓ " .. button_text  -- Checkmark for current selection
+        end
+
+        table.insert(buttons, {
+            {
+                text = button_text,
+                callback = function()
+                    UIManager:close(self.font_dialog)
+                    self:setCatalogFont(font_info.value)
+                    UIManager:show(InfoMessage:new{
+                        text = T(_("Catalog font set to:\n%1\n\nChanges will apply when you next browse a catalog."),
+                            font_info.name),
+                        timeout = 3,
+                    })
+                end,
+            },
+        })
+
+        -- Add separator every 5 items for readability
+        if i % 5 == 0 and i < #available_fonts then
+            table.insert(buttons, {})
+        end
+    end
+
+    -- Create and show dialog
+    self.font_dialog = ButtonDialog:new{
+        title = _("Catalog Font Selection\n\nChoose a font for catalog entries"),
+        title_align = "center",
+        buttons = buttons,
+    }
+    UIManager:show(self.font_dialog)
 end
 
 function OPDS:onShowOPDSCatalog()
