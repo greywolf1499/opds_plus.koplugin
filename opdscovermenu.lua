@@ -22,6 +22,19 @@ function OPDSCoverMenu:updateItems(select_number)
     logger.warn("OPDS+: OPDSCoverMenu:updateItems() called")
     logger.warn("OPDS+: item_table exists:", self.item_table ~= nil)
 
+    -- Debug: Check if we have manager and settings
+    if self._manager then
+        logger.warn("OPDS+: _manager exists:", self._manager ~= nil)
+        if self._manager.settings then
+            logger.warn("OPDS+: settings exists:", self._manager.settings ~= nil)
+            logger.warn("OPDS+: cover_height_ratio:", self._manager.settings.cover_height_ratio)
+        else
+            logger.warn("OPDS+: WARNING - No settings found in _manager")
+        end
+    else
+        logger.warn("OPDS+: WARNING - No _manager reference found!")
+    end
+
     -- Cancel any scheduled cover loading from previous page
     if self._scheduled_cover_load then
         logger.warn("OPDS+: Cancelling scheduled cover load from previous page")
@@ -64,9 +77,18 @@ function OPDSCoverMenu:updateItems(select_number)
         -- Use OPDSListMenu for items with covers
         logger.warn("OPDS+: Using OPDSListMenu (covers present)")
 
+        -- IMPORTANT: Clear any previously calculated dimensions
+        -- so they get recalculated with new settings
+        self.cover_width = nil
+        self.cover_height = nil
+
         -- Set up cover properties and methods
         self.setCoverDimensions = OPDSListMenu.setCoverDimensions
-        self:setCoverDimensions()  -- Calculate and set cover dimensions
+
+        -- Calculate dimensions with current settings
+        logger.warn("OPDS+: Calculating cover dimensions...")
+        self:setCoverDimensions()
+        logger.warn("OPDS+: Calculated dimensions:", self.cover_width, "x", self.cover_height)
 
         self._items_to_update = {}
 

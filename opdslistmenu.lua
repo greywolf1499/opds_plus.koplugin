@@ -27,12 +27,11 @@ logger.warn("OPDS+ opdslistmenu.lua IS LOADING")
 logger.warn("========================================")
 
 -- ============================================
--- CONFIGURATION - Easy to modify
+-- CONFIGURATION - Can be overridden by settings
 -- ============================================
 local COVER_CONFIG = {
     -- Cover height as a fraction of screen height
-    -- Values: 0.05 to 0.25 (5% to 25% of screen height)
-    -- Smaller = more items per page, Larger = bigger covers
+    -- This is the DEFAULT value - actual value comes from settings
     cover_height_ratio = 0.10,  -- 10% of screen height (default)
 
     -- Minimum and maximum cover dimensions (in pixels)
@@ -43,6 +42,43 @@ local COVER_CONFIG = {
     -- Most books are roughly 2:3 (width:height)
     book_aspect_ratio = 2/3,  -- 0.666... (width is 66% of height)
 }
+
+-- Calculate cover dimensions based on screen and settings
+local function calculateCoverDimensions(custom_ratio)
+    logger.warn("========================================")
+    logger.warn("OPDS+: calculateCoverDimensions FUNCTION CALLED")
+    logger.warn("OPDS+: Parameter custom_ratio =", custom_ratio)
+    logger.warn("OPDS+: Type of custom_ratio =", type(custom_ratio))
+
+    local screen_height = Screen:getHeight()
+    logger.warn("OPDS+: screen_height =", screen_height)
+
+    -- Use custom ratio if provided, otherwise use default
+    local ratio = custom_ratio or COVER_CONFIG.cover_height_ratio
+    logger.warn("OPDS+: After 'or' logic, ratio =", ratio)
+
+    -- Calculate desired cover height
+    local cover_height = math.floor(screen_height * ratio)
+    logger.warn("OPDS+: Calculation:", screen_height, "*", ratio, "= raw:", screen_height * ratio)
+    logger.warn("OPDS+: After math.floor, cover_height =", cover_height)
+
+    -- Clamp to min/max values
+    local original_height = cover_height
+    cover_height = math.max(COVER_CONFIG.min_cover_height, cover_height)
+    logger.warn("OPDS+: After max(", COVER_CONFIG.min_cover_height, ",", original_height, "), cover_height =", cover_height)
+
+    cover_height = math.min(COVER_CONFIG.max_cover_height, cover_height)
+    logger.warn("OPDS+: After min(", COVER_CONFIG.max_cover_height, ",", cover_height, "), cover_height =", cover_height)
+
+    -- Calculate width maintaining aspect ratio
+    local cover_width = math.floor(cover_height * COVER_CONFIG.book_aspect_ratio)
+    logger.warn("OPDS+: cover_width =", cover_height, "*", COVER_CONFIG.book_aspect_ratio, "=", cover_width)
+
+    logger.warn("OPDS+: FINAL RETURN VALUES: width =", cover_width, "height =", cover_height)
+    logger.warn("========================================")
+
+    return cover_width, cover_height
+end
 
 -- Calculate cover dimensions based on screen and settings
 local function calculateCoverDimensions()
@@ -336,8 +372,26 @@ local OPDSListMenu = Menu:extend{
 
 -- Calculate and set cover dimensions
 function OPDSListMenu:setCoverDimensions()
-    self.cover_width, self.cover_height = calculateCoverDimensions()
-    logger.warn("OPDS+: Set cover dimensions to", self.cover_width, "x", self.cover_height)
+    local custom_ratio = nil
+
+    logger.warn("OPDS+: setCoverDimensions called")
+    logger.warn("OPDS+: self._manager exists:", self._manager ~= nil)
+    logger.warn("OPDS+: self.settings exists:", self.settings ~= nil)
+
+    -- Try to get ratio from multiple possible locations
+    if self._manager and self._manager.settings and self._manager.settings.cover_height_ratio then
+        custom_ratio = self._manager.settings.cover_height_ratio
+        logger.warn("OPDS+: Got ratio from self._manager.settings:", custom_ratio)
+    elseif self.settings and self.settings.cover_height_ratio then
+        custom_ratio = self.settings.cover_height_ratio
+        logger.warn("OPDS+: Got ratio from self.settings:", custom_ratio)
+    else
+        logger.warn("OPDS+: No custom ratio found, using default 0.10")
+    end
+
+    logger.warn("OPDS+: About to call calculateCoverDimensions with ratio:", custom_ratio)
+    self.cover_width, self.cover_height = calculateCoverDimensions(custom_ratio)
+    logger.warn("OPDS+: Calculated dimensions:", self.cover_width, "x", self.cover_height)
 end
 
 -- Override _recalculateDimen to properly calculate items per page with cover heights
@@ -432,6 +486,8 @@ function OPDSListMenu:updateItems(select_number)
         if entry then
             local item_width = self.content_width or Screen:getWidth()
             local item_height = self.item_height
+
+            logger.warn("OPDS+: Creating item", i, "with cover dimensions:", self.cover_width, "x", self.cover_height)
 
             local item = OPDSListMenuItem:new{
                 entry = entry,
