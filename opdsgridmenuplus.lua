@@ -702,7 +702,8 @@ function OPDSGridMenu:updateItems(select_number)
     -- Update page info with custom text
     if self.page_info then
         local columns = self.columns or 3
-        local custom_text = "▦ " .. self.page .. "/" .. self.page_num .. " (" .. self.perpage .. " items, " .. columns .. " cols)"
+        -- Shortened format: icon + page + items count only (no "cols" label)
+        local custom_text = "▦ " .. self.page .. "/" .. self.page_num .. " (" .. self.perpage .. " items)"
         logger.warn("OPDS+ Grid: Setting custom page info:", custom_text)
 
         -- Find and replace the text widget
