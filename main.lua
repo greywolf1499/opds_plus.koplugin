@@ -740,51 +740,6 @@ function OPDS:showGridColumnsMenu()
     UIManager:show(self.grid_columns_dialog)
 end
 
-function OPDS:showGridColumnsMenu()
-    local current_columns = self.settings.grid_columns or 3
-
-    local buttons = {}
-
-    for cols = 2, 4 do
-        local is_current = (current_columns == cols)
-        local button_text = tostring(cols)
-        if cols == 2 then
-            button_text = button_text .. " " .. _("columns (wider)")
-        elseif cols == 3 then
-            button_text = button_text .. " " .. _("columns (balanced)")
-        else
-            button_text = button_text .. " " .. _("columns (compact)")
-        end
-
-        if is_current then
-            button_text = "✓ " .. button_text
-        end
-
-        table.insert(buttons, {
-            {
-                text = button_text,
-                callback = function()
-                    UIManager:close(self.grid_columns_dialog)
-                    self.settings.grid_columns = cols
-                    self.opds_settings:saveSetting("settings", self.settings)
-                    self.opds_settings:flush()
-                    UIManager:show(InfoMessage:new{
-                        text = T(_("Grid columns set to %1.\n\nChanges will apply when you next browse a catalog in grid mode."), cols),
-                        timeout = 2,
-                    })
-                end,
-            },
-        })
-    end
-
-    self.grid_columns_dialog = ButtonDialog:new{
-        title = _("Grid Columns\n\nChoose how many books to display per row in grid view"),
-        title_align = "center",
-        buttons = buttons,
-    }
-    UIManager:show(self.grid_columns_dialog)
-end
-
 function OPDS:onShowOPDSCatalog()
     self.opds_browser = OPDSBrowser:new{
         servers = self.servers,
