@@ -292,6 +292,22 @@ function OPDS:addToMainMenu(menu_items)
                                         })
                                     end,
                                 },
+                            },
+                        },
+                        {
+                            text = _("List View Settings"),
+                            sub_item_table = {
+                                {
+                                    text = _("Cover Size"),
+                                    callback = function()
+                                        self:showCoverSizeMenu()
+                                    end,
+                                },
+                            },
+                        },
+                        {
+                            text = _("Grid View Settings"),
+                            sub_item_table = {
                                 {
                                     text = _("Grid Columns"),
                                     callback = function()
@@ -299,12 +315,6 @@ function OPDS:addToMainMenu(menu_items)
                                     end,
                                 },
                             },
-                        },
-                        {
-                            text = _("Cover Size"),
-                            callback = function()
-                                self:showCoverSizeMenu()
-                            end,
                         },
                         {
                             text = _("Font & Text"),
