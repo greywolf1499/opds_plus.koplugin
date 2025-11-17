@@ -42,13 +42,13 @@ local GRID_CONFIG = {
     -- Standard book aspect ratio
     book_aspect_ratio = 2/3,
 
-    -- Spacing
-    cell_padding = 8,        -- Padding inside each cell
-    cell_margin = 12,        -- Gap between cells (increased for better separation)
-    row_spacing = 16,        -- Space between rows (increased)
-    top_margin = 8,          -- Top margin of grid
-    bottom_margin = 8,       -- Bottom margin of grid
-    side_margin = 12,        -- Left/right margins (increased)
+    -- Spacing (reduced for better space utilization)
+    cell_padding = 6,        -- Padding inside each cell
+    cell_margin = 10,        -- Gap between cells (reduced from 12)
+    row_spacing = 12,        -- Space between rows (reduced from 16)
+    top_margin = 6,          -- Top margin of grid (reduced from 8)
+    bottom_margin = 6,       -- Bottom margin of grid (reduced from 8)
+    side_margin = 10,        -- Left/right margins (reduced from 12)
 
     -- Text
     title_lines_max = 2,     -- Maximum lines for title
@@ -215,7 +215,7 @@ function OPDSGridCell:init()
     -- Parse title and author
     local title, author = parseTitleAuthor(self.entry)
 
-    -- Get font settings
+        -- Get font settings
     local title_font = (self.font_settings and self.font_settings.title_font) or "smallinfofont"
     local title_size = (self.font_settings and self.font_settings.title_size) or 14
     local title_bold = (self.font_settings and self.font_settings.title_bold)
@@ -236,41 +236,100 @@ function OPDSGridCell:init()
     -- Calculate text area width (should match cover width for alignment)
     local text_width = self.cover_width
 
-    -- Calculate fixed height for text area to ensure alignment
-    -- This ensures all cells have same height even if text varies
-    local text_area_height = self.cell_height - self.cover_height - (GRID_CONFIG.cell_padding * 2) - 10
+    -- Calculate FIXED heights for uniform alignment across all cells
+    -- Title: strictly 2 lines maximum
+    local title_line_height = math.ceil(title_size * 1.3)
+    local title_fixed_height = title_line_height * 2
 
-    -- Build text group with FIXED height container
+    -- Author: strictly 1 line
+    local author_line_height = math.ceil(info_size * 1.2)
+    local author_fixed_height = GRID_CONFIG.show_author and author_line_height or 0
+
+    -- Gaps
+    local title_author_gap = GRID_CONFIG.show_author and 4 or 0
+    local cover_text_gap = 6
+
+    -- Total fixed text area height
+    local text_area_height = title_fixed_height + title_author_gap + author_fixed_height + cover_text_gap
+
+    -- Ensure it doesn't exceed what was calculated in setGridDimensions
+    local max_text_area = self.cell_height - self.cover_height - (GRID_CONFIG.cell_padding * 2)
+    text_area_height = math.min(text_area_height, max_text_area)
+
+    -- Build text group with FIXED heights for each element
     local text_group = VerticalGroup:new{
         align = "center",
     }
 
-    -- Title (limit to 2 lines with max height)
-    local max_title_height = title_size * 2.5  -- Max 2 lines
+    -- Title - TextBoxWidget with fixed height and truncation
     local title_widget = TextBoxWidget:new{
         text = title,
         face = Font:getFace(title_font, title_size),
-        width = text_width,
-        alignment = "center",
         bold = title_bold,
-        line_height = 0,
-        max_height = max_title_height,
+        width = text_width,
+        height = title_fixed_height,
+        alignment = "center",
+        fgcolor = Blitbuffer.COLOR_BLACK,
+        line_height = 0,  -- Use default line height
+        -- This will automatically truncate with "..." if text is too long
     }
-    table.insert(text_group, title_widget)
 
-    -- Author (if enabled and available) - also limited height
-    if GRID_CONFIG.show_author and author and author ~= "" then
-        table.insert(text_group, VerticalSpan:new{ width = 2 })
-        local author_widget = TextWidget:new{
-            text = author,
-            face = Font:getFace(info_font, info_size),
-            max_width = text_width,
-            fgcolor = info_color,
+    -- Wrap title in fixed container to ensure consistent height even if text is short
+    local title_container = FrameContainer:new{
+        width = text_width,
+        height = title_fixed_height,
+        padding = 0,
+        margin = 0,
+        bordersize = 0,
+        background = Blitbuffer.COLOR_WHITE,
+        CenterContainer:new{
+            dimen = Geom:new{
+                w = text_width,
+                h = title_fixed_height,
+            },
+            title_widget,
+        },
+    }
+    table.insert(text_group, title_container)
+
+    -- Author - FIXED height, single line with truncation
+    if GRID_CONFIG.show_author then
+        table.insert(text_group, VerticalSpan:new{ width = title_author_gap })
+
+        local author_widget
+        if author and author ~= "" then
+            -- Single line author with truncation
+            author_widget = TextWidget:new{
+                text = author,
+                face = Font:getFace(info_font, info_size),
+                max_width = text_width,
+                fgcolor = info_color,
+            }
+        else
+            -- Empty placeholder to maintain spacing
+            author_widget = VerticalSpan:new{ width = 0 }
+        end
+
+        -- Wrap in fixed-height container
+        local author_container = FrameContainer:new{
+            width = text_width,
+            height = author_fixed_height,
+            padding = 0,
+            margin = 0,
+            bordersize = 0,
+            background = Blitbuffer.COLOR_WHITE,
+            CenterContainer:new{
+                dimen = Geom:new{
+                    w = text_width,
+                    h = author_fixed_height,
+                },
+                author_widget,
+            },
         }
-        table.insert(text_group, author_widget)
+        table.insert(text_group, author_container)
     end
 
-    -- NEW: Wrap text group in a fixed-height container to prevent overflow
+    -- Wrap entire text group in fixed-height container
     local TopContainer = require("ui/widget/container/topcontainer")
     local text_container = TopContainer:new{
         dimen = Geom:new{
@@ -281,8 +340,7 @@ function OPDSGridCell:init()
     }
 
     -- Assemble cell: cover at top, then text
-    -- Use LeftContainer to align everything to left (for grid row alignment)
-    local LeftContainer = require("ui/widget/container/leftcontainer")
+    local CenterContainer = require("ui/widget/container/centercontainer")
 
     self[1] = FrameContainer:new{
         width = self.cell_width,
@@ -291,15 +349,15 @@ function OPDSGridCell:init()
         margin = 0,
         bordersize = 0,
         background = Blitbuffer.COLOR_WHITE,
-        LeftContainer:new{  -- Changed from CenterContainer to LeftContainer
+        CenterContainer:new{
             dimen = Geom:new{
                 w = self.cell_width - (GRID_CONFIG.cell_padding * 2),
                 h = self.cell_height - (GRID_CONFIG.cell_padding * 2),
             },
             VerticalGroup:new{
-                align = "left",  -- Changed from "center" to "left"
+                align = "center",
                 cover_widget,
-                VerticalSpan:new{ width = 6 },  -- Space between cover and text
+                VerticalSpan:new{ width = cover_text_gap },
                 text_container,
             },
         },
@@ -360,38 +418,87 @@ function OPDSGridMenu:setGridDimensions()
         logger.dbg("OPDS+ Grid: Using custom columns:", self.columns)
     end
 
-    -- Calculate available width for the grid
+    -- Get screen dimensions
     local screen_width = Screen:getWidth()
+    local screen_height = Screen:getHeight()
+
+    -- Calculate available dimensions
     local available_width = screen_width - (GRID_CONFIG.side_margin * 2)
 
+    -- Estimate available height more accurately
+    -- Title bar: ~77px, Page info: ~44px, Margins: 12px = ~133px total
+    -- Add 7px buffer for safety
+    local estimated_ui_overhead = 140
+    local estimated_available_height = screen_height - estimated_ui_overhead
+
+    -- TARGET: At least 2 rows for 3 columns on typical e-reader screens
+    local min_rows_target = 2
+
+    -- Account for row spacing in target calculation
+    -- For 2 rows: we need 1 gap of row_spacing between them
+    local row_spacing_total = (min_rows_target - 1) * GRID_CONFIG.row_spacing
+
+    -- Max row height = (available - spacing) / rows
+    local max_row_height = math.floor((estimated_available_height - row_spacing_total) / min_rows_target)
+
+    logger.dbg("OPDS+ Grid: Screen:", screen_width, "x", screen_height)
+    logger.dbg("OPDS+ Grid: Estimated available height:", estimated_available_height)
+    logger.dbg("OPDS+ Grid: Target rows:", min_rows_target, "with spacing:", row_spacing_total)
+    logger.dbg("OPDS+ Grid: Max row height (cell only):", max_row_height)
+
     -- Calculate cell width based on columns
-    -- Total width = (cell_width * columns) + (gap * (columns - 1))
     local total_gap_width = GRID_CONFIG.cell_margin * (self.columns - 1)
     local available_for_cells = available_width - total_gap_width
     self.cell_width = math.floor(available_for_cells / self.columns)
 
     -- Cover width should fit in cell with padding
-    self.cover_width = self.cell_width - (GRID_CONFIG.cell_padding * 2)
+    local max_cover_width = self.cell_width - (GRID_CONFIG.cell_padding * 2)
 
-    -- Calculate cover height maintaining aspect ratio
-    self.cover_height = math.floor(self.cover_width / GRID_CONFIG.book_aspect_ratio)
+    -- Calculate cover height from width maintaining aspect ratio
+    local cover_height_from_width = math.floor(max_cover_width / GRID_CONFIG.book_aspect_ratio)
 
-    -- Clamp cover height to reasonable limits
+    -- Get font settings for text height calculation
+    local title_size = 14
+    local info_size = 12
+    if self._manager and self._manager.settings then
+        title_size = self._manager.settings.title_size or 14
+        info_size = self._manager.settings.info_size or 12
+    end
+
+    -- Calculate minimum text area needed
+    local title_height = math.ceil(title_size * 2 * 1.3)  -- 2 lines max
+    local author_height = GRID_CONFIG.show_author and math.ceil(info_size * 1.2) or 0
+    local cover_text_gap = 6
+    local text_buffer = 8
+    local min_text_area = title_height + author_height + cover_text_gap + text_buffer
+
+    -- Calculate maximum cover height that fits in our row budget
+    -- max_row_height is just the CELL height (not including spacing between rows)
+    local max_cover_height_for_rows = max_row_height - min_text_area - (GRID_CONFIG.cell_padding * 2)
+
+    -- Use the smaller of the two: width-based or height-based
+    self.cover_height = math.min(cover_height_from_width, max_cover_height_for_rows)
+
+    -- Clamp to absolute limits
     self.cover_height = math.max(GRID_CONFIG.min_cover_height, self.cover_height)
     self.cover_height = math.min(GRID_CONFIG.max_cover_height, self.cover_height)
 
-    -- Recalculate cover width if height was clamped
+    -- Recalculate cover width from final height
     self.cover_width = math.floor(self.cover_height * GRID_CONFIG.book_aspect_ratio)
 
-    -- Calculate cell height
-    -- Cell needs to fit: cover + text (approx 3-4 lines) + padding
-    local text_height = 70  -- Approximate height for title (2 lines) + author (1 line)
-    self.cell_height = self.cover_height + text_height + (GRID_CONFIG.cell_padding * 2) + 10
+    -- Calculate final cell height
+    local text_area_height = min_text_area
+    self.cell_height = self.cover_height + text_area_height + (GRID_CONFIG.cell_padding * 2)
 
     logger.dbg("OPDS+ Grid: Dimensions - Columns:", self.columns)
     logger.dbg("OPDS+ Grid: Dimensions - Available width:", available_width)
+    logger.dbg("OPDS+ Grid: Dimensions - Max cover for rows:", max_cover_height_for_rows)
+    logger.dbg("OPDS+ Grid: Dimensions - Cover from width:", cover_height_from_width)
     logger.dbg("OPDS+ Grid: Dimensions - Cell:", self.cell_width, "x", self.cell_height)
     logger.dbg("OPDS+ Grid: Dimensions - Cover:", self.cover_width, "x", self.cover_height)
+    logger.dbg("OPDS+ Grid: Dimensions - Text area:", text_area_height)
+    logger.dbg("OPDS+ Grid: Dimensions - Cover limited by:",
+        self.cover_height == max_cover_height_for_rows and "HEIGHT (rows)" or "WIDTH (columns)")
 end
 
 function OPDSGridMenu:_recalculateDimen()
@@ -405,33 +512,44 @@ function OPDSGridMenu:_recalculateDimen()
     local available_width = self.inner_dimen.w - (GRID_CONFIG.side_margin * 2)
     local available_height = self.inner_dimen.h
 
+    logger.dbg("OPDS+ Grid: Inner dimen:", self.inner_dimen.w, "x", self.inner_dimen.h)
+
     -- Subtract UI elements
     if not self.is_borderless then
         available_height = available_height - 2
+        logger.dbg("OPDS+ Grid: Subtracted border: 2px")
     end
     if not self.no_title and self.title_bar then
         available_height = available_height - self.title_bar.dimen.h
+        logger.dbg("OPDS+ Grid: Subtracted title bar:", self.title_bar.dimen.h)
     end
     if self.page_info then
-        available_height = available_height - self.page_info:getSize().h
+        local page_info_height = self.page_info:getSize().h
+        available_height = available_height - page_info_height
+        logger.dbg("OPDS+ Grid: Subtracted page info:", page_info_height)
     end
 
     available_height = available_height - GRID_CONFIG.top_margin - GRID_CONFIG.bottom_margin
 
-    -- Calculate row height (cell + spacing)
+    logger.dbg("OPDS+ Grid: Available height after subtractions:", available_height)
+    logger.dbg("OPDS+ Grid: Cell height:", self.cell_height)
+
+    -- Calculate how much space each row takes (cell + spacing)
     local row_height = self.cell_height + GRID_CONFIG.row_spacing
 
     -- Calculate rows per page
-    local rows_per_page = math.floor(available_height / row_height)
+    -- We can fit one more row if we have space for the cell itself (spacing only needed between rows)
+    local rows_per_page = math.floor((available_height + GRID_CONFIG.row_spacing) / row_height)
     if rows_per_page < 1 then rows_per_page = 1 end
 
     -- Items per page = rows * columns
     self.perpage = rows_per_page * self.columns
     if self.perpage < 1 then self.perpage = 1 end
 
-    logger.dbg("OPDS+ Grid: Available:", available_width, "x", available_height)
+    logger.dbg("OPDS+ Grid: Row height (cell + spacing):", row_height)
     logger.dbg("OPDS+ Grid: Rows per page:", rows_per_page)
     logger.dbg("OPDS+ Grid: Items per page:", self.perpage)
+    logger.dbg("OPDS+ Grid: Total items:", #self.item_table)
 
     -- Calculate total pages
     self.page_num = math.ceil(#self.item_table / self.perpage)
@@ -500,13 +618,24 @@ function OPDSGridMenu:updateItems(select_number)
     -- Calculate rows for this page
     local rows_per_page = math.ceil(self.perpage / self.columns)
 
+    -- Calculate total width used by cells
+    local total_cells_width = (self.cell_width * self.columns) + (GRID_CONFIG.cell_margin * (self.columns - 1))
+    local available_width = self.inner_dimen.w
+    local centering_offset = math.floor((available_width - total_cells_width) / 2)
+
+    logger.dbg("OPDS+ Grid: Total cells width:", total_cells_width)
+    logger.dbg("OPDS+ Grid: Available width:", available_width)
+    logger.dbg("OPDS+ Grid: Centering offset:", centering_offset)
+
     for row = 1, rows_per_page do
         local row_group = HorizontalGroup:new{
             align = "top",
         }
 
-        -- Add left margin
-        table.insert(row_group, HorizontalSpan:new{ width = GRID_CONFIG.side_margin })
+        -- Add centering offset at the start
+        if centering_offset > 0 then
+            table.insert(row_group, HorizontalSpan:new{ width = centering_offset })
+        end
 
         for col = 1, self.columns do
             local entry_idx = idx_offset + ((row - 1) * self.columns) + col
@@ -542,6 +671,11 @@ function OPDSGridMenu:updateItems(select_number)
             if col < self.columns then
                 table.insert(row_group, HorizontalSpan:new{ width = GRID_CONFIG.cell_margin })
             end
+        end
+
+        -- Add centering offset at the end (for symmetry)
+        if centering_offset > 0 then
+            table.insert(row_group, HorizontalSpan:new{ width = centering_offset })
         end
 
         -- Add row to item group
