@@ -81,6 +81,12 @@ local OPDS = WidgetContainer:extend{
         info_color = "dark_gray",  -- dark_gray or black
         use_same_font = true,  -- Use same font for title and info
     },
+    -- Default grid border settings
+    default_grid_border_settings = {
+    border_style = "none",         -- "none", "hash", or "individual"
+    border_size = 2,                -- Border thickness in pixels (1-5)
+    border_color = "dark_gray",    -- "dark_gray", "light_gray", or "black"
+    },
 }
 
 function OPDS:init()
@@ -120,6 +126,17 @@ function OPDS:init()
     end
     if not self.settings.grid_size_preset then
         self.settings.grid_size_preset = "Balanced"  -- Default preset
+    end
+
+    -- Initialize grid border settings with defaults
+    if not self.settings.grid_border_style then
+        self.settings.grid_border_style = "none"
+    end
+    if not self.settings.grid_border_size then
+        self.settings.grid_border_size = 2
+    end
+    if not self.settings.grid_border_color then
+        self.settings.grid_border_color = "dark_gray"
     end
 
     self:onDispatcherRegisterActions()
@@ -315,6 +332,13 @@ function OPDS:addToMainMenu(menu_items)
                                     text = _("Grid Layout"),
                                     callback = function()
                                         self:showGridLayoutMenu()
+                                    end,
+                                },
+                                -- ADD THIS NEW MENU ITEM:
+                                {
+                                    text = _("Grid Borders"),
+                                    callback = function()
+                                        self:showGridBorderMenu()
                                     end,
                                 },
                             },
@@ -738,6 +762,280 @@ function OPDS:showGridColumnsMenu()
         buttons = buttons,
     }
     UIManager:show(self.grid_columns_dialog)
+end
+
+function OPDS:showGridBorderMenu()
+    local current_style = self.settings.grid_border_style or "none"
+    local current_size = self.settings.grid_border_size or 2
+    local current_color = self.settings.grid_border_color or "dark_gray"
+
+    local buttons = {}
+
+    -- Border Style Section
+    table.insert(buttons, {
+        {
+            text = _("Border Style"),
+            enabled = false,
+        },
+    })
+
+    local styles = {
+        {id = "none", name = _("No Borders"), desc = _("Clean, borderless grid")},
+        {id = "hash", name = _("Hash Grid"), desc = _("Shared borders like # pattern")},
+        {id = "individual", name = _("Individual Tiles"), desc = _("Each book has its own border")},
+    }
+
+    for idx, style in ipairs(styles) do  -- CHANGED: from "_, style" to "idx, style"
+        local is_current = (current_style == style.id)
+        local button_text = style.name
+        if is_current then
+            button_text = "✓ " .. button_text
+        end
+
+        table.insert(buttons, {
+            {
+                text = button_text,
+                callback = function()
+                    UIManager:close(self.grid_border_dialog)
+                    self.settings.grid_border_style = style.id
+                    self.opds_settings:saveSetting("settings", self.settings)
+                    self.opds_settings:flush()
+                    UIManager:show(InfoMessage:new{
+                        text = T(_("Border style set to: %1\n\n%2\n\nChanges will apply when you next browse a catalog in grid view."),
+                            style.name, style.desc),
+                        timeout = 2.5,
+                    })
+                end,
+            },
+        })
+    end
+
+    -- Separator
+    table.insert(buttons, {})
+
+    -- Border Customization (only if not "none")
+    if current_style ~= "none" then
+        table.insert(buttons, {
+            {
+                text = _("Customize Borders"),
+                enabled = false,
+            },
+        })
+
+        -- Border Size
+        table.insert(buttons, {
+            {
+                text = T(_("Border Thickness: %1px"), current_size),
+                callback = function()
+                    UIManager:close(self.grid_border_dialog)
+                    self:showGridBorderSizeMenu()
+                end,
+            },
+        })
+
+        -- Border Color
+        local color_display = current_color == "dark_gray" and _("Dark Gray") or
+                             current_color == "light_gray" and _("Light Gray") or
+                             _("Black")
+        table.insert(buttons, {
+            {
+                text = T(_("Border Color: %1"), color_display),
+                callback = function()
+                    UIManager:close(self.grid_border_dialog)
+                    self:showGridBorderColorMenu()
+                end,
+            },
+        })
+    end
+
+    self.grid_border_dialog = ButtonDialog:new{
+        title = _("Grid Border Settings\n\nCustomize the appearance of grid borders"),
+        title_align = "center",
+        buttons = buttons,
+    }
+    UIManager:show(self.grid_border_dialog)
+end
+
+function OPDS:showGridBorderSizeMenu()
+    local current_size = self.settings.grid_border_size or 2
+
+    local spin_widget = SpinWidget:new{
+        title_text = _("Border Thickness"),
+        info_text = _("Adjust the thickness of grid borders.\n\n• Thinner borders = more subtle\n• Thicker borders = more defined\n\nRecommended: 2-3px"),
+        value = current_size,
+        value_min = 1,
+        value_max = 5,
+        value_step = 1,
+        value_hold_step = 1,
+        unit = "px",
+        ok_text = _("Apply"),
+        default_value = 2,
+        callback = function(spin)
+            self.settings.grid_border_size = spin.value
+            self.opds_settings:saveSetting("settings", self.settings)
+            self.opds_settings:flush()
+            UIManager:show(InfoMessage:new{
+                text = T(_("Border thickness set to %1px.\n\nChanges will apply when you next browse a catalog in grid view."),
+                    spin.value),
+                timeout = 2,
+            })
+        end,
+        extra_text = _("Back to Borders"),
+        extra_callback = function()
+            UIManager:close(spin_widget)
+            self:showGridBorderMenu()
+        end,
+    }
+    UIManager:show(spin_widget)
+end
+
+function OPDS:showGridBorderColorMenu()
+    local current_color = self.settings.grid_border_color or "dark_gray"
+
+    local buttons = {}
+
+    local colors = {
+        {id = "light_gray", name = _("Light Gray"), desc = _("Subtle, minimal contrast")},
+        {id = "dark_gray", name = _("Dark Gray"), desc = _("Balanced, clear definition")},
+        {id = "black", name = _("Black"), desc = _("High contrast, bold borders")},
+    }
+
+    for idx, color in ipairs(colors) do  -- CHANGED: from "_, color" to "idx, color"
+        local is_current = (current_color == color.id)
+        local button_text = color.name
+        if is_current then
+            button_text = "✓ " .. button_text
+        end
+
+        table.insert(buttons, {
+            {
+                text = button_text,
+                callback = function()
+                    UIManager:close(self.grid_border_color_dialog)
+                    self.settings.grid_border_color = color.id
+                    self.opds_settings:saveSetting("settings", self.settings)
+                    self.opds_settings:flush()
+                    UIManager:show(InfoMessage:new{
+                        text = T(_("Border color set to: %1\n\n%2\n\nChanges will apply when you next browse a catalog in grid view."),
+                            color.name, color.desc),
+                        timeout = 2.5,
+                    })
+                end,
+            },
+        })
+    end
+
+    -- Separator
+    table.insert(buttons, {})
+
+    -- Back button
+    table.insert(buttons, {
+        {
+            text = "← " .. _("Back to Border Settings"),
+            callback = function()
+                UIManager:close(self.grid_border_color_dialog)
+                self:showGridBorderMenu()
+            end,
+        },
+    })
+
+    self.grid_border_color_dialog = ButtonDialog:new{
+        title = _("Border Color\n\nChoose the color for grid borders"),
+        title_align = "center",
+        buttons = buttons,
+    }
+    UIManager:show(self.grid_border_color_dialog)
+end
+
+function OPDS:showGridBorderSizeMenu()
+    local current_size = self.settings.grid_border_size or 2
+
+    local spin_widget = SpinWidget:new{
+        title_text = _("Border Thickness"),
+        info_text = _("Adjust the thickness of grid borders.\n\n• Thinner borders = more subtle\n• Thicker borders = more defined\n\nRecommended: 2-3px"),
+        value = current_size,
+        value_min = 1,
+        value_max = 5,
+        value_step = 1,
+        value_hold_step = 1,
+        unit = "px",
+        ok_text = _("Apply"),
+        default_value = 2,
+        callback = function(spin)
+            self.settings.grid_border_size = spin.value
+            self.opds_settings:saveSetting("settings", self.settings)
+            self.opds_settings:flush()
+            UIManager:show(InfoMessage:new{
+                text = T(_("Border thickness set to %1px.\n\nChanges will apply when you next browse a catalog in grid view."),
+                    spin.value),
+                timeout = 2,
+            })
+        end,
+        extra_text = _("Back to Borders"),
+        extra_callback = function()
+            UIManager:close(spin_widget)
+            self:showGridBorderMenu()
+        end,
+    }
+    UIManager:show(spin_widget)
+end
+
+function OPDS:showGridBorderColorMenu()
+    local current_color = self.settings.grid_border_color or "dark_gray"
+
+    local buttons = {}
+
+    local colors = {
+        {id = "light_gray", name = _("Light Gray"), desc = _("Subtle, minimal contrast")},
+        {id = "dark_gray", name = _("Dark Gray"), desc = _("Balanced, clear definition")},
+        {id = "black", name = _("Black"), desc = _("High contrast, bold borders")},
+    }
+
+    for _, color in ipairs(colors) do
+        local is_current = (current_color == color.id)
+        local button_text = color.name
+        if is_current then
+            button_text = "✓ " .. button_text
+        end
+
+        table.insert(buttons, {
+            {
+                text = button_text,
+                callback = function()
+                    UIManager:close(self.grid_border_color_dialog)
+                    self.settings.grid_border_color = color.id
+                    self.opds_settings:saveSetting("settings", self.settings)
+                    self.opds_settings:flush()
+                    UIManager:show(InfoMessage:new{
+                        text = T(_("Border color set to: %1\n\n%2\n\nChanges will apply when you next browse a catalog in grid view."),
+                            color.name, color.desc),
+                        timeout = 2.5,
+                    })
+                end,
+            },
+        })
+    end
+
+    -- Separator
+    table.insert(buttons, {})
+
+    -- Back button
+    table.insert(buttons, {
+        {
+            text = "← " .. _("Back to Border Settings"),
+            callback = function()
+                UIManager:close(self.grid_border_color_dialog)
+                self:showGridBorderMenu()
+            end,
+        },
+    })
+
+    self.grid_border_color_dialog = ButtonDialog:new{
+        title = _("Border Color\n\nChoose the color for grid borders"),
+        title_align = "center",
+        buttons = buttons,
+    }
+    UIManager:show(self.grid_border_color_dialog)
 end
 
 function OPDS:onShowOPDSCatalog()
