@@ -70,6 +70,17 @@ local OPDS = WidgetContainer:extend{
             ratio = 0.20,  -- 20% of screen height
         },
     },
+    -- Default font settings
+    default_font_settings = {
+        title_font = "smallinfofont",
+        title_size = 16,
+        title_bold = true,
+        info_font = "smallinfofont",
+        info_size = 14,
+        info_bold = false,
+        info_color = "dark_gray",  -- dark_gray or black
+        use_same_font = true,  -- Use same font for title and info
+    },
 }
 
 function OPDS:init()
@@ -89,8 +100,12 @@ function OPDS:init()
     if not self.settings.cover_size_preset then
         self.settings.cover_size_preset = "Regular"
     end
-    if not self.settings.catalog_font then
-        self.settings.catalog_font = "smallinfofont"  -- Default KOReader UI font
+
+    -- Initialize font settings with defaults
+    for key, default_value in pairs(self.default_font_settings) do
+        if self.settings[key] == nil then
+            self.settings[key] = default_value
+        end
     end
 
     self:onDispatcherRegisterActions()
@@ -112,14 +127,17 @@ function OPDS:getCurrentPresetName()
     return self.settings.cover_size_preset or "Regular"
 end
 
-function OPDS:getCatalogFont()
-    return self.settings.catalog_font or "smallinfofont"
-end
-
-function OPDS:setCatalogFont(font_name)
-    self.settings.catalog_font = font_name
+function OPDS:saveSetting(key, value)
+    self.settings[key] = value
     self.opds_settings:saveSetting("settings", self.settings)
     self.opds_settings:flush()
+end
+
+function OPDS:getSetting(key)
+    if self.settings[key] ~= nil then
+        return self.settings[key]
+    end
+    return self.default_font_settings[key]
 end
 
 function OPDS:getAvailableFonts()
@@ -161,19 +179,10 @@ function OPDS:getAvailableFonts()
                         if ext then
                             ext = "." .. ext:lower()
                             if font_extensions[ext] then
-                                -- Extract clean name without extension
                                 local font_name = entry:match("^(.+)%.")
-
-                                -- Avoid duplicates
                                 if font_name and not seen_fonts[font_name] then
                                     seen_fonts[font_name] = true
-
-                                    -- Create display name (make it more readable)
-                                    local display_name = font_name
-                                    -- Replace common patterns for better readability
-                                    display_name = display_name:gsub("%-", " ")
-                                    display_name = display_name:gsub("_", " ")
-
+                                    local display_name = font_name:gsub("%-", " "):gsub("_", " ")
                                     table.insert(fonts, {
                                         name = display_name,
                                         value = font_name,
@@ -181,7 +190,7 @@ function OPDS:getAvailableFonts()
                                 end
                             end
                         end
-                    -- Also check subdirectories (like fonts/noto/)
+                    -- Also check subdirectories
                     elseif mode == "directory" then
                         local subdir_path = path
                         for subentry in lfs.dir(subdir_path) do
@@ -245,10 +254,125 @@ function OPDS:addToMainMenu(menu_items)
                             end,
                         },
                         {
-                            text = _("Catalog Font"),
-                            callback = function()
-                                self:showFontSelectionMenu()
-                            end,
+                            text = _("Font & Text"),
+                            sub_item_table = {
+                                {
+                                    text = _("Use Same Font for All"),
+                                    checked_func = function()
+                                        return self:getSetting("use_same_font")
+                                    end,
+                                    callback = function()
+                                        local current = self:getSetting("use_same_font")
+                                        self:saveSetting("use_same_font", not current)
+                                        UIManager:show(InfoMessage:new{
+                                            text = not current and
+                                                _("Now using the same font for title and details.\n\nChanges apply on next catalog browse.") or
+                                                _("Now using separate fonts for title and details.\n\nChanges apply on next catalog browse."),
+                                            timeout = 2,
+                                        })
+                                    end,
+                                },
+                                {
+                                    text = _("Title Settings"),
+                                    sub_item_table = {
+                                        {
+                                            text = _("Title Font"),
+                                            callback = function()
+                                                self:showFontSelectionMenu("title_font", _("Title Font"))
+                                            end,
+                                        },
+                                        {
+                                            text = _("Title Size"),
+                                            callback = function()
+                                                self:showSizeSelectionMenu("title_size", _("Title Font Size"), 12, 24, 16)
+                                            end,
+                                        },
+                                        {
+                                            text = _("Title Bold"),
+                                            checked_func = function()
+                                                return self:getSetting("title_bold")
+                                            end,
+                                            callback = function()
+                                                local current = self:getSetting("title_bold")
+                                                self:saveSetting("title_bold", not current)
+                                                UIManager:show(InfoMessage:new{
+                                                    text = not current and
+                                                        _("Title is now bold.") or
+                                                        _("Title is now regular weight."),
+                                                    timeout = 2,
+                                                })
+                                            end,
+                                        },
+                                    },
+                                },
+                                {
+                                    text = _("Information Settings"),
+                                    sub_item_table = {
+                                        {
+                                            text = _("Info Font"),
+                                            enabled_func = function()
+                                                return not self:getSetting("use_same_font")
+                                            end,
+                                            callback = function()
+                                                self:showFontSelectionMenu("info_font", _("Information Font"))
+                                            end,
+                                        },
+                                        {
+                                            text = _("Info Size"),
+                                            callback = function()
+                                                self:showSizeSelectionMenu("info_size", _("Information Font Size"), 10, 20, 14)
+                                            end,
+                                        },
+                                        {
+                                            text = _("Info Bold"),
+                                            checked_func = function()
+                                                return self:getSetting("info_bold")
+                                            end,
+                                            callback = function()
+                                                local current = self:getSetting("info_bold")
+                                                self:saveSetting("info_bold", not current)
+                                                UIManager:show(InfoMessage:new{
+                                                    text = not current and
+                                                        _("Information text is now bold.") or
+                                                        _("Information text is now regular weight."),
+                                                    timeout = 2,
+                                                })
+                                            end,
+                                        },
+                                        {
+                                            text = _("Info Color"),
+                                            sub_item_table = {
+                                                {
+                                                    text = _("Dark Gray (Subtle)"),
+                                                    checked_func = function()
+                                                        return self:getSetting("info_color") == "dark_gray"
+                                                    end,
+                                                    callback = function()
+                                                        self:saveSetting("info_color", "dark_gray")
+                                                        UIManager:show(InfoMessage:new{
+                                                            text = _("Information text color set to dark gray."),
+                                                            timeout = 2,
+                                                        })
+                                                    end,
+                                                },
+                                                {
+                                                    text = _("Black (High Contrast)"),
+                                                    checked_func = function()
+                                                        return self:getSetting("info_color") == "black"
+                                                    end,
+                                                    callback = function()
+                                                        self:saveSetting("info_color", "black")
+                                                        UIManager:show(InfoMessage:new{
+                                                            text = _("Information text color set to black."),
+                                                            timeout = 2,
+                                                        })
+                                                    end,
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
                         },
                     },
                 },
@@ -270,7 +394,7 @@ function OPDS:showCoverSizeMenu()
         local is_current = (current_preset == preset.name)
         local button_text = preset.name
         if is_current then
-            button_text = "✓ " .. button_text  -- Checkmark for current selection
+            button_text = "✓ " .. button_text
         end
 
         table.insert(buttons, {
@@ -327,13 +451,13 @@ function OPDS:showCustomSizeDialog()
         title_text = _("Custom Cover Size"),
         info_text = _("Adjust the size of book covers as a percentage of screen height.\n\n• Smaller values = more books per page\n• Larger values = bigger covers, fewer books per page\n\nRecommended range: 8% to 20%"),
         value = current_percent,
-        value_min = 5,   -- 5% minimum
-        value_max = 25,  -- 25% maximum
+        value_min = 5,
+        value_max = 25,
         value_step = 1,
         value_hold_step = 5,
         unit = "%",
         ok_text = _("Apply"),
-        default_value = 10,  -- 10% default
+        default_value = 10,
         callback = function(spin)
             local new_ratio = spin.value / 100
             self:setCoverHeightRatio(new_ratio, "Custom")
@@ -352,8 +476,8 @@ function OPDS:showCustomSizeDialog()
     UIManager:show(spin_widget)
 end
 
-function OPDS:showFontSelectionMenu()
-    local current_font = self:getCatalogFont()
+function OPDS:showFontSelectionMenu(setting_key, title)
+    local current_font = self:getSetting(setting_key)
     local available_fonts = self:getAvailableFonts()
 
     -- Build button list with available fonts
@@ -364,7 +488,7 @@ function OPDS:showFontSelectionMenu()
         local is_current = (current_font == font_info.value)
         local button_text = font_info.name
         if is_current then
-            button_text = "✓ " .. button_text  -- Checkmark for current selection
+            button_text = "✓ " .. button_text
         end
 
         table.insert(buttons, {
@@ -372,9 +496,10 @@ function OPDS:showFontSelectionMenu()
                 text = button_text,
                 callback = function()
                     UIManager:close(self.font_dialog)
-                    self:setCatalogFont(font_info.value)
+                    self:saveSetting(setting_key, font_info.value)
                     UIManager:show(InfoMessage:new{
-                        text = T(_("Catalog font set to:\n%1\n\nChanges will apply when you next browse a catalog."),
+                        text = T(_("%1 set to:\n%2\n\nChanges will apply when you next browse a catalog."),
+                            title,
                             font_info.name),
                         timeout = 3,
                     })
@@ -390,11 +515,38 @@ function OPDS:showFontSelectionMenu()
 
     -- Create and show dialog
     self.font_dialog = ButtonDialog:new{
-        title = _("Catalog Font Selection\n\nChoose a font for catalog entries"),
+        title = T(_("%1 Selection\n\nChoose a font"), title),
         title_align = "center",
         buttons = buttons,
     }
     UIManager:show(self.font_dialog)
+end
+
+function OPDS:showSizeSelectionMenu(setting_key, title, min_size, max_size, default_size)
+    local current_size = self:getSetting(setting_key)
+
+    local spin_widget = SpinWidget:new{
+        title_text = title,
+        info_text = _("Adjust the font size.\n\nChanges will apply when you next browse a catalog."),
+        value = current_size,
+        value_min = min_size,
+        value_max = max_size,
+        value_step = 1,
+        value_hold_step = 2,
+        unit = "pt",
+        ok_text = _("Apply"),
+        default_value = default_size,
+        callback = function(spin)
+            self:saveSetting(setting_key, spin.value)
+            UIManager:show(InfoMessage:new{
+                text = T(_("%1 set to %2pt.\n\nChanges will apply when you next browse a catalog."),
+                    title,
+                    spin.value),
+                timeout = 2,
+            })
+        end,
+    }
+    UIManager:show(spin_widget)
 end
 
 function OPDS:onShowOPDSCatalog()
@@ -407,7 +559,7 @@ function OPDS:onShowOPDSCatalog()
         is_popout = false,
         is_borderless = true,
         title_bar_fm_style = true,
-        show_covers = true, -- Enable cover display
+        show_covers = true,
         _manager = self,
         file_downloaded_callback = function(file)
             self:showFileDownloadedDialog(file)
