@@ -41,41 +41,32 @@ local COVER_CONFIG = {
     -- Standard book aspect ratio (portrait orientation)
     -- Most books are roughly 2:3 (width:height)
     book_aspect_ratio = 2/3,  -- 0.666... (width is 66% of height)
+
+    -- Spacing and padding
+    item_top_padding = 6,     -- Padding above each item
+    item_bottom_padding = 6,  -- Padding below each item
+    cover_left_margin = 6,    -- Margin to left of cover
+    cover_right_margin = 8,   -- Margin between cover and text
 }
 
 -- Calculate cover dimensions based on screen and settings
 local function calculateCoverDimensions(custom_ratio)
-    logger.warn("========================================")
-    logger.warn("OPDS+: calculateCoverDimensions FUNCTION CALLED")
-    logger.warn("OPDS+: Parameter custom_ratio =", custom_ratio)
-    logger.warn("OPDS+: Type of custom_ratio =", type(custom_ratio))
-
     local screen_height = Screen:getHeight()
-    logger.warn("OPDS+: screen_height =", screen_height)
 
     -- Use custom ratio if provided, otherwise use default
     local ratio = custom_ratio or COVER_CONFIG.cover_height_ratio
-    logger.warn("OPDS+: After 'or' logic, ratio =", ratio)
 
     -- Calculate desired cover height
     local cover_height = math.floor(screen_height * ratio)
-    logger.warn("OPDS+: Calculation:", screen_height, "*", ratio, "= raw:", screen_height * ratio)
-    logger.warn("OPDS+: After math.floor, cover_height =", cover_height)
 
     -- Clamp to min/max values
-    local original_height = cover_height
     cover_height = math.max(COVER_CONFIG.min_cover_height, cover_height)
-    logger.warn("OPDS+: After max(", COVER_CONFIG.min_cover_height, ",", original_height, "), cover_height =", cover_height)
-
     cover_height = math.min(COVER_CONFIG.max_cover_height, cover_height)
-    logger.warn("OPDS+: After min(", COVER_CONFIG.max_cover_height, ",", cover_height, "), cover_height =", cover_height)
 
     -- Calculate width maintaining aspect ratio
     local cover_width = math.floor(cover_height * COVER_CONFIG.book_aspect_ratio)
-    logger.warn("OPDS+: cover_width =", cover_height, "*", COVER_CONFIG.book_aspect_ratio, "=", cover_width)
 
-    logger.warn("OPDS+: FINAL RETURN VALUES: width =", cover_width, "height =", cover_height)
-    logger.warn("========================================")
+    logger.dbg("OPDS+: Cover dimensions:", cover_width, "x", cover_height, "at", (ratio * 100) .. "%")
 
     return cover_width, cover_height
 end
@@ -100,13 +91,13 @@ local function getPlaceholderCover(width, height)
     local plugin_path = getPluginPath()
     local placeholder_path = plugin_path .. "placeholder.png"
 
-    logger.warn("OPDS+: Looking for placeholder at:", placeholder_path)
+    logger.dbg("OPDS+: Looking for placeholder at:", placeholder_path)
 
     -- Check if file exists
     local f = io.open(placeholder_path, "r")
     if f then
         f:close()
-        logger.warn("OPDS+: Found placeholder file, loading...")
+        logger.dbg("OPDS+: Found placeholder file, loading...")
 
         -- Load and render the image
         local ok, image = pcall(function()
@@ -114,18 +105,18 @@ local function getPlaceholderCover(width, height)
         end)
 
         if ok and image then
-            logger.warn("OPDS+: Successfully loaded placeholder image")
+            logger.dbg("OPDS+: Successfully loaded placeholder image")
             placeholder_cover_bb = image
             return placeholder_cover_bb
         else
             logger.warn("OPDS+: Failed to load placeholder image:", tostring(image))
         end
     else
-        logger.warn("OPDS+: Placeholder file not found at:", placeholder_path)
+        logger.dbg("OPDS+: Placeholder file not found at:", placeholder_path)
     end
 
     -- Fallback: create a simple solid color placeholder
-    logger.warn("OPDS+: Creating simple fallback placeholder")
+    logger.dbg("OPDS+: Creating simple fallback placeholder")
     local bb = Blitbuffer.new(width, height, Blitbuffer.TYPE_BB8)
 
     -- Fill with gray (value between 0-255, where 255 is white)
@@ -152,8 +143,51 @@ local function getPlaceholderCover(width, height)
 
     placeholder_cover_bb = bb
 
-    logger.warn("OPDS+: Created fallback placeholder", width, "x", height)
+    logger.dbg("OPDS+: Created fallback placeholder", width, "x", height)
     return placeholder_cover_bb
+end
+
+-- Parse title and author from combined text field
+-- OPDS provides title and author separately, but sometimes they're combined in text
+local function parseTitleAuthor(entry)
+    local title = entry.title  -- Try dedicated title field first
+    local author = entry.author  -- Try dedicated author field
+
+    -- If we don't have a separate title, try to parse from text
+    if not title or title == "" then
+        if entry.text then
+            -- Try to split "Title - Author" format
+            local title_part, author_part = entry.text:match("^(.+)%s*%-%s*(.+)$")
+            if title_part and author_part then
+                title = title_part
+                -- Only use parsed author if we don't already have one
+                if not author or author == "" then
+                    author = author_part
+                end
+            else
+                -- Couldn't split, use text as title
+                title = entry.text
+            end
+        end
+    end
+
+    return title or _("Unknown"), author
+end
+
+-- Format series information for display
+local function formatSeriesInfo(series, series_index)
+    -- Only show if we have a non-empty series name
+    if not series or series == "" then
+        return nil
+    end
+
+    -- If we have both series and index
+    if series_index and series_index ~= "" then
+        return series .. " #" .. series_index
+    end
+
+    -- Just series name
+    return series
 end
 
 -- This is a simplified menu that displays OPDS catalog items with cover images
@@ -214,94 +248,108 @@ function OPDSListMenuItem:init()
         }
     end
 
-    -- Calculate text area dimensions
-    local margin = Size.margin.default or 4
-    local padding = Size.padding.tiny or 2
+    -- Calculate spacing and dimensions
+    local top_padding = COVER_CONFIG.item_top_padding
+    local bottom_padding = COVER_CONFIG.item_bottom_padding
+    local cover_left_margin = COVER_CONFIG.cover_left_margin
+    local cover_right_margin = COVER_CONFIG.cover_right_margin
+    local text_padding = Size.padding.tiny or 2
 
-    local text_width = self.width - self.cover_width - (margin * 3)
-    local text_height = self.height - (margin * 2)
+    -- Available space for text
+    local text_width = self.width - self.cover_width - cover_left_margin - cover_right_margin
+    local text_height = self.height - top_padding - bottom_padding
 
     if text_width <= 0 or text_height <= 0 then
         text_width = math.max(text_width, 100)
         text_height = math.max(text_height, 50)
     end
 
-    -- Remove the debug "[OPDS+]" prefix now that it's working
-    local display_text = self.entry.text or self.entry.title or _("Unknown")
+    -- Parse title and author from entry
+    local title, author = parseTitleAuthor(self.entry)
 
+    logger.dbg("OPDS+: Parsed - Title:", title, "Author:", author)
+
+    -- Build text information widgets
+    local text_group = VerticalGroup:new{
+        align = "left",
+    }
+
+    -- Title (bold, larger)
     local title_widget = TextBoxWidget:new{
-        text = display_text,
+        text = title,
         face = Font:getFace("smallinfofont", 16),
         width = text_width,
         alignment = "left",
         bold = true,
     }
+    table.insert(text_group, title_widget)
 
-    local text_group = VerticalGroup:new{
-        align = "left",
-        title_widget,
-    }
-
-    -- Add author if available
-    if self.entry.author then
-        table.insert(text_group, VerticalSpan:new{ width = padding })
+    -- Author (if available)
+    if author and author ~= "" then
+        table.insert(text_group, VerticalSpan:new{ width = text_padding })
         table.insert(text_group, TextWidget:new{
-            text = self.entry.author,
+            text = author,
             face = Font:getFace("smallinfofont", 14),
             max_width = text_width,
+            fgcolor = Blitbuffer.COLOR_DARK_GRAY,
         })
     end
 
-    -- Add mandatory info if available
+    -- Series information (if available and valid)
+    local series_text = formatSeriesInfo(self.entry.series, self.entry.series_index)
+    if series_text then
+        table.insert(text_group, VerticalSpan:new{ width = text_padding })
+        table.insert(text_group, TextWidget:new{
+            text = "📚 " .. series_text,  -- Book emoji prefix
+            face = Font:getFace("smallinfofont", 13),
+            max_width = text_width,
+            fgcolor = Blitbuffer.COLOR_DARK_GRAY,
+        })
+    end
+
+    -- Mandatory info (file format, etc.) if available
     if self.entry.mandatory then
-        table.insert(text_group, VerticalSpan:new{ width = padding })
+        table.insert(text_group, VerticalSpan:new{ width = text_padding })
         table.insert(text_group, TextWidget:new{
             text = self.entry.mandatory,
-            face = Font:getFace("smallinfofont", 13),
-            fgcolor = Blitbuffer.COLOR_DARK_GRAY,
+            face = Font:getFace("smallinfofont", 12),
             max_width = text_width,
+            fgcolor = Blitbuffer.COLOR_LIGHT_GRAY,
         })
     end
 
-    -- Optional: Add debug info showing cover status (can be removed later)
-    if false then  -- Set to true to show debug info
-        local debug_text = "Cover: "
-        if self.entry.cover_bb then
-            debug_text = debug_text .. "✓ LOADED"
-        elseif self.entry.cover_url then
-            debug_text = debug_text .. "Loading..."
-        else
-            debug_text = debug_text .. "NONE"
-        end
+    -- Assemble the complete item with proper spacing
+    -- KEY CHANGE: Use TopContainer instead of default (center) alignment for text
+    local TopContainer = require("ui/widget/container/topcontainer")
 
-        table.insert(text_group, VerticalSpan:new{ width = padding })
-        table.insert(text_group, TextWidget:new{
-            text = debug_text,
-            face = Font:getFace("smallinfofont", 11),
-            fgcolor = Blitbuffer.COLOR_DARK_GRAY,
-            max_width = text_width,
-        })
-    end
-
-    -- Assemble the complete item
     self[1] = FrameContainer:new{
         width = self.width,
         height = self.height,
         padding = 0,
-        bordersize = Size.border.thin or 1,
+        margin = 0,
+        bordersize = 0,
         background = Blitbuffer.COLOR_WHITE,
-        HorizontalGroup:new{
-            align = "top",
-            HorizontalSpan:new{ width = margin },
-            cover_widget,
-            HorizontalSpan:new{ width = margin },
-            LeftContainer:new{
-                dimen = Geom:new{
-                    w = text_width,
-                    h = text_height,
+        VerticalGroup:new{
+            align = "left",
+            -- Top padding
+            VerticalSpan:new{ width = top_padding },
+            -- Main content
+            HorizontalGroup:new{
+                align = "top",  -- This aligns cover and text to top
+                HorizontalSpan:new{ width = cover_left_margin },
+                cover_widget,
+                HorizontalSpan:new{ width = cover_right_margin },
+                -- Use TopContainer to align text content to top
+                TopContainer:new{
+                    dimen = Geom:new{
+                        w = text_width,
+                        h = text_height,
+                    },
+                    text_group,
                 },
-                text_group,
             },
+            -- Bottom padding
+            VerticalSpan:new{ width = bottom_padding },
         }
     }
 
@@ -309,7 +357,7 @@ function OPDSListMenuItem:init()
 end
 
 function OPDSListMenuItem:update()
-    logger.warn("OPDS+: OPDSListMenuItem:update() - refreshing with new cover")
+    logger.dbg("OPDS+: OPDSListMenuItem:update() - refreshing with new cover")
     -- Re-initialize with updated entry data
     self:init()
     UIManager:setDirty(self.show_parent, function()
@@ -319,7 +367,7 @@ end
 
 -- Handle tap events - delegate to parent menu
 function OPDSListMenuItem:onTapSelect(arg, ges)
-    logger.warn("OPDS+: OPDSListMenuItem:onTapSelect called for:", self.entry.text)
+    logger.dbg("OPDS+: OPDSListMenuItem:onTapSelect called for:", self.entry.text)
     if self.menu and self.menu.onMenuSelect then
         self.menu:onMenuSelect(self.entry)
         return true
@@ -329,7 +377,7 @@ end
 
 -- Handle hold events - delegate to parent menu
 function OPDSListMenuItem:onHoldSelect(arg, ges)
-    logger.warn("OPDS+: OPDSListMenuItem:onHoldSelect called for:", self.entry.text)
+    logger.dbg("OPDS+: OPDSListMenuItem:onHoldSelect called for:", self.entry.text)
     if self.menu and self.menu.onMenuHold then
         self.menu:onMenuHold(self.entry)
         return true
@@ -352,29 +400,26 @@ local OPDSListMenu = Menu:extend{
 function OPDSListMenu:setCoverDimensions()
     local custom_ratio = nil
 
-    logger.warn("OPDS+: setCoverDimensions called")
-    logger.warn("OPDS+: self._manager exists:", self._manager ~= nil)
-    logger.warn("OPDS+: self.settings exists:", self.settings ~= nil)
+    logger.dbg("OPDS+: setCoverDimensions called")
 
     -- Try to get ratio from multiple possible locations
     if self._manager and self._manager.settings and self._manager.settings.cover_height_ratio then
         custom_ratio = self._manager.settings.cover_height_ratio
-        logger.warn("OPDS+: Got ratio from self._manager.settings:", custom_ratio)
+        logger.dbg("OPDS+: Got ratio from settings:", custom_ratio)
     elseif self.settings and self.settings.cover_height_ratio then
         custom_ratio = self.settings.cover_height_ratio
-        logger.warn("OPDS+: Got ratio from self.settings:", custom_ratio)
+        logger.dbg("OPDS+: Got ratio from self.settings:", custom_ratio)
     else
-        logger.warn("OPDS+: No custom ratio found, using default 0.10")
+        logger.dbg("OPDS+: No custom ratio found, using default")
     end
 
-    logger.warn("OPDS+: About to call calculateCoverDimensions with ratio:", custom_ratio)
     self.cover_width, self.cover_height = calculateCoverDimensions(custom_ratio)
-    logger.warn("OPDS+: Calculated dimensions:", self.cover_width, "x", self.cover_height)
+    logger.dbg("OPDS+: Set cover dimensions to", self.cover_width, "x", self.cover_height)
 end
 
 -- Override _recalculateDimen to properly calculate items per page with cover heights
 function OPDSListMenu:_recalculateDimen()
-    logger.warn("OPDS+: OPDSListMenu:_recalculateDimen() called")
+    logger.dbg("OPDS+: OPDSListMenu:_recalculateDimen() called")
 
     -- Make sure we have cover dimensions
     if not self.cover_width or not self.cover_height then
@@ -395,9 +440,8 @@ function OPDSListMenu:_recalculateDimen()
         available_height = available_height - self.page_info:getSize().h
     end
 
-    -- Each item height = cover height + margins (top and bottom)
-    local margin = Size.margin.default or 4
-    self.item_height = self.cover_height + (margin * 2)
+    -- Each item height = cover height + top padding + bottom padding + separator line
+    self.item_height = self.cover_height + COVER_CONFIG.item_top_padding + COVER_CONFIG.item_bottom_padding
 
     -- Calculate how many items fit in available height
     self.perpage = math.floor(available_height / self.item_height)
@@ -407,9 +451,9 @@ function OPDSListMenu:_recalculateDimen()
         self.perpage = 1
     end
 
-    logger.warn("OPDS+: Available height:", available_height)
-    logger.warn("OPDS+: Item height:", self.item_height)
-    logger.warn("OPDS+: Items per page:", self.perpage)
+    logger.dbg("OPDS+: Available height:", available_height)
+    logger.dbg("OPDS+: Item height:", self.item_height)
+    logger.dbg("OPDS+: Items per page:", self.perpage)
 
     -- Calculate total pages
     self.page_num = math.ceil(#self.item_table / self.perpage)
@@ -430,13 +474,11 @@ function OPDSListMenu:_recalculateDimen()
 end
 
 function OPDSListMenu:updateItems(select_number)
-    logger.warn("========================================")
-    logger.warn("OPDS+: OPDSListMenu:updateItems() CALLED")
-    logger.warn("========================================")
+    logger.dbg("OPDS+: OPDSListMenu:updateItems() called")
 
     -- Cancel any previous image loading
     if self.halt_image_loading then
-        logger.warn("OPDS+: Cancelling previous image loading")
+        logger.dbg("OPDS+: Cancelling previous image loading")
         self.halt_image_loading()
         self.halt_image_loading = nil
     end
@@ -455,7 +497,7 @@ function OPDSListMenu:updateItems(select_number)
     self._items_to_update = {}
     local idx_offset = (self.page - 1) * self.perpage
 
-    logger.warn("OPDS+: Building page", self.page, "with", self.perpage, "items per page")
+    logger.dbg("OPDS+: Building page", self.page, "with", self.perpage, "items per page")
 
     for i = 1, self.perpage do
         local entry_idx = idx_offset + i
@@ -464,8 +506,6 @@ function OPDSListMenu:updateItems(select_number)
         if entry then
             local item_width = self.content_width or Screen:getWidth()
             local item_height = self.item_height
-
-            logger.warn("OPDS+: Creating item", i, "with cover dimensions:", self.cover_width, "x", self.cover_height)
 
             local item = OPDSListMenuItem:new{
                 entry = entry,
@@ -478,11 +518,21 @@ function OPDSListMenu:updateItems(select_number)
             }
 
             table.insert(self.item_group, item)
+
+            -- Add separator line between items (but not after the last one)
+            if i < self.perpage and entry_idx < #self.item_table then
+                local LineWidget = require("ui/widget/linewidget")
+                table.insert(self.item_group, LineWidget:new{
+                    dimen = Geom:new{ w = item_width, h = Size.line.thin },
+                    background = Blitbuffer.COLOR_DARK_GRAY,
+                })
+            end
+
             table.insert(self.layout, {item})  -- Wrap in table for focus manager
 
             -- Track items that need cover loading
             if entry.cover_url and entry.lazy_load_cover and not entry.cover_bb then
-                logger.warn("OPDS+: Queued for loading:", entry.text:sub(1, 40))
+                logger.dbg("OPDS+: Queued for loading:", entry.text:sub(1, 40))
                 table.insert(self._items_to_update, {
                     entry = entry,
                     widget = item,
@@ -491,7 +541,7 @@ function OPDSListMenu:updateItems(select_number)
         end
     end
 
-    logger.warn("OPDS+: Built", #self.item_group, "items,", #self._items_to_update, "need covers")
+    logger.dbg("OPDS+: Built", #self.item_group, "items,", #self._items_to_update, "need covers")
 
     -- Update page info
     self:updatePageInfo(select_number)
@@ -504,7 +554,7 @@ function OPDSListMenu:updateItems(select_number)
 
     -- Schedule cover loading
     if #self._items_to_update > 0 then
-        logger.warn("OPDS+: Scheduling cover loading in 1 second...")
+        logger.dbg("OPDS+: Scheduling cover loading in 1 second...")
 
         -- Store the scheduled function so it can be cancelled if needed
         self._scheduled_cover_load = function()
@@ -518,10 +568,7 @@ function OPDSListMenu:updateItems(select_number)
 end
 
 function OPDSListMenu:_loadVisibleCovers()
-    logger.warn("========================================")
-    logger.warn("OPDS+: _loadVisibleCovers() STARTING")
-    logger.warn("OPDS+: Items to load:", #self._items_to_update)
-    logger.warn("========================================")
+    logger.dbg("OPDS+: _loadVisibleCovers() starting")
 
     if #self._items_to_update == 0 then
         return
@@ -536,18 +583,18 @@ function OPDSListMenu:_loadVisibleCovers()
         if url and not items_by_url[url] then
             table.insert(urls, url)
             items_by_url[url] = {item_data}
-            logger.warn("OPDS+: Will load:", url)
+            logger.dbg("OPDS+: Will load:", url)
         elseif url then
             table.insert(items_by_url[url], item_data)
         end
     end
 
     if #urls == 0 then
-        logger.warn("OPDS+: No valid URLs to load!")
+        logger.dbg("OPDS+: No valid URLs to load!")
         return
     end
 
-    logger.warn("OPDS+: Loading", #urls, "unique cover URLs")
+    logger.dbg("OPDS+: Loading", #urls, "unique cover URLs")
 
     -- Load covers asynchronously
     local ImageLoader = require("image_loader")
@@ -556,13 +603,10 @@ function OPDSListMenu:_loadVisibleCovers()
     local username = self.root_catalog_username
     local password = self.root_catalog_password
 
-    logger.warn("OPDS+: Using credentials:", username and "yes" or "no")
+    logger.dbg("OPDS+: Using credentials:", username and "yes" or "no")
 
     local batch, halt = ImageLoader:loadImages(urls, function(url, content)
-        logger.warn("========================================")
-        logger.warn("OPDS+: Cover downloaded from:", url)
-        logger.warn("OPDS+: Size:", #content, "bytes")
-        logger.warn("========================================")
+        logger.dbg("OPDS+: Cover downloaded from:", url)
 
         local items = items_by_url[url]
         if not items then
@@ -576,7 +620,7 @@ function OPDSListMenu:_loadVisibleCovers()
 
             entry.lazy_load_cover = false
 
-            logger.warn("OPDS+: Rendering cover for:", entry.text:sub(1, 40))
+            logger.dbg("OPDS+: Rendering cover for:", entry.text:sub(1, 40))
 
             -- Render the cover image maintaining aspect ratio
             local ok, cover_bb = pcall(function()
@@ -590,7 +634,7 @@ function OPDSListMenu:_loadVisibleCovers()
             end)
 
             if ok and cover_bb then
-                logger.warn("OPDS+: ✓ Cover rendered successfully!")
+                logger.dbg("OPDS+: ✓ Cover rendered successfully!")
                 entry.cover_bb = cover_bb
 
                 -- Update the widget to show the new cover
@@ -602,14 +646,14 @@ function OPDSListMenu:_loadVisibleCovers()
         end
     end, username, password)
 
-    logger.warn("OPDS+: ImageLoader started, batch:", batch ~= nil, "halt:", halt ~= nil)
+    logger.dbg("OPDS+: ImageLoader started")
 
     self.halt_image_loading = halt
     self._items_to_update = {}
 end
 
 function OPDSListMenu:onCloseWidget()
-    logger.warn("OPDS+: OPDSListMenu:onCloseWidget()")
+    logger.dbg("OPDS+: OPDSListMenu:onCloseWidget()")
 
     -- Clean up image loading
     if self.halt_image_loading then
