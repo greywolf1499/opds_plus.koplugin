@@ -4,6 +4,7 @@ local DataStorage = require("datastorage")
 local Dispatcher = require("dispatcher")
 local LuaSettings = require("luasettings")
 local OPDSBrowser = require("opdsbrowser")
+local SpinWidget = require("ui/widget/spinwidget")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local util = require("util")
@@ -53,8 +54,24 @@ function OPDS:init()
     self.downloads = self.opds_settings:readSetting("downloads", {})
     self.settings = self.opds_settings:readSetting("settings", {})
     self.pending_syncs = self.opds_settings:readSetting("pending_syncs", {})
+
+    -- Initialize cover settings with defaults if not present
+    if not self.settings.cover_height_ratio then
+        self.settings.cover_height_ratio = 0.10  -- 10% default
+    end
+
     self:onDispatcherRegisterActions()
     self.ui.menu:registerToMainMenu(self)
+end
+
+function OPDS:getCoverHeightRatio()
+    return self.settings.cover_height_ratio or 0.10
+end
+
+function OPDS:setCoverHeightRatio(ratio)
+    self.settings.cover_height_ratio = ratio
+    self.opds_settings:saveSetting("settings", self.settings)
+    self.opds_settings:flush()
 end
 
 function OPDS:onDispatcherRegisterActions()
@@ -67,11 +84,52 @@ function OPDS:addToMainMenu(menu_items)
     if not self.ui.document then -- FileManager menu only
         menu_items.opdsplus = {
             text = _("OPDS Plus Catalog"),
-            callback = function()
-                self:onShowOPDSCatalog()
-            end,
+            sub_item_table = {
+                {
+                    text = _("Browse Catalogs"),
+                    callback = function()
+                        self:onShowOPDSCatalog()
+                    end,
+                },
+                {
+                    text = _("Settings"),
+                    callback = function()
+                        self:showSettingsMenu()
+                    end,
+                },
+            },
         }
     end
+end
+
+function OPDS:showSettingsMenu()
+    local SpinWidget = require("ui/widget/spinwidget")
+    local current_ratio = self:getCoverHeightRatio()
+
+    -- Convert ratio to percentage for display (0.10 -> 10)
+    local current_percent = math.floor(current_ratio * 100)
+
+    local spin_widget = SpinWidget:new{
+        title_text = _("Cover Size"),
+        info_text = _("Adjust the size of book covers as a percentage of screen height.\n\nSmaller values = more books per page\nLarger values = bigger covers, fewer books per page"),
+        value = current_percent,
+        value_min = 5,   -- 5% minimum
+        value_max = 25,  -- 25% maximum
+        value_step = 1,
+        value_hold_step = 5,
+        unit = "%",
+        ok_text = _("Apply"),
+        default_value = 10,  -- 10% default
+        callback = function(spin)
+            local new_ratio = spin.value / 100  -- Convert back to ratio (10 -> 0.10)
+            self:setCoverHeightRatio(new_ratio)
+            UIManager:show(require("ui/widget/infomessage"):new{
+                text = _("Cover size updated. Changes will apply when you next browse a catalog."),
+                timeout = 3,
+            })
+        end,
+    }
+    UIManager:show(spin_widget)
 end
 
 function OPDS:onShowOPDSCatalog()
