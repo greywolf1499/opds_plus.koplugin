@@ -603,6 +603,48 @@ function OPDSListMenu:updateItems(select_number)
         return "ui", refresh_dimen
     end)
 
+    -- Update page info with custom text
+    if self.page_info then
+        local custom_text = "≡ " .. self.page .. "/" .. self.page_num .. " (" .. self.perpage .. " items)"
+        logger.warn("OPDS+ List: Setting custom page info:", custom_text)
+
+        -- Find and replace the text widget
+        for i = 1, 10 do
+            if self.page_info[i] and type(self.page_info[i]) == "table" and self.page_info[i].text then
+                logger.warn("OPDS+ List: Found text widget at index", i)
+
+                -- Get the original widget's properties (with fallbacks)
+                local old_widget = self.page_info[i]
+                local Font = require("ui/font")
+                local face = old_widget.face or Font:getFace("smallinfofont")
+                local fgcolor = old_widget.fgcolor or Blitbuffer.COLOR_BLACK
+
+                logger.warn("OPDS+ List: Old widget face:", old_widget.face and "exists" or "nil")
+                logger.warn("OPDS+ List: Old widget fgcolor:", old_widget.fgcolor)
+
+                -- Free the old widget
+                if old_widget.free then
+                    old_widget:free()
+                end
+
+                -- Create new TextWidget with updated text
+                local TextWidget = require("ui/widget/textwidget")
+                self.page_info[i] = TextWidget:new{
+                    text = custom_text,
+                    face = face,
+                    fgcolor = fgcolor,
+                }
+
+                logger.warn("OPDS+ List: Created new text widget")
+
+                -- Mark dirty for full refresh
+                UIManager:setDirty(self.show_parent, "ui")
+
+                break
+            end
+        end
+    end
+
     -- Schedule cover loading
     if #self._items_to_update > 0 then
         logger.dbg("OPDS+: Scheduling cover loading in 1 second...")
@@ -616,6 +658,11 @@ function OPDSListMenu:updateItems(select_number)
 
         UIManager:scheduleIn(1, self._scheduled_cover_load)
     end
+end
+
+-- Override page info to show mode indicator
+function OPDSListMenu:getPageInfo()
+    return "≡ " .. self.page .. " / " .. self.page_num .. " (" .. self.perpage .. " items)"
 end
 
 function OPDSListMenu:_loadVisibleCovers()
