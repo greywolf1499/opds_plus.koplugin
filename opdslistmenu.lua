@@ -80,28 +80,6 @@ local function calculateCoverDimensions(custom_ratio)
     return cover_width, cover_height
 end
 
--- Calculate cover dimensions based on screen and settings
-local function calculateCoverDimensions()
-    local screen_height = Screen:getHeight()
-
-    -- Calculate desired cover height
-    local cover_height = math.floor(screen_height * COVER_CONFIG.cover_height_ratio)
-
-    -- Clamp to min/max values
-    cover_height = math.max(COVER_CONFIG.min_cover_height, cover_height)
-    cover_height = math.min(COVER_CONFIG.max_cover_height, cover_height)
-
-    -- Calculate width maintaining aspect ratio
-    local cover_width = math.floor(cover_height * COVER_CONFIG.book_aspect_ratio)
-
-    logger.warn("OPDS+: Cover dimensions calculated:")
-    logger.warn("OPDS+:   Screen height:", screen_height)
-    logger.warn("OPDS+:   Cover height:", cover_height, "(" .. (COVER_CONFIG.cover_height_ratio * 100) .. "% of screen)")
-    logger.warn("OPDS+:   Cover width:", cover_width, "(aspect ratio " .. COVER_CONFIG.book_aspect_ratio .. ")")
-
-    return cover_width, cover_height
-end
-
 -- ============================================
 
 -- Get the plugin directory path
