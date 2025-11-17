@@ -1,14 +1,16 @@
 local BD = require("ui/bidi")
+local ButtonDialog = require("ui/widget/buttondialog")
 local ConfirmBox = require("ui/widget/confirmbox")
 local DataStorage = require("datastorage")
 local Dispatcher = require("dispatcher")
+local InfoMessage = require("ui/widget/infomessage")
 local LuaSettings = require("luasettings")
 local OPDSBrowser = require("opdsbrowser")
 local SpinWidget = require("ui/widget/spinwidget")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local util = require("util")
-local _ = require("gettext")
+local _ = require("gettext")  -- Keep this as is - it works fine here
 local T = require("ffi/util").template
 
 local OPDS = WidgetContainer:extend{
@@ -43,6 +45,29 @@ local OPDS = WidgetContainer:extend{
             url = "https://gallica.bnf.fr/opds",
         },
     },
+    -- Cover size presets
+    cover_size_presets = {
+        {
+            name = "Compact",
+            description = "Small covers, more books per page",
+            ratio = 0.08,  -- 8% of screen height
+        },
+        {
+            name = "Regular",
+            description = "Balanced size, good readability",
+            ratio = 0.10,  -- 10% of screen height (default)
+        },
+        {
+            name = "Large",
+            description = "Larger covers, easier to see details",
+            ratio = 0.15,  -- 15% of screen height
+        },
+        {
+            name = "Extra Large",
+            description = "Very large covers, fewer books per page",
+            ratio = 0.20,  -- 20% of screen height
+        },
+    },
 }
 
 function OPDS:init()
@@ -57,7 +82,10 @@ function OPDS:init()
 
     -- Initialize cover settings with defaults if not present
     if not self.settings.cover_height_ratio then
-        self.settings.cover_height_ratio = 0.10  -- 10% default
+        self.settings.cover_height_ratio = 0.10  -- Regular (10% default)
+    end
+    if not self.settings.cover_size_preset then
+        self.settings.cover_size_preset = "Regular"
     end
 
     self:onDispatcherRegisterActions()
@@ -68,10 +96,15 @@ function OPDS:getCoverHeightRatio()
     return self.settings.cover_height_ratio or 0.10
 end
 
-function OPDS:setCoverHeightRatio(ratio)
+function OPDS:setCoverHeightRatio(ratio, preset_name)
     self.settings.cover_height_ratio = ratio
+    self.settings.cover_size_preset = preset_name or "Custom"
     self.opds_settings:saveSetting("settings", self.settings)
     self.opds_settings:flush()
+end
+
+function OPDS:getCurrentPresetName()
+    return self.settings.cover_size_preset or "Regular"
 end
 
 function OPDS:onDispatcherRegisterActions()
@@ -103,15 +136,75 @@ function OPDS:addToMainMenu(menu_items)
 end
 
 function OPDS:showSettingsMenu()
-    local SpinWidget = require("ui/widget/spinwidget")
+    local current_preset = self:getCurrentPresetName()
     local current_ratio = self:getCoverHeightRatio()
 
-    -- Convert ratio to percentage for display (0.10 -> 10)
+    -- Build button list with presets
+    local buttons = {}
+
+    -- Add preset buttons
+    -- Use a different loop variable name to avoid shadowing _
+    for i = 1, #self.cover_size_presets do
+        local preset = self.cover_size_presets[i]
+        local is_current = (current_preset == preset.name)
+        local button_text = preset.name
+        if is_current then
+            button_text = "✓ " .. button_text  -- Checkmark for current selection
+        end
+
+        table.insert(buttons, {
+            {
+                text = button_text,
+                callback = function()
+                    UIManager:close(self.settings_dialog)
+                    self:setCoverHeightRatio(preset.ratio, preset.name)
+                    UIManager:show(InfoMessage:new{
+                        text = T(_("Cover size set to %1 (%2%).\n\n%3\n\nChanges will apply when you next browse a catalog."),
+                            preset.name,
+                            math.floor(preset.ratio * 100),
+                            preset.description),
+                        timeout = 3,
+                    })
+                end,
+            },
+        })
+    end
+
+    -- Add separator
+    table.insert(buttons, {})
+
+    -- Add custom option button
+    local custom_button_text = "Custom"
+    if current_preset == "Custom" then
+        custom_button_text = "✓ " .. custom_button_text .. " (" .. math.floor(current_ratio * 100) .. "%)"
+    end
+
+    table.insert(buttons, {
+        {
+            text = custom_button_text,
+            callback = function()
+                UIManager:close(self.settings_dialog)
+                self:showCustomSizeDialog()
+            end,
+        },
+    })
+
+    -- Create and show dialog
+    self.settings_dialog = ButtonDialog:new{
+        title = _("Cover Size Settings\n\nSelect a preset or choose custom size"),
+        title_align = "center",
+        buttons = buttons,
+    }
+    UIManager:show(self.settings_dialog)
+end
+
+function OPDS:showCustomSizeDialog()
+    local current_ratio = self:getCoverHeightRatio()
     local current_percent = math.floor(current_ratio * 100)
 
     local spin_widget = SpinWidget:new{
-        title_text = _("Cover Size"),
-        info_text = _("Adjust the size of book covers as a percentage of screen height.\n\nSmaller values = more books per page\nLarger values = bigger covers, fewer books per page"),
+        title_text = _("Custom Cover Size"),
+        info_text = _("Adjust the size of book covers as a percentage of screen height.\n\n• Smaller values = more books per page\n• Larger values = bigger covers, fewer books per page\n\nRecommended range: 8% to 20%"),
         value = current_percent,
         value_min = 5,   -- 5% minimum
         value_max = 25,  -- 25% maximum
@@ -121,12 +214,18 @@ function OPDS:showSettingsMenu()
         ok_text = _("Apply"),
         default_value = 10,  -- 10% default
         callback = function(spin)
-            local new_ratio = spin.value / 100  -- Convert back to ratio (10 -> 0.10)
-            self:setCoverHeightRatio(new_ratio)
-            UIManager:show(require("ui/widget/infomessage"):new{
-                text = _("Cover size updated. Changes will apply when you next browse a catalog."),
+            local new_ratio = spin.value / 100
+            self:setCoverHeightRatio(new_ratio, "Custom")
+            UIManager:show(InfoMessage:new{
+                text = T(_("Cover size set to Custom (%1%%).\n\nChanges will apply when you next browse a catalog."),
+                    spin.value),
                 timeout = 3,
             })
+        end,
+        extra_text = _("Back to Presets"),
+        extra_callback = function()
+            UIManager:close(spin_widget)
+            self:showSettingsMenu()
         end,
     }
     UIManager:show(spin_widget)
