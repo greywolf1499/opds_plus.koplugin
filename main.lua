@@ -108,6 +108,17 @@ function OPDS:init()
         end
     end
 
+    -- Initialize display mode settings
+    if not self.settings.display_mode then
+        self.settings.display_mode = "list"  -- Default to list view
+    end
+    if not self.settings.grid_columns then
+        self.settings.grid_columns = 3  -- Default to 3 columns
+    end
+    if not self.settings.grid_cover_height_ratio then
+        self.settings.grid_cover_height_ratio = 0.20  -- 20% for grid view
+    end
+
     self:onDispatcherRegisterActions()
     self.ui.menu:registerToMainMenu(self)
 end
@@ -247,6 +258,48 @@ function OPDS:addToMainMenu(menu_items)
                 {
                     text = _("Settings"),
                     sub_item_table = {
+                        {
+                            text = _("Display Mode"),
+                            sub_item_table = {
+                                {
+                                    text = _("List View"),
+                                    checked_func = function()
+                                        local mode = self.settings.display_mode
+                                        return mode == "list" or mode == nil
+                                    end,
+                                    callback = function()
+                                        self.settings.display_mode = "list"
+                                        self.opds_settings:saveSetting("settings", self.settings)
+                                        self.opds_settings:flush()
+                                        UIManager:show(InfoMessage:new{
+                                            text = _("Display mode set to List View.\n\nChanges will apply when you next browse a catalog."),
+                                            timeout = 2,
+                                        })
+                                    end,
+                                },
+                                {
+                                    text = _("Grid View"),
+                                    checked_func = function()
+                                        return self.settings.display_mode == "grid"
+                                    end,
+                                    callback = function()
+                                        self.settings.display_mode = "grid"
+                                        self.opds_settings:saveSetting("settings", self.settings)
+                                        self.opds_settings:flush()
+                                        UIManager:show(InfoMessage:new{
+                                            text = _("Display mode set to Grid View.\n\nChanges will apply when you next browse a catalog."),
+                                            timeout = 2,
+                                        })
+                                    end,
+                                },
+                                {
+                                    text = _("Grid Columns"),
+                                    callback = function()
+                                        self:showGridColumnsMenu()
+                                    end,
+                                },
+                            },
+                        },
                         {
                             text = _("Cover Size"),
                             callback = function()
@@ -449,7 +502,7 @@ function OPDS:showCustomSizeDialog()
 
     local spin_widget = SpinWidget:new{
         title_text = _("Custom Cover Size"),
-        info_text = _("Adjust the size of book covers as a percentage of screen height.\n\n• Smaller values = more books per page\n• Larger values = bigger covers, fewer books per page\n\nRecommended range: 8% to 20%"),
+        info_text = _("Adjust the size of book covers as a percentage of screen height.\n\n• Smaller values = more books per page\n• Larger values = bigger covers, fewer books per page\n\nRecommended range: 8-20%"),
         value = current_percent,
         value_min = 5,
         value_max = 25,
@@ -547,6 +600,51 @@ function OPDS:showSizeSelectionMenu(setting_key, title, min_size, max_size, defa
         end,
     }
     UIManager:show(spin_widget)
+end
+
+function OPDS:showGridColumnsMenu()
+    local current_columns = self.settings.grid_columns or 3
+
+    local buttons = {}
+
+    for cols = 2, 4 do
+        local is_current = (current_columns == cols)
+        local button_text = tostring(cols)
+        if cols == 2 then
+            button_text = button_text .. " " .. _("columns (wider)")
+        elseif cols == 3 then
+            button_text = button_text .. " " .. _("columns (balanced)")
+        else
+            button_text = button_text .. " " .. _("columns (compact)")
+        end
+
+        if is_current then
+            button_text = "✓ " .. button_text
+        end
+
+        table.insert(buttons, {
+            {
+                text = button_text,
+                callback = function()
+                    UIManager:close(self.grid_columns_dialog)
+                    self.settings.grid_columns = cols
+                    self.opds_settings:saveSetting("settings", self.settings)
+                    self.opds_settings:flush()
+                    UIManager:show(InfoMessage:new{
+                        text = T(_("Grid columns set to %1.\n\nChanges will apply when you next browse a catalog in grid mode."), cols),
+                        timeout = 2,
+                    })
+                end,
+            },
+        })
+    end
+
+    self.grid_columns_dialog = ButtonDialog:new{
+        title = _("Grid Columns\n\nChoose how many books to display per row in grid view"),
+        title_align = "center",
+        buttons = buttons,
+    }
+    UIManager:show(self.grid_columns_dialog)
 end
 
 function OPDS:onShowOPDSCatalog()
