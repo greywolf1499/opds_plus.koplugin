@@ -77,8 +77,58 @@ function OPDSBrowser:init()
     self.onLeftButtonTap = function()
         self:showOPDSMenu()
     end
+
+    -- NEW: Initialize right button for view toggle (will be set when showing catalogs with covers)
+    self.title_bar_right_icon = nil  -- Initially no right button
+
     self.facet_groups = nil -- Initialize facet groups storage
     OPDSCoverMenu.init(self) -- call parent's init() - changed from Menu.init
+end
+
+function OPDSBrowser:toggleViewMode()
+    -- Get current mode
+    local current_mode = self._manager.settings.display_mode or "list"
+
+    -- Toggle to opposite mode
+    local new_mode = (current_mode == "list") and "grid" or "list"
+
+    -- Save new mode
+    self._manager.settings.display_mode = new_mode
+    self._manager.opds_settings:saveSetting("settings", self._manager.settings)
+    self._manager.opds_settings:flush()
+
+    logger.warn("OPDS+: Toggling view mode from", current_mode, "to", new_mode)
+    logger.warn("OPDS+: Current path depth:", #self.paths)
+    logger.warn("OPDS+: Auth context - username:", self.root_catalog_username and "present" or "none")
+
+    -- Show notification
+    local mode_text = new_mode == "grid" and _("Grid View") or _("List View")
+    UIManager:show(InfoMessage:new{
+        text = T(_("Switched to %1"), mode_text),
+        timeout = 1,
+    })
+
+    -- Refresh the current view WITHOUT breaking navigation or auth context
+    if #self.paths > 0 then
+        -- We're in a catalog - get current URL
+        local current_path = self.paths[#self.paths]
+        local current_url = current_path.url
+
+        logger.warn("OPDS+: Reloading catalog:", current_url)
+
+        -- Reload the catalog with same URL
+        -- Mark as paths_updated to avoid adding duplicate to history
+        self:updateCatalog(current_url, true)
+    else
+        -- We're at root level
+        logger.warn("OPDS+: Refreshing root level display")
+
+        -- Just switch the display mode for the current item table
+        -- This preserves everything and just changes the view
+        self:switchItemTable(self.catalog_title, self.item_table, -1)
+    end
+
+    logger.warn("OPDS+: View toggle complete, path depth now:", #self.paths)
 end
 
 function OPDSBrowser:showOPDSMenu()
@@ -152,7 +202,37 @@ function OPDSBrowser:showFacetMenu()
     local dialog
     local catalog_url = self.paths[#self.paths].url
 
-    -- Add sub-catalog to bookmarks option first
+    -- NEW: Check if we have covers to show view toggle
+    local has_covers = false
+    for _, item in ipairs(self.item_table or {}) do
+        if item.cover_url then
+            has_covers = true
+            break
+        end
+    end
+
+    -- NEW: Add view toggle option FIRST if we have covers
+    if has_covers then
+        local current_mode = self._manager.settings.display_mode or "list"
+        local toggle_text
+        if current_mode == "list" then
+            toggle_text = "\u{25A6} " .. _("Switch to Grid View")  -- ▦ Grid icon
+        else
+            toggle_text = "\u{2261} " .. _("Switch to List View")  -- ≡ List icon
+        end
+
+        table.insert(buttons, {{
+            text = toggle_text,
+            callback = function()
+                UIManager:close(dialog)
+                self:toggleViewMode()
+            end,
+            align = "left",
+        }})
+        table.insert(buttons, {}) -- separator
+    end
+
+    -- Add sub-catalog to bookmarks option
     table.insert(buttons, {{
         text = "\u{f067} " .. _("Add catalog"),
         callback = function()
@@ -214,6 +294,61 @@ function OPDSBrowser:showFacetMenu()
     UIManager:show(dialog)
 end
 
+-- NEW: Shows menu for catalogs without facets but with covers (for view toggle)
+function OPDSBrowser:showCatalogMenu()
+    local buttons = {}
+    local dialog
+    local catalog_url = self.paths[#self.paths].url
+
+    -- Check if we have covers
+    local has_covers = false
+    for _, item in ipairs(self.item_table or {}) do
+        if item.cover_url then
+            has_covers = true
+            break
+        end
+    end
+
+    -- Add view toggle if we have covers
+    if has_covers then
+        local current_mode = self._manager.settings.display_mode or "list"
+        local toggle_text
+        if current_mode == "list" then
+            toggle_text = "\u{25A6} " .. _("Switch to Grid View")  -- ▦ Grid icon
+        else
+            toggle_text = "\u{2261} " .. _("Switch to List View")  -- ≡ List icon
+        end
+
+        table.insert(buttons, {{
+            text = toggle_text,
+            callback = function()
+                UIManager:close(dialog)
+                self:toggleViewMode()
+            end,
+            align = "left",
+        }})
+        table.insert(buttons, {}) -- separator
+    end
+
+    -- Add sub-catalog option
+    table.insert(buttons, {{
+        text = "\u{f067} " .. _("Add catalog"),
+        callback = function()
+            UIManager:close(dialog)
+            self:addSubCatalog(catalog_url)
+        end,
+        align = "left",
+    }})
+
+    dialog = ButtonDialog:new{
+        buttons = buttons,
+        shrink_unneeded_width = true,
+        anchor = function()
+            return self.title_bar.left_button.image.dimen
+        end,
+    }
+    UIManager:show(dialog)
+end
 
 local function buildRootEntry(server)
     local icons = ""
@@ -773,14 +908,20 @@ function OPDSBrowser:updateCatalog(item_url, paths_updated)
 
         -- Set appropriate title bar icon based on content
         if self.facet_groups or self.search_url then
-            self:setTitleBarLeftIcon("appbar.menu")
+            -- Has facets/search - use facet menu (which now includes view toggle)
+            self.title_bar_left_icon = "appbar.menu"
             self.onLeftButtonTap = function()
                 self:showFacetMenu()
             end
         else
-            self:setTitleBarLeftIcon("plus")
+            -- No facets - use catalog menu for view toggle + add catalog
+            self.title_bar_left_icon = cover_count > 0 and "appbar.menu" or "plus"
             self.onLeftButtonTap = function()
-                self:addSubCatalog(item_url)
+                if cover_count > 0 then
+                    self:showCatalogMenu()
+                else
+                    self:addSubCatalog(item_url)
+                end
             end
         end
 
