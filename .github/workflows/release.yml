@@ -1,0 +1,49 @@
+name: Build & Publish Release Archive
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare packaging directory
+        run: |
+          mkdir -p package/opds_plus.koplugin
+          rsync -av --exclude '.git' --exclude '.github' ./ package/opds_plus.koplugin/
+
+      - name: Create zip archive
+        run: |
+          cd package
+          zip -r ../opds_plus.koplugin.zip opds_plus.koplugin
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: opds_plus.koplugin
+          path: opds_plus.koplugin.zip
+
+  publish-release:
+    needs: build-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: opds_plus.koplugin
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: opds_plus.koplugin.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,26 @@
+# Lua / KOReader plugin ignores
+*.swp
+*.bak
+*~
+
+# OS / Editor junk
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
+
+# Packaging artifacts
+opds_plus.koplugin.zip
+/dist/
+/tmp/
+
+# KOReader runtime data (not part of the plugin source)
+settings/
+cache/
+
+# Generated font caches (if any)
+*.ttc.cache
+
+# GitHub artifacts
+/.github/*.tmp

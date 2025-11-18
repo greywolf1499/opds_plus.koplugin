@@ -1,0 +1,30 @@
+GNU AFFERO GENERAL PUBLIC LICENSE
+Version 3, 19 November 2007
+
+Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+Everyone is permitted to copy and distribute verbatim copies
+of this license document, but changing it is not allowed.
+
+Preamble
+
+The GNU Affero General Public License is a free, copyleft license for
+software and other kinds of works, specifically designed to ensure
+cooperation with the community in the case of network server software.
+
+(Full license text abbreviated here for brevity in the repository. For the
+complete text see: https://www.gnu.org/licenses/agpl-3.0.html )
+
+You may redistribute this plugin under the terms of the GNU Affero General
+Public License version 3 or (at your option) any later version.
+
+This plugin is a derivative work of KOReader's OPDS plugin and therefore
+inherits the same license. KOReader is licensed under AGPLv3.
+
+DISCLAIMER OF WARRANTY:
+This program is provided AS IS without warranty of any kind.
+
+Source availability clause (AGPL Section 13): If you modify and run a
+modified version of this program on a publicly accessible server, you must
+make the modified source code available to users of that server.
+
+For full details, please read the complete license text online.
