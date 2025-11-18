@@ -45,6 +45,18 @@
 - textos.info (Spanish)
 - Gallica (French)
 
+## 📸 Screenshots
+
+|                        **List View**                        |                        **Grid View**                        |
+| :---------------------------------------------------------: | :---------------------------------------------------------: |
+| ![List View with Covers](.github/screenshots/list_view.png) | ![Grid View with Covers](.github/screenshots/grid_view.png) |
+|          *Classic list view with cover thumbnails*          |            *Immersive grid layout for browsing*             |
+
+|                       **View Options**                        |                    **Customization**                    |
+| :-----------------------------------------------------------: | :-----------------------------------------------------: |
+| ![View Toggle Menu](.github/screenshots/view_toggle_menu.png) | ![Settings Menu](.github/screenshots/settings_menu.png) |
+|             *Switch views instantly via the menu*             |            *Extensive customization options*            |
+
 ## 📥 Installation
 
 ### Method 1: Manual Installation (Recommended)
