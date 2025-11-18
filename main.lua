@@ -52,23 +52,23 @@ local OPDS = WidgetContainer:extend{
     cover_size_presets = {
         {
             name = "Compact",
-            description = "Small covers, more books per page",
-            ratio = 0.08,  -- 8% of screen height
+            description = "8 books per page",
+            ratio = 0.08,  -- Kept for backward compatibility with custom
         },
         {
             name = "Regular",
-            description = "Balanced size, good readability",
-            ratio = 0.10,  -- 10% of screen height (default)
+            description = "6 books per page (default)",
+            ratio = 0.10,
         },
         {
             name = "Large",
-            description = "Larger covers, easier to see details",
-            ratio = 0.15,  -- 15% of screen height
+            description = "4 books per page",
+            ratio = 0.15,
         },
         {
             name = "Extra Large",
-            description = "Very large covers, fewer books per page",
-            ratio = 0.20,  -- 20% of screen height
+            description = "3 books per page",
+            ratio = 0.20,
         },
     },
     -- Default font settings

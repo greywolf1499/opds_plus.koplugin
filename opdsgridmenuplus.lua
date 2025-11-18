@@ -27,29 +27,36 @@ local _ = require("gettext")
 -- GRID CONFIGURATION
 -- ============================================
 local GRID_CONFIG = {
-    -- Grid layout
+    -- Grid layout presets - now defined by rows target
+    size_presets = {
+        ["Compact"] = { columns = 4, target_rows = 3, description = "More books visible" },
+        ["Balanced"] = { columns = 3, target_rows = 2, description = "Good balance" },
+        ["Spacious"] = { columns = 2, target_rows = 2, description = "Larger covers" },
+    },
+
+    -- Fallback defaults
     default_columns = 3,
     min_columns = 2,
     max_columns = 4,
 
-    -- Cover dimensions limits (will be calculated based on columns)
-    min_cover_height = 100,
+    -- Cover dimensions limits
+    min_cover_height = 80,
     max_cover_height = 400,
 
     -- Standard book aspect ratio
     book_aspect_ratio = 2/3,
 
-    -- Spacing (reduced for better space utilization)
-    cell_padding = 6,        -- Padding inside each cell
-    cell_margin = 10,        -- Gap between cells
-    row_spacing = 12,        -- Space between rows
-    top_margin = 6,          -- Top margin of grid
-    bottom_margin = 6,       -- Bottom margin of grid
-    side_margin = 10,        -- Left/right margins
+    -- Spacing
+    cell_padding = 6,
+    cell_margin = 10,
+    row_spacing = 12,
+    top_margin = 6,
+    bottom_margin = 6,
+    side_margin = 10,
 
     -- Text
-    title_lines_max = 2,     -- Maximum lines for title
-    show_author = true,      -- Show author below title
+    title_lines_max = 2,
+    show_author = true,
 }
 
 -- Helper function to get border color
@@ -407,11 +414,28 @@ function OPDSGridMenu:_debugLog(...)
 end
 
 function OPDSGridMenu:setGridDimensions()
-    -- Get columns setting
-    self.columns = GRID_CONFIG.default_columns
-    if self._manager and self._manager.settings and self._manager.settings.grid_columns then
-        self.columns = self._manager.settings.grid_columns
+    -- Get preset or custom column setting
+    local preset_name = "Balanced"
+    local columns = GRID_CONFIG.default_columns
+    local target_rows = 2
+
+    if self._manager and self._manager.settings then
+        preset_name = self._manager.settings.grid_size_preset or "Balanced"
+
+        if preset_name ~= "Custom" then
+            local preset = GRID_CONFIG.size_presets[preset_name]
+            if preset then
+                columns = preset.columns
+                target_rows = preset.target_rows
+            end
+        else
+            -- Custom columns
+            columns = self._manager.settings.grid_columns or GRID_CONFIG.default_columns
+            target_rows = 2  -- Default target for custom
+        end
     end
+
+    self.columns = columns
 
     -- Get screen dimensions
     local screen_width = Screen:getWidth()
@@ -420,13 +444,9 @@ function OPDSGridMenu:setGridDimensions()
     -- Calculate available dimensions
     local available_width = screen_width - (GRID_CONFIG.side_margin * 2)
 
-    -- Estimate available height
-    local estimated_ui_overhead = 140
-    local estimated_available_height = screen_height - estimated_ui_overhead
-
-    local min_rows_target = 2
-    local row_spacing_total = (min_rows_target - 1) * GRID_CONFIG.row_spacing
-    local max_row_height = math.floor((estimated_available_height - row_spacing_total) / min_rows_target)
+    -- Estimate available height (will be refined in _recalculateDimen)
+    local estimated_ui_overhead = 100
+    local available_height = screen_height - estimated_ui_overhead - GRID_CONFIG.top_margin - GRID_CONFIG.bottom_margin
 
     -- Calculate cell width based on columns
     local total_gap_width = GRID_CONFIG.cell_margin * (self.columns - 1)
@@ -447,18 +467,22 @@ function OPDSGridMenu:setGridDimensions()
         info_size = self._manager.settings.info_size or 12
     end
 
-    -- Calculate minimum text area needed
+    -- Calculate text area needed
     local title_height = math.ceil(title_size * 2 * 1.3)
     local author_height = GRID_CONFIG.show_author and math.ceil(info_size * 1.2) or 0
     local cover_text_gap = 6
-    local text_buffer = 8
-    local min_text_area = title_height + author_height + cover_text_gap + text_buffer
+    local text_area_height = title_height + author_height + cover_text_gap
 
-    -- Calculate maximum cover height that fits in our row budget
-    local max_cover_height_for_rows = max_row_height - min_text_area - (GRID_CONFIG.cell_padding * 2)
+    -- Calculate how much height we need per row
+    local spacing_between_rows = (target_rows - 1) * GRID_CONFIG.row_spacing
+    local available_for_rows = available_height - spacing_between_rows
+    local target_row_height = math.floor(available_for_rows / target_rows)
 
-    -- Use the smaller of the two
-    self.cover_height = math.min(cover_height_from_width, max_cover_height_for_rows)
+    -- Calculate max cover height that fits in target row height
+    local max_cover_from_rows = target_row_height - text_area_height - (GRID_CONFIG.cell_padding * 2)
+
+    -- Use the more restrictive constraint
+    self.cover_height = math.min(cover_height_from_width, max_cover_from_rows)
 
     -- Clamp to absolute limits
     self.cover_height = math.max(GRID_CONFIG.min_cover_height, self.cover_height)
@@ -468,11 +492,10 @@ function OPDSGridMenu:setGridDimensions()
     self.cover_width = math.floor(self.cover_height * GRID_CONFIG.book_aspect_ratio)
 
     -- Calculate final cell height
-    local text_area_height = min_text_area
     self.cell_height = self.cover_height + text_area_height + (GRID_CONFIG.cell_padding * 2)
 
-    self:_debugLog("Grid dimensions - Cell:", self.cell_width, "x", self.cell_height,
-                   "Cover:", self.cover_width, "x", self.cover_height)
+    self:_debugLog("Grid preset:", preset_name, "Columns:", columns, "Target rows:", target_rows)
+    self:_debugLog("Cell:", self.cell_width, "x", self.cell_height, "Cover:", self.cover_width, "x", self.cover_height)
 end
 
 function OPDSGridMenu:_recalculateDimen()
@@ -480,7 +503,7 @@ function OPDSGridMenu:_recalculateDimen()
         self:setGridDimensions()
     end
 
-    -- Calculate available space
+    -- Calculate ACTUAL available space
     local available_width = self.inner_dimen.w - (GRID_CONFIG.side_margin * 2)
     local available_height = self.inner_dimen.h
 
@@ -502,10 +525,47 @@ function OPDSGridMenu:_recalculateDimen()
     local rows_per_page = math.floor((available_height + GRID_CONFIG.row_spacing) / row_height)
     if rows_per_page < 1 then rows_per_page = 1 end
 
+    -- Check if we can fit more rows by adjusting cell height slightly
+    local used_height = (rows_per_page * self.cell_height) + ((rows_per_page - 1) * GRID_CONFIG.row_spacing)
+    local remaining_space = available_height - used_height
+
+    if remaining_space > self.cell_height * 0.6 then
+        -- Try to fit one more row
+        local new_rows = rows_per_page + 1
+        local total_spacing = (new_rows - 1) * GRID_CONFIG.row_spacing
+        local new_cell_height = math.floor((available_height - total_spacing) / new_rows)
+
+        -- Calculate new cover height
+        local title_size = 14
+        local info_size = 12
+        if self._manager and self._manager.settings then
+            title_size = self._manager.settings.title_size or 14
+            info_size = self._manager.settings.info_size or 12
+        end
+
+        local title_height = math.ceil(title_size * 2 * 1.3)
+        local author_height = GRID_CONFIG.show_author and math.ceil(info_size * 1.2) or 0
+        local cover_text_gap = 6
+        local text_area_height = title_height + author_height + cover_text_gap
+
+        local new_cover_height = new_cell_height - text_area_height - (GRID_CONFIG.cell_padding * 2)
+
+        if new_cover_height >= GRID_CONFIG.min_cover_height then
+            self.cover_height = new_cover_height
+            self.cover_width = math.floor(self.cover_height * GRID_CONFIG.book_aspect_ratio)
+            self.cell_height = new_cell_height
+            rows_per_page = new_rows
+
+            self:_debugLog("Optimized: Adjusted to fit", rows_per_page, "rows (was wasting",
+                          math.floor(remaining_space), "px)")
+        end
+    end
+
     self.perpage = rows_per_page * self.columns
     if self.perpage < 1 then self.perpage = 1 end
 
-    self:_debugLog("Grid layout - Rows:", rows_per_page, "Items per page:", self.perpage)
+    self:_debugLog("Final grid - Rows:", rows_per_page, "Items:", self.perpage,
+                   "Whitespace:", math.floor(available_height - used_height), "px")
 
     -- Calculate total pages
     self.page_num = math.ceil(#self.item_table / self.perpage)

@@ -27,43 +27,56 @@ local _ = require("gettext")
 -- CONFIGURATION - Can be overridden by settings
 -- ============================================
 local COVER_CONFIG = {
-    -- Cover height as a fraction of screen height
-    -- This is the DEFAULT value - actual value comes from settings
-    cover_height_ratio = 0.10,  -- 10% of screen height (default)
+    -- These will be used to calculate optimal cover sizes
+    size_presets = {
+        ["Compact"] = { target_items = 8, description = "More books per page" },
+        ["Regular"] = { target_items = 6, description = "Balanced view" },
+        ["Large"] = { target_items = 4, description = "Larger covers" },
+        ["Extra Large"] = { target_items = 3, description = "Maximum detail" },
+    },
 
     -- Minimum and maximum cover dimensions (in pixels)
     min_cover_height = 48,
-    max_cover_height = 200,
+    max_cover_height = 300,
 
     -- Standard book aspect ratio (portrait orientation)
-    -- Most books are roughly 2:3 (width:height)
-    book_aspect_ratio = 2/3,  -- 0.666... (width is 66% of height)
+    book_aspect_ratio = 2/3,
 
     -- Spacing and padding
-    item_top_padding = 6,     -- Padding above each item
-    item_bottom_padding = 6,  -- Padding below each item
-    cover_left_margin = 6,    -- Margin to left of cover
-    cover_right_margin = 8,   -- Margin between cover and text
+    item_top_padding = 6,
+    item_bottom_padding = 6,
+    cover_left_margin = 6,
+    cover_right_margin = 8,
 }
 
--- Calculate cover dimensions based on screen and settings
-local function calculateCoverDimensions(custom_ratio)
-    local screen_height = Screen:getHeight()
+-- Calculate optimal cover size based on available space and target items
+local function calculateOptimalCoverSize(available_height, target_items, min_height, max_height)
+    -- Account for padding in each item
+    local padding_per_item = COVER_CONFIG.item_top_padding + COVER_CONFIG.item_bottom_padding
 
-    -- Use custom ratio if provided, otherwise use default
-    local ratio = custom_ratio or COVER_CONFIG.cover_height_ratio
+    -- Calculate ideal cover height to fit target items
+    local ideal_height = math.floor((available_height - (padding_per_item * target_items)) / target_items)
 
-    -- Calculate desired cover height
-    local cover_height = math.floor(screen_height * ratio)
+    -- Clamp to min/max
+    local cover_height = math.max(min_height, math.min(max_height, ideal_height))
 
-    -- Clamp to min/max values
-    cover_height = math.max(COVER_CONFIG.min_cover_height, cover_height)
-    cover_height = math.min(COVER_CONFIG.max_cover_height, cover_height)
+    -- Calculate how many items actually fit with this size
+    local item_height = cover_height + padding_per_item
+    local actual_items = math.floor(available_height / item_height)
 
-    -- Calculate width maintaining aspect ratio
+    -- If we can fit more items by making covers slightly smaller, do it
+    if actual_items < target_items then
+        -- Try to squeeze one more item in
+        local adjusted_height = math.floor((available_height - (padding_per_item * (actual_items + 1))) / (actual_items + 1))
+        if adjusted_height >= min_height then
+            cover_height = adjusted_height
+            actual_items = actual_items + 1
+        end
+    end
+
     local cover_width = math.floor(cover_height * COVER_CONFIG.book_aspect_ratio)
 
-    return cover_width, cover_height
+    return cover_width, cover_height, actual_items
 end
 
 -- ============================================
@@ -387,8 +400,8 @@ end
 
 -- Main OPDS List Menu that extends the standard Menu
 local OPDSListMenu = Menu:extend{
-    cover_width = nil,   -- Will be calculated
-    cover_height = nil,  -- Will be calculated
+    cover_width = nil,
+    cover_height = nil,
     _items_to_update = {},
 }
 
@@ -398,29 +411,60 @@ function OPDSListMenu:_debugLog(...)
     end
 end
 
--- Calculate and set cover dimensions
+-- Calculate and set cover dimensions based on available space
 function OPDSListMenu:setCoverDimensions()
-    local custom_ratio = nil
-
-    -- Try to get ratio from multiple possible locations
-    if self._manager and self._manager.settings and self._manager.settings.cover_height_ratio then
-        custom_ratio = self._manager.settings.cover_height_ratio
-    elseif self.settings and self.settings.cover_height_ratio then
-        custom_ratio = self.settings.cover_height_ratio
+    -- Get the preset/target from settings
+    local preset_name = "Regular"  -- Default
+    if self._manager and self._manager.settings and self._manager.settings.cover_size_preset then
+        preset_name = self._manager.settings.cover_size_preset
     end
 
-    self.cover_width, self.cover_height = calculateCoverDimensions(custom_ratio)
-    self:_debugLog("Set cover dimensions to", self.cover_width, "x", self.cover_height)
+    -- For custom sizes, we need a different approach
+    if preset_name == "Custom" then
+        -- Use the stored ratio for custom
+        local custom_ratio = 0.10  -- Default fallback
+        if self._manager and self._manager.settings and self._manager.settings.cover_height_ratio then
+            custom_ratio = self._manager.settings.cover_height_ratio
+        end
+
+        local screen_height = Screen:getHeight()
+        self.cover_height = math.floor(screen_height * custom_ratio)
+        self.cover_height = math.max(COVER_CONFIG.min_cover_height, self.cover_height)
+        self.cover_height = math.min(COVER_CONFIG.max_cover_height, self.cover_height)
+        self.cover_width = math.floor(self.cover_height * COVER_CONFIG.book_aspect_ratio)
+
+        self:_debugLog("Custom cover size:", self.cover_width, "x", self.cover_height)
+        return
+    end
+
+    -- Get preset configuration
+    local preset = COVER_CONFIG.size_presets[preset_name] or COVER_CONFIG.size_presets["Regular"]
+
+    -- We need to estimate available height
+    -- This is approximate since we're called before the menu is fully laid out
+    local screen_height = Screen:getHeight()
+    local estimated_ui_overhead = 100  -- Title bar + page info + margins
+    local available_height = screen_height - estimated_ui_overhead
+
+    -- Calculate optimal size
+    self.cover_width, self.cover_height = calculateOptimalCoverSize(
+        available_height,
+        preset.target_items,
+        COVER_CONFIG.min_cover_height,
+        COVER_CONFIG.max_cover_height
+    )
+
+    self:_debugLog("Preset:", preset_name, "Target items:", preset.target_items, "Cover size:", self.cover_width, "x", self.cover_height)
 end
 
--- Override _recalculateDimen to properly calculate items per page with cover heights
+-- Override _recalculateDimen with improved space utilization
 function OPDSListMenu:_recalculateDimen()
     -- Make sure we have cover dimensions
     if not self.cover_width or not self.cover_height then
         self:setCoverDimensions()
     end
 
-    -- Calculate available height for menu items
+    -- Calculate ACTUAL available height for menu items
     local available_height = self.inner_dimen.h
 
     -- Subtract height of other UI elements
@@ -434,10 +478,10 @@ function OPDSListMenu:_recalculateDimen()
         available_height = available_height - self.page_info:getSize().h
     end
 
-    -- Each item height = cover height + top padding + bottom padding + separator line
+    -- Each item height
     self.item_height = self.cover_height + COVER_CONFIG.item_top_padding + COVER_CONFIG.item_bottom_padding
 
-    -- Calculate how many items fit in available height
+    -- Calculate how many items fit
     self.perpage = math.floor(available_height / self.item_height)
 
     -- Make sure we have at least 1 item per page
@@ -445,7 +489,29 @@ function OPDSListMenu:_recalculateDimen()
         self.perpage = 1
     end
 
-    self:_debugLog("Items per page:", self.perpage)
+    -- Check if we have significant whitespace and can fit more items by shrinking slightly
+    local used_height = self.perpage * self.item_height
+    local remaining_space = available_height - used_height
+
+    if remaining_space > self.item_height * 0.7 then
+        -- We have space for another item if we shrink covers slightly
+        local new_items = self.perpage + 1
+        local new_item_height = math.floor(available_height / new_items)
+        local new_cover_height = new_item_height - COVER_CONFIG.item_top_padding - COVER_CONFIG.item_bottom_padding
+
+        if new_cover_height >= COVER_CONFIG.min_cover_height then
+            self.cover_height = new_cover_height
+            self.cover_width = math.floor(self.cover_height * COVER_CONFIG.book_aspect_ratio)
+            self.item_height = new_item_height
+            self.perpage = new_items
+
+            self:_debugLog("Optimized: Adjusted cover to fit", self.perpage, "items (was wasting",
+                          math.floor(remaining_space), "px)")
+        end
+    end
+
+    self:_debugLog("Final layout - Items per page:", self.perpage, "Whitespace:",
+                   math.floor(available_height - (self.perpage * self.item_height)), "px")
 
     -- Calculate total pages
     self.page_num = math.ceil(#self.item_table / self.perpage)
