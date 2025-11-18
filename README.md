@@ -1,5 +1,7 @@
 # OPDS Plus - Enhanced OPDS Browser for KOReader
 
+**Version:** 1.1.0
+
 **OPDS Plus** is a feature-rich enhancement of KOReader's built-in OPDS catalog browser, providing visual book cover displays, multiple viewing modes, and extensive customization options for browsing online book catalogs.
 
 ## ✨ Features
