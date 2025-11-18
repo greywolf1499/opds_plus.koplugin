@@ -14,7 +14,7 @@ local lfs = require("libs/libkoreader-lfs")
 local util = require("util")
 local _ = require("gettext")
 local T = require("ffi/util").template
-local Version = require("version")
+local Version = require("opds_plus_version")
 
 local OPDS = WidgetContainer:extend{
     name = "opdsplus",
@@ -688,7 +688,7 @@ function OPDS:showGridLayoutMenu()
         {name = "Spacious", columns = 2, desc = _("Fewer books, larger covers")},
     }
 
-    for _, preset in ipairs(presets) do
+    for i, preset in ipairs(presets) do
         local is_current = (current_preset == preset.name and current_columns == preset.columns)
         local button_text = preset.name .. " (" .. preset.columns .. " " .. _("cols") .. ")"
         if is_current then
@@ -821,7 +821,7 @@ function OPDS:showGridBorderMenu()
         {id = "individual", name = _("Individual Tiles"), desc = _("Each book has its own border")},
     }
 
-    for _, style in ipairs(styles) do
+    for i, style in ipairs(styles) do
         local is_current = (current_style == style.id)
         local button_text = style.name
         if is_current then
@@ -936,7 +936,7 @@ function OPDS:showGridBorderColorMenu()
         {id = "black", name = _("Black"), desc = _("High contrast, bold borders")},
     }
 
-    for _, color in ipairs(colors) do
+    for i, color in ipairs(colors) do
         local is_current = (current_color == color.id)
         local button_text = color.name
         if is_current then

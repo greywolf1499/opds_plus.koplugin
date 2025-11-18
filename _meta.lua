@@ -1,5 +1,5 @@
 local _ = require("gettext")
-local V = require("version")
+local V = require("opds_plus_version")
 return {
     name = "opdsplus",
     fullname = _("OPDS Plus"),
