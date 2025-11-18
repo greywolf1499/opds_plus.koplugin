@@ -226,7 +226,6 @@ function OPDSListMenuItem:init()
 
     -- Check if we should use real cover or placeholder
     if self.entry.cover_bb then
-        -- Cover has been loaded - use it!
         cover_widget = ImageWidget:new{
             image = self.entry.cover_bb,
             width = self.cover_width,
@@ -234,13 +233,10 @@ function OPDSListMenuItem:init()
             alpha = true,
         }
     elseif self.entry.cover_url and self.entry.lazy_load_cover then
-        -- Cover is being loaded - show loading placeholder
         cover_widget = createPlaceholderCover(self.cover_width, self.cover_height, "loading")
     elseif self.entry.cover_url and self.entry.cover_failed then
-        -- Cover failed to load - show error placeholder
         cover_widget = createPlaceholderCover(self.cover_width, self.cover_height, "error")
     else
-        -- No cover available - show no cover placeholder
         cover_widget = createPlaceholderCover(self.cover_width, self.cover_height, "no_cover")
     end
 
@@ -283,6 +279,61 @@ function OPDSListMenuItem:init()
         info_color = Blitbuffer.COLOR_BLACK
     end
 
+    -- Helper function to truncate text with ellipsis
+    local function truncateText(text, face, max_width)
+        if not text or text == "" then
+            return text
+        end
+
+        local RenderText = require("ui/rendertext")
+        local text_width = RenderText:sizeUtf8Text(0, Screen:getWidth(), face, text).x
+
+        if text_width <= max_width then
+            return text
+        end
+
+        -- Text is too long, need to truncate
+        local ellipsis = "…"
+        local ellipsis_width = RenderText:sizeUtf8Text(0, Screen:getWidth(), face, ellipsis).x
+        local available_width = max_width - ellipsis_width
+
+        -- Binary search for the right length
+        local left, right = 1, #text
+        local best_length = 1
+
+        while left <= right do
+            local mid = math.floor((left + right) / 2)
+            local test_text = require("util").splitToChars(text)
+            local truncated = ""
+            for i = 1, mid do
+                truncated = truncated .. (test_text[i] or "")
+            end
+
+            local test_width = RenderText:sizeUtf8Text(0, Screen:getWidth(), face, truncated).x
+
+            if test_width <= available_width then
+                best_length = mid
+                left = mid + 1
+            else
+                right = mid - 1
+            end
+        end
+
+        local result_chars = require("util").splitToChars(text)
+        local result = ""
+        for i = 1, best_length do
+            result = result .. (result_chars[i] or "")
+        end
+
+        -- Try to break at word boundary
+        local last_space = result:reverse():find(" ")
+        if last_space and last_space < 15 then
+            result = result:sub(1, -(last_space + 1))
+        end
+
+        return result .. ellipsis
+    end
+
     -- Build text information widgets
     local text_group = VerticalGroup:new{
         align = "left",
@@ -301,9 +352,13 @@ function OPDSListMenuItem:init()
     -- Author (if available)
     if author and author ~= "" then
         table.insert(text_group, VerticalSpan:new{ width = text_padding })
+
+        local author_face = Font:getFace(info_font, info_size)
+        local author_text = truncateText(author, author_face, text_width)
+
         table.insert(text_group, TextWidget:new{
-            text = author,
-            face = Font:getFace(info_font, info_size),
+            text = author_text,
+            face = author_face,
             max_width = text_width,
             fgcolor = info_color,
             bold = info_bold,
@@ -314,9 +369,15 @@ function OPDSListMenuItem:init()
     local series_text = formatSeriesInfo(self.entry.series, self.entry.series_index)
     if series_text then
         table.insert(text_group, VerticalSpan:new{ width = text_padding })
+
+        local series_face = Font:getFace(info_font, info_size - 1)
+        local icon = "📚 "
+        local full_series = icon .. series_text
+        local truncated_series = truncateText(full_series, series_face, text_width)
+
         table.insert(text_group, TextWidget:new{
-            text = "📚 " .. series_text,
-            face = Font:getFace(info_font, info_size - 1),  -- Slightly smaller
+            text = truncated_series,
+            face = series_face,
             max_width = text_width,
             fgcolor = info_color,
             bold = info_bold,
@@ -328,7 +389,7 @@ function OPDSListMenuItem:init()
         table.insert(text_group, VerticalSpan:new{ width = text_padding })
         table.insert(text_group, TextWidget:new{
             text = self.entry.mandatory,
-            face = Font:getFace(info_font, info_size - 2),  -- Even smaller
+            face = Font:getFace(info_font, info_size - 2),
             max_width = text_width,
             fgcolor = Blitbuffer.COLOR_LIGHT_GRAY,
             bold = false,

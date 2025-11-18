@@ -229,31 +229,73 @@ function OPDSGridCell:init()
     local text_width = self.cover_width
 
     -- Calculate FIXED heights for uniform alignment across all cells
-    -- Title: strictly 2 lines maximum
     local title_line_height = math.ceil(title_size * 1.3)
     local title_fixed_height = title_line_height * 2
 
-    -- Author: strictly 1 line
     local author_line_height = math.ceil(info_size * 1.2)
     local author_fixed_height = GRID_CONFIG.show_author and author_line_height or 0
 
-    -- Gaps
     local title_author_gap = GRID_CONFIG.show_author and 4 or 0
     local cover_text_gap = 6
 
-    -- Total fixed text area height
     local text_area_height = title_fixed_height + title_author_gap + author_fixed_height + cover_text_gap
 
-    -- Ensure it doesn't exceed what was calculated in setGridDimensions
     local max_text_area = self.cell_height - self.cover_height - (GRID_CONFIG.cell_padding * 2)
     text_area_height = math.min(text_area_height, max_text_area)
+
+    -- Helper function to truncate text with ellipsis
+    local function truncateText(text, face, max_width)
+        if not text or text == "" then
+            return text
+        end
+
+        local RenderText = require("ui/rendertext")
+        local text_width = RenderText:sizeUtf8Text(0, Screen:getWidth(), face, text).x
+
+        if text_width <= max_width then
+            return text
+        end
+
+        local ellipsis = "…"
+        local ellipsis_width = RenderText:sizeUtf8Text(0, Screen:getWidth(), face, ellipsis).x
+        local available_width = max_width - ellipsis_width
+
+        local left, right = 1, #text
+        local best_length = 1
+
+        while left <= right do
+            local mid = math.floor((left + right) / 2)
+            local test_text = require("util").splitToChars(text)
+            local truncated = ""
+            for i = 1, mid do
+                truncated = truncated .. (test_text[i] or "")
+            end
+
+            local test_width = RenderText:sizeUtf8Text(0, Screen:getWidth(), face, truncated).x
+
+            if test_width <= available_width then
+                best_length = mid
+                left = mid + 1
+            else
+                right = mid - 1
+            end
+        end
+
+        local result_chars = require("util").splitToChars(text)
+        local result = ""
+        for i = 1, best_length do
+            result = result .. (result_chars[i] or "")
+        end
+
+        return result .. ellipsis
+    end
 
     -- Build text group with FIXED heights for each element
     local text_group = VerticalGroup:new{
         align = "center",
     }
 
-    -- Title - TextBoxWidget with fixed height and truncation
+    -- Title - with smart truncation
     local title_widget = TextBoxWidget:new{
         text = title,
         face = Font:getFace(title_font, title_size),
@@ -262,10 +304,9 @@ function OPDSGridCell:init()
         height = title_fixed_height,
         alignment = "center",
         fgcolor = Blitbuffer.COLOR_BLACK,
-        line_height = 0,  -- Use default line height
+        line_height = 0,
     }
 
-    -- Wrap title in fixed container to ensure consistent height
     local title_container = FrameContainer:new{
         width = text_width,
         height = title_fixed_height,
@@ -283,15 +324,18 @@ function OPDSGridCell:init()
     }
     table.insert(text_group, title_container)
 
-    -- Author - FIXED height, single line with truncation
+    -- Author - with truncation
     if GRID_CONFIG.show_author then
         table.insert(text_group, VerticalSpan:new{ width = title_author_gap })
 
         local author_widget
         if author and author ~= "" then
+            local author_face = Font:getFace(info_font, info_size)
+            local author_text = truncateText(author, author_face, text_width)
+
             author_widget = TextWidget:new{
-                text = author,
-                face = Font:getFace(info_font, info_size),
+                text = author_text,
+                face = author_face,
                 max_width = text_width,
                 fgcolor = info_color,
             }
@@ -299,7 +343,6 @@ function OPDSGridCell:init()
             author_widget = VerticalSpan:new{ width = 0 }
         end
 
-        -- Wrap in fixed-height container
         local author_container = FrameContainer:new{
             width = text_width,
             height = author_fixed_height,
@@ -328,16 +371,14 @@ function OPDSGridCell:init()
         text_group,
     }
 
-    -- Assemble cell: cover at top, then text
+    -- Assemble cell
     local CenterContainer = require("ui/widget/container/centercontainer")
 
-    -- Get border settings
     local border_style = (self.border_settings and self.border_settings.style) or "none"
     local border_size = (self.border_settings and self.border_settings.size) or 2
     local border_color_name = (self.border_settings and self.border_settings.color) or "dark_gray"
     local border_color = getBorderColor(border_color_name)
 
-    -- Apply border based on style
     local cell_bordersize = 0
     if border_style == "individual" then
         cell_bordersize = border_size
