@@ -1,5 +1,8 @@
 name: Build & Publish Release Archive
 
+permissions:
+  contents: write
+
 on:
   push:
     tags:
