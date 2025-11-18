@@ -16,15 +16,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare packaging directory
-        run: |
-          mkdir -p package/opds_plus.koplugin
-          rsync -av --exclude '.git' --exclude '.github' ./ package/opds_plus.koplugin/
-
       - name: Create zip archive
         run: |
-          cd package
-          zip -r ../opds_plus.koplugin.zip opds_plus.koplugin
+          zip -r opds_plus.koplugin.zip . \
+            -x '.git/*' \
+            -x '.github/*' \
+            -x '*.zip'
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
