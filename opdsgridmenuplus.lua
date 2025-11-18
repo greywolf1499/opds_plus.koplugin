@@ -18,14 +18,10 @@ local UIManager = require("ui/uimanager")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
 local CenterContainer = require("ui/widget/container/centercontainer")
-local LineWidget = require("ui/widget/linewidget")  -- NEW: For hash borders
+local LineWidget = require("ui/widget/linewidget")
 local Screen = Device.screen
 local logger = require("logger")
 local _ = require("gettext")
-
-logger.warn("========================================")
-logger.warn("OPDS+ opdsgridmenu.lua IS LOADING")
-logger.warn("========================================")
 
 -- ============================================
 -- GRID CONFIGURATION
@@ -45,18 +41,18 @@ local GRID_CONFIG = {
 
     -- Spacing (reduced for better space utilization)
     cell_padding = 6,        -- Padding inside each cell
-    cell_margin = 10,        -- Gap between cells (reduced from 12)
-    row_spacing = 12,        -- Space between rows (reduced from 16)
-    top_margin = 6,          -- Top margin of grid (reduced from 8)
-    bottom_margin = 6,       -- Bottom margin of grid (reduced from 8)
-    side_margin = 10,        -- Left/right margins (reduced from 12)
+    cell_margin = 10,        -- Gap between cells
+    row_spacing = 12,        -- Space between rows
+    top_margin = 6,          -- Top margin of grid
+    bottom_margin = 6,       -- Bottom margin of grid
+    side_margin = 10,        -- Left/right margins
 
     -- Text
     title_lines_max = 2,     -- Maximum lines for title
     show_author = true,      -- Show author below title
 }
 
--- NEW: Helper function to get border color
+-- Helper function to get border color
 local function getBorderColor(color_name)
     if color_name == "black" then
         return Blitbuffer.COLOR_BLACK
@@ -65,24 +61,6 @@ local function getBorderColor(color_name)
     else -- "dark_gray" or default
         return Blitbuffer.COLOR_DARK_GRAY
     end
-end
-
--- Calculate cover dimensions for grid view
-local function calculateGridCoverDimensions(custom_ratio)
-    local screen_height = Screen:getHeight()
-
-    local ratio = custom_ratio or GRID_CONFIG.cover_height_ratio
-    local cover_height = math.floor(screen_height * ratio)
-
-    -- Clamp to min/max
-    cover_height = math.max(GRID_CONFIG.min_cover_height, cover_height)
-    cover_height = math.min(GRID_CONFIG.max_cover_height, cover_height)
-
-    local cover_width = math.floor(cover_height * GRID_CONFIG.book_aspect_ratio)
-
-    logger.dbg("OPDS+ Grid: Cover dimensions:", cover_width, "x", cover_height)
-
-    return cover_width, cover_height
 end
 
 -- Create placeholder cover for grid
@@ -178,12 +156,10 @@ local OPDSGridCell = InputContainer:extend{
     show_parent = nil,
     menu = nil,
     font_settings = nil,
-    border_settings = nil,  -- NEW: Border configuration
+    border_settings = nil,
 }
 
 function OPDSGridCell:init()
-    logger.dbg("OPDS+ Grid: GridCell:init() for:", self.entry.text or "unknown")
-
     self.dimen = Geom:new{
         w = self.cell_width,
         h = self.cell_height,
@@ -207,7 +183,6 @@ function OPDSGridCell:init()
     -- Create cover widget
     local cover_widget
     if self.entry.cover_bb then
-        logger.dbg("OPDS+ Grid: Using loaded cover")
         cover_widget = ImageWidget:new{
             image = self.entry.cover_bb,
             width = self.cover_width,
@@ -215,13 +190,10 @@ function OPDSGridCell:init()
             alpha = true,
         }
     elseif self.entry.cover_url and self.entry.lazy_load_cover then
-        logger.dbg("OPDS+ Grid: Showing loading placeholder")
         cover_widget = createGridPlaceholder(self.cover_width, self.cover_height, "loading")
     elseif self.entry.cover_url and self.entry.cover_failed then
-        logger.dbg("OPDS+ Grid: Showing error placeholder")
         cover_widget = createGridPlaceholder(self.cover_width, self.cover_height, "error")
     else
-        logger.dbg("OPDS+ Grid: Showing no cover placeholder")
         cover_widget = createGridPlaceholder(self.cover_width, self.cover_height, "no_cover")
     end
 
@@ -352,13 +324,13 @@ function OPDSGridCell:init()
     -- Assemble cell: cover at top, then text
     local CenterContainer = require("ui/widget/container/centercontainer")
 
-    -- NEW: Get border settings
+    -- Get border settings
     local border_style = (self.border_settings and self.border_settings.style) or "none"
     local border_size = (self.border_settings and self.border_settings.size) or 2
     local border_color_name = (self.border_settings and self.border_settings.color) or "dark_gray"
     local border_color = getBorderColor(border_color_name)
 
-    -- NEW: Apply border based on style
+    -- Apply border based on style
     local cell_bordersize = 0
     if border_style == "individual" then
         cell_bordersize = border_size
@@ -369,8 +341,8 @@ function OPDSGridCell:init()
         height = self.cell_height,
         padding = GRID_CONFIG.cell_padding,
         margin = 0,
-        bordersize = cell_bordersize,  -- NEW: Border for individual style
-        color = border_color,           -- NEW: Border color
+        bordersize = cell_bordersize,
+        color = border_color,
         background = Blitbuffer.COLOR_WHITE,
         CenterContainer:new{
             dimen = Geom:new{
@@ -390,7 +362,6 @@ function OPDSGridCell:init()
 end
 
 function OPDSGridCell:update()
-    logger.dbg("OPDS+ Grid: GridCell:update() - refreshing with new cover")
     self:init()
     UIManager:setDirty(self.show_parent, function()
         return "ui", self.dimen
@@ -398,7 +369,6 @@ function OPDSGridCell:update()
 end
 
 function OPDSGridCell:onTapSelect(arg, ges)
-    logger.dbg("OPDS+ Grid: GridCell tap:", self.entry.text)
     if self.menu and self.menu.onMenuSelect then
         self.menu:onMenuSelect(self.entry)
         return true
@@ -407,7 +377,6 @@ function OPDSGridCell:onTapSelect(arg, ges)
 end
 
 function OPDSGridCell:onHoldSelect(arg, ges)
-    logger.dbg("OPDS+ Grid: GridCell hold:", self.entry.text)
     if self.menu and self.menu.onMenuHold then
         self.menu:onMenuHold(self.entry)
         return true
@@ -431,14 +400,17 @@ local OPDSGridMenu = Menu:extend{
     _items_to_update = {},
 }
 
-function OPDSGridMenu:setGridDimensions()
-    logger.dbg("OPDS+ Grid: setGridDimensions called")
+function OPDSGridMenu:_debugLog(...)
+    if self._manager and self._manager.settings and self._manager.settings.debug_mode then
+        logger.dbg("OPDS+ Grid:", ...)
+    end
+end
 
+function OPDSGridMenu:setGridDimensions()
     -- Get columns setting
     self.columns = GRID_CONFIG.default_columns
     if self._manager and self._manager.settings and self._manager.settings.grid_columns then
         self.columns = self._manager.settings.grid_columns
-        logger.dbg("OPDS+ Grid: Using custom columns:", self.columns)
     end
 
     -- Get screen dimensions
@@ -455,9 +427,6 @@ function OPDSGridMenu:setGridDimensions()
     local min_rows_target = 2
     local row_spacing_total = (min_rows_target - 1) * GRID_CONFIG.row_spacing
     local max_row_height = math.floor((estimated_available_height - row_spacing_total) / min_rows_target)
-
-    logger.dbg("OPDS+ Grid: Screen:", screen_width, "x", screen_height)
-    logger.dbg("OPDS+ Grid: Max row height (cell only):", max_row_height)
 
     -- Calculate cell width based on columns
     local total_gap_width = GRID_CONFIG.cell_margin * (self.columns - 1)
@@ -502,13 +471,11 @@ function OPDSGridMenu:setGridDimensions()
     local text_area_height = min_text_area
     self.cell_height = self.cover_height + text_area_height + (GRID_CONFIG.cell_padding * 2)
 
-    logger.dbg("OPDS+ Grid: Final - Cell:", self.cell_width, "x", self.cell_height)
-    logger.dbg("OPDS+ Grid: Final - Cover:", self.cover_width, "x", self.cover_height)
+    self:_debugLog("Grid dimensions - Cell:", self.cell_width, "x", self.cell_height,
+                   "Cover:", self.cover_width, "x", self.cover_height)
 end
 
 function OPDSGridMenu:_recalculateDimen()
-    logger.dbg("OPDS+ Grid: _recalculateDimen called")
-
     if not self.cover_width or not self.cover_height then
         self:setGridDimensions()
     end
@@ -538,8 +505,7 @@ function OPDSGridMenu:_recalculateDimen()
     self.perpage = rows_per_page * self.columns
     if self.perpage < 1 then self.perpage = 1 end
 
-    logger.dbg("OPDS+ Grid: Rows per page:", rows_per_page)
-    logger.dbg("OPDS+ Grid: Items per page:", self.perpage)
+    self:_debugLog("Grid layout - Rows:", rows_per_page, "Items per page:", self.perpage)
 
     -- Calculate total pages
     self.page_num = math.ceil(#self.item_table / self.perpage)
@@ -558,8 +524,6 @@ function OPDSGridMenu:_recalculateDimen()
 end
 
 function OPDSGridMenu:updateItems(select_number)
-    logger.dbg("OPDS+ Grid: updateItems called")
-
     -- Cancel previous image loading
     if self.halt_image_loading then
         self.halt_image_loading()
@@ -598,7 +562,7 @@ function OPDSGridMenu:updateItems(select_number)
         font_settings.use_same_font = true
     end
 
-    -- NEW: Get border settings
+    -- Get border settings
     local border_settings = {
         style = "none",
         size = 2,
@@ -609,9 +573,6 @@ function OPDSGridMenu:updateItems(select_number)
         border_settings.size = self._manager.settings.grid_border_size or 2
         border_settings.color = self._manager.settings.grid_border_color or "dark_gray"
     end
-
-    logger.dbg("OPDS+ Grid: Border settings - style:", border_settings.style,
-               "size:", border_settings.size, "color:", border_settings.color)
 
     -- Build grid
     self._items_to_update = {}
@@ -625,7 +586,7 @@ function OPDSGridMenu:updateItems(select_number)
     local available_width = self.inner_dimen.w
     local centering_offset = math.floor((available_width - total_cells_width) / 2)
 
-    -- NEW: Hash border implementation
+    -- Hash border implementation
     if border_settings.style == "hash" then
         local border_color = getBorderColor(border_settings.color)
         local border_size = border_settings.size
@@ -762,8 +723,6 @@ function OPDSGridMenu:updateItems(select_number)
         end
     end
 
-    logger.dbg("OPDS+ Grid: Built", rows_per_page, "rows,", #self._items_to_update, "need covers")
-
     -- Update page info
     self:updatePageInfo(select_number)
 
@@ -804,6 +763,8 @@ function OPDSGridMenu:updateItems(select_number)
 
     -- Schedule cover loading
     if #self._items_to_update > 0 then
+        self:_debugLog("Scheduling cover loading for", #self._items_to_update, "items")
+
         self._scheduled_cover_load = function()
             if self._loadVisibleCovers then
                 self:_loadVisibleCovers()
@@ -821,8 +782,6 @@ end
 
 -- Reuse cover loading logic
 function OPDSGridMenu:_loadVisibleCovers()
-    logger.dbg("OPDS+ Grid: _loadVisibleCovers starting")
-
     if #self._items_to_update == 0 then
         return
     end
@@ -844,11 +803,14 @@ function OPDSGridMenu:_loadVisibleCovers()
         return
     end
 
-    logger.dbg("OPDS+ Grid: Loading", #urls, "covers")
+    self:_debugLog("Loading", #urls, "covers")
 
     local ImageLoader = require("image_loader")
     local username = self.root_catalog_username
     local password = self.root_catalog_password
+
+    -- Get debug mode setting
+    local debug_mode = self._manager and self._manager.settings and self._manager.settings.debug_mode
 
     local batch, halt = ImageLoader:loadImages(urls, function(url, content)
         local items = items_by_url[url]
@@ -881,15 +843,13 @@ function OPDSGridMenu:_loadVisibleCovers()
                 widget:update()
             end
         end
-    end, username, password)
+    end, username, password, debug_mode)
 
     self.halt_image_loading = halt
     self._items_to_update = {}
 end
 
 function OPDSGridMenu:onCloseWidget()
-    logger.dbg("OPDS+ Grid: onCloseWidget")
-
     if self.halt_image_loading then
         self.halt_image_loading()
         self.halt_image_loading = nil
@@ -906,7 +866,5 @@ function OPDSGridMenu:onCloseWidget()
 
     Menu.onCloseWidget(self)
 end
-
-logger.warn("OPDS+ opdsgridmenu.lua LOADED SUCCESSFULLY")
 
 return OPDSGridMenu
