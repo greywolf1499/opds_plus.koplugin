@@ -29,10 +29,6 @@ local _ = require("gettext")
 local N_ = _.ngettext
 local T = ffiUtil.template
 
-logger.warn("========================================")
-logger.warn("OPDS+ opdsbrowser.lua IS LOADING")
-logger.warn("========================================")
-
 -- Import the custom cover menu for displaying book covers
 local OPDSCoverMenu = require("opdscovermenuplus")
 
@@ -53,19 +49,19 @@ local OPDSBrowser = OPDSCoverMenu:extend{
     facet_rel            = "http://opds-spec.org/facet",
     image_rel            = {
         ["http://opds-spec.org/image"] = true,
-        ["http://opds-spec.org/cover"] = true, -- ManyBooks.net, not in spec
+        ["http://opds-spec.org/cover"] = true,
         ["x-stanza-cover-image"] = true,
     },
     thumbnail_rel        = {
         ["http://opds-spec.org/image/thumbnail"] = true,
-        ["http://opds-spec.org/thumbnail"] = true, -- ManyBooks.net, not in spec
+        ["http://opds-spec.org/thumbnail"] = true,
         ["x-stanza-cover-image-thumbnail"] = true,
     },
 
     root_catalog_title    = nil,
     root_catalog_username = nil,
     root_catalog_password = nil,
-    facet_groups          = nil, -- Stores OPDS facet groups
+    facet_groups          = nil,
 
     title_shrink_font_to_fit = true,
 }
@@ -78,11 +74,15 @@ function OPDSBrowser:init()
         self:showOPDSMenu()
     end
 
-    -- NEW: Initialize right button for view toggle (will be set when showing catalogs with covers)
-    self.title_bar_right_icon = nil  -- Initially no right button
+    self.title_bar_right_icon = nil
+    self.facet_groups = nil
+    OPDSCoverMenu.init(self)
+end
 
-    self.facet_groups = nil -- Initialize facet groups storage
-    OPDSCoverMenu.init(self) -- call parent's init() - changed from Menu.init
+function OPDSBrowser:_debugLog(...)
+    if self._manager and self._manager.settings and self._manager.settings.debug_mode then
+        logger.dbg("OPDS+ Browser:", ...)
+    end
 end
 
 function OPDSBrowser:toggleViewMode()
@@ -97,9 +97,7 @@ function OPDSBrowser:toggleViewMode()
     self._manager.opds_settings:saveSetting("settings", self._manager.settings)
     self._manager.opds_settings:flush()
 
-    logger.warn("OPDS+: Toggling view mode from", current_mode, "to", new_mode)
-    logger.warn("OPDS+: Current path depth:", #self.paths)
-    logger.warn("OPDS+: Auth context - username:", self.root_catalog_username and "present" or "none")
+    self:_debugLog("Toggling view mode from", current_mode, "to", new_mode)
 
     -- Show notification
     local mode_text = new_mode == "grid" and _("Grid View") or _("List View")
@@ -114,21 +112,12 @@ function OPDSBrowser:toggleViewMode()
         local current_path = self.paths[#self.paths]
         local current_url = current_path.url
 
-        logger.warn("OPDS+: Reloading catalog:", current_url)
-
         -- Reload the catalog with same URL
-        -- Mark as paths_updated to avoid adding duplicate to history
         self:updateCatalog(current_url, true)
     else
-        -- We're at root level
-        logger.warn("OPDS+: Refreshing root level display")
-
-        -- Just switch the display mode for the current item table
-        -- This preserves everything and just changes the view
+        -- We're at root level - just switch the display mode
         self:switchItemTable(self.catalog_title, self.item_table, -1)
     end
-
-    logger.warn("OPDS+: View toggle complete, path depth now:", #self.paths)
 end
 
 function OPDSBrowser:showOPDSMenu()
@@ -202,7 +191,7 @@ function OPDSBrowser:showFacetMenu()
     local dialog
     local catalog_url = self.paths[#self.paths].url
 
-    -- NEW: Check if we have covers to show view toggle
+    -- Check if we have covers to show view toggle
     local has_covers = false
     for _, item in ipairs(self.item_table or {}) do
         if item.cover_url then
@@ -211,14 +200,14 @@ function OPDSBrowser:showFacetMenu()
         end
     end
 
-    -- NEW: Add view toggle option FIRST if we have covers
+    -- Add view toggle option FIRST if we have covers
     if has_covers then
         local current_mode = self._manager.settings.display_mode or "list"
         local toggle_text
         if current_mode == "list" then
-            toggle_text = "\u{25A6} " .. _("Switch to Grid View")  -- ▦ Grid icon
+            toggle_text = "\u{25A6} " .. _("Switch to Grid View")
         else
-            toggle_text = "\u{2261} " .. _("Switch to List View")  -- ≡ List icon
+            toggle_text = "\u{2261} " .. _("Switch to List View")
         end
 
         table.insert(buttons, {{
@@ -229,7 +218,7 @@ function OPDSBrowser:showFacetMenu()
             end,
             align = "left",
         }})
-        table.insert(buttons, {}) -- separator
+        table.insert(buttons, {})
     end
 
     -- Add sub-catalog to bookmarks option
@@ -241,7 +230,7 @@ function OPDSBrowser:showFacetMenu()
         end,
         align = "left",
     }})
-    table.insert(buttons, {}) -- separator
+    table.insert(buttons, {})
 
     -- Add search option if available
     if self.search_url then
@@ -253,7 +242,7 @@ function OPDSBrowser:showFacetMenu()
             end,
             align = "left",
         }})
-        table.insert(buttons, {}) -- separator
+        table.insert(buttons, {})
     end
 
     -- Add facet groups
@@ -280,7 +269,7 @@ function OPDSBrowser:showFacetMenu()
                     align = "left",
                 }})
             end
-            table.insert(buttons, {}) -- separator between groups
+            table.insert(buttons, {})
         end
     end
 
@@ -294,7 +283,7 @@ function OPDSBrowser:showFacetMenu()
     UIManager:show(dialog)
 end
 
--- NEW: Shows menu for catalogs without facets but with covers (for view toggle)
+-- Shows menu for catalogs without facets but with covers (for view toggle)
 function OPDSBrowser:showCatalogMenu()
     local buttons = {}
     local dialog
@@ -314,9 +303,9 @@ function OPDSBrowser:showCatalogMenu()
         local current_mode = self._manager.settings.display_mode or "list"
         local toggle_text
         if current_mode == "list" then
-            toggle_text = "\u{25A6} " .. _("Switch to Grid View")  -- ▦ Grid icon
+            toggle_text = "\u{25A6} " .. _("Switch to Grid View")
         else
-            toggle_text = "\u{2261} " .. _("Switch to List View")  -- ≡ List icon
+            toggle_text = "\u{2261} " .. _("Switch to List View")
         end
 
         table.insert(buttons, {{
@@ -327,7 +316,7 @@ function OPDSBrowser:showCatalogMenu()
             end,
             align = "left",
         }})
-        table.insert(buttons, {}) -- separator
+        table.insert(buttons, {})
     end
 
     -- Add sub-catalog option
@@ -364,13 +353,12 @@ local function buildRootEntry(server)
         url        = server.url,
         username   = server.username,
         password   = server.password,
-        raw_names  = server.raw_names, -- use server raw filenames for download
+        raw_names  = server.raw_names,
         searchable = server.url and server.url:match("%%s") and true or false,
         sync       = server.sync,
     }
 end
 
--- Builds the root list of catalogs
 function OPDSBrowser:genItemTableFromRoot()
     local item_table = {
         {
@@ -384,7 +372,6 @@ function OPDSBrowser:genItemTableFromRoot()
     return item_table
 end
 
--- Shows dialog to edit properties of the new/existing catalog
 function OPDSBrowser:addEditCatalog(item)
     local fields = {
         {
@@ -454,7 +441,6 @@ function OPDSBrowser:addEditCatalog(item)
     dialog:onShowKeyboard()
 end
 
--- Shows dialog to add a subcatalog to the root list
 function OPDSBrowser:addSubCatalog(item_url)
     local dialog
     dialog = InputDialog:new{
@@ -478,7 +464,7 @@ function OPDSBrowser:addSubCatalog(item_url)
                             UIManager:close(dialog)
                             local fields = {name, item_url,
                                 self.root_catalog_username, self.root_catalog_password, self.root_catalog_raw_names}
-                            self:editCatalogFromInput(fields, nil, true) -- no init, stay in the subcatalog
+                            self:editCatalogFromInput(fields, nil, true)
                         end
                     end,
                 },
@@ -489,7 +475,6 @@ function OPDSBrowser:addSubCatalog(item_url)
     dialog:onShowKeyboard()
 end
 
--- Saves catalog properties from input dialog
 function OPDSBrowser:editCatalogFromInput(fields, item, no_refresh)
     local new_server = {
         title     = fields[1],
@@ -508,7 +493,7 @@ function OPDSBrowser:editCatalogFromInput(fields, item, no_refresh)
         new_idx = #self.servers + 2
         itemnumber = new_idx
     end
-    self.servers[new_idx - 1] = new_server -- first item is "Downloads"
+    self.servers[new_idx - 1] = new_server
     self.item_table[new_idx] = new_item
     if not no_refresh then
         self:switchItemTable(nil, self.item_table, itemnumber)
@@ -516,7 +501,6 @@ function OPDSBrowser:editCatalogFromInput(fields, item, no_refresh)
     self._manager.updated = true
 end
 
--- Deletes catalog from the root list
 function OPDSBrowser:deleteCatalog(item)
     table.remove(self.servers, item.idx - 1)
     table.remove(self.item_table, item.idx)
@@ -524,15 +508,12 @@ function OPDSBrowser:deleteCatalog(item)
     self._manager.updated = true
 end
 
--- Fetches feed from server
 function OPDSBrowser:fetchFeed(item_url, headers_only)
     local sink = {}
     socketutil:set_timeout(socketutil.LARGE_BLOCK_TIMEOUT, socketutil.LARGE_TOTAL_TIMEOUT)
     local request = {
         url      = item_url,
         method   = headers_only and "HEAD" or "GET",
-        -- Explicitly specify that we don't support compressed content.
-        -- Some servers will still break RFC2616 14.3 and send crap instead.
         headers  = {
             ["Accept-Encoding"] = "identity",
         },
@@ -540,7 +521,6 @@ function OPDSBrowser:fetchFeed(item_url, headers_only)
         user     = self.root_catalog_username,
         password = self.root_catalog_password,
     }
-    logger.dbg("Request:", socketutil.redact_request(request))
     local code, headers, status = socket.skip(1, http.request(request))
     socketutil:reset_timeout()
 
@@ -558,7 +538,7 @@ function OPDSBrowser:fetchFeed(item_url, headers_only)
     elseif headers and code == 302
         and item_url:match("^https")
         and headers.location:match("^http[^s]") then
-        text = T(_("Insecure HTTPS → HTTP downgrade attempted by redirect from:\n\n'%1'\n\nto\n\n'%2'.\n\nPlease inform the server administrator that many clients disallow this because it could be used to intercept credentials."),
+        text = T(_("Insecure HTTPS → HTTP downgrade attempted by redirect from:\n\n'%1'\n\nto\n\n'%2'.\n\nPlease inform the server administrator that many clients disallow this because it could be used for a downgrade attack."),
             BD.url(item_url), BD.url(headers.location))
             icon = "notice-warning"
     else
@@ -577,7 +557,6 @@ function OPDSBrowser:fetchFeed(item_url, headers_only)
     logger.dbg(string.format("OPDS: Failed to fetch catalog `%s`: %s", item_url, text))
 end
 
--- Parses feed to catalog
 function OPDSBrowser:parseFeed(item_url)
     local headers = self:fetchFeed(item_url, true)
     local feed_last_modified = headers and headers["last-modified"]
@@ -586,12 +565,11 @@ function OPDSBrowser:parseFeed(item_url)
         local hash = "opds|catalog|" .. item_url .. "|" .. feed_last_modified
         feed = CatalogCache:check(hash)
         if feed then
-            logger.dbg("Cache hit for", hash)
+            self:_debugLog("Cache hit for", item_url)
         else
-            logger.dbg("Cache miss for", hash)
+            self:_debugLog("Cache miss, fetching", item_url)
             feed = self:fetchFeed(item_url)
             if feed then
-                logger.dbg("Caching", hash)
                 CatalogCache:insert(hash, feed)
             end
         end
@@ -608,31 +586,25 @@ function OPDSBrowser:getServerFileName(item_url, filetype)
     local filename
 
     if headers then
-        logger.dbg("OPDSBrowser: server file headers", socketutil.redact_headers(headers))
         local disposition = headers["content-disposition"]
         if disposition then
-            -- Try to get filename inside quotes (can contain spaces)
             filename = disposition:match('filename="([^"]+)"')
             if not filename then
-                -- Fallback: try filename without quotes, until end or semicolon
                 filename = disposition:match('filename=([^;]+)')
             end
         end
 
-        -- If not found, try from redirect URL (location)
         if not filename and headers["location"] then
             filename = headers["location"]:gsub(".*/", "")
         end
     end
 
-    -- If still no filename, extract from original URL (remove path and query params)
     if not filename then
         filename = item_url:gsub(".*/", ""):gsub("?.*", "")
     end
 
     if filename and filetype then
         local current_suffix = util.getFileNameSuffix(filename)
-        -- Add extension if missing
         if not current_suffix then
             filename = filename .. "." .. filetype:lower()
         end
@@ -641,9 +613,7 @@ function OPDSBrowser:getServerFileName(item_url, filetype)
     return filename
 end
 
--- Generates link to search in catalog
 function OPDSBrowser:getSearchTemplate(osd_url)
-    -- parse search descriptor
     local search_descriptor = self:parseFeed(osd_url)
     if search_descriptor and search_descriptor.OpenSearchDescription and search_descriptor.OpenSearchDescription.Url then
         for _, candidate in ipairs(search_descriptor.OpenSearchDescription.Url) do
@@ -654,7 +624,6 @@ function OPDSBrowser:getSearchTemplate(osd_url)
     end
 end
 
--- Generates menu items from the fetched list of catalog entries
 function OPDSBrowser:genItemTableFromURL(item_url)
     local ok, catalog = pcall(self.parseFeed, self, item_url)
     if not ok then
@@ -667,18 +636,17 @@ function OPDSBrowser:genItemTableFromURL(item_url)
     return self:genItemTableFromCatalog(catalog, item_url)
 end
 
--- Generates catalog item table and processes OPDS facets/search links
 function OPDSBrowser:genItemTableFromCatalog(catalog, item_url)
     local item_table = {}
-    self.facet_groups = nil -- Reset facets
-    self.search_url = nil   -- Reset search URL
+    self.facet_groups = nil
+    self.search_url = nil
 
     if not catalog then
         return item_table
     end
 
     local feed = catalog.feed or catalog
-    self.facet_groups = {} -- Initialize table to store facet groups
+    self.facet_groups = {}
 
     local function build_href(href)
         return url.absolute(item_url, href)
@@ -695,20 +663,17 @@ function OPDSBrowser:genItemTableFromCatalog(catalog, item_url)
                     end
                 end
                 if not self.sync then
-                    -- OpenSearch
                     if link.type:find(self.search_type) then
                         if link.href then
                             self.search_url = build_href(self:getSearchTemplate(build_href(link.href)))
                             has_opensearch = true
                         end
                     end
-                    -- Calibre search (also matches the actual template for OpenSearch!)
                     if link.type:find(self.search_template_type) and link.rel and link.rel:find("search") then
                         if link.href and not has_opensearch then
                             self.search_url = build_href(link.href:gsub("{searchTerms}", "%%s"))
                         end
                     end
-                    -- Process OPDS facets
                     if link.rel == self.facet_rel then
                         local group_name = link["opds:facetGroup"] or _("Filters")
                         if not self.facet_groups[group_name] then
@@ -736,9 +701,6 @@ function OPDSBrowser:genItemTableFromCatalog(catalog, item_url)
                              or link.rel == "http://opds-spec.org/sort/new") then
                     item.url = link_href
                 end
-                -- Some catalogs do not use the rel attribute to denote
-                -- a publication. Arxiv uses title. Specifically, it uses
-                -- a title attribute that contains pdf. (title="pdf")
                 if link.rel or link.title then
                     if link.rel == self.borrow_rel then
                         table.insert(item.acquisitions, {
@@ -751,9 +713,6 @@ function OPDSBrowser:genItemTableFromCatalog(catalog, item_url)
                             title = link.title,
                         })
                     elseif link.rel == self.stream_rel then
-                        -- https://vaemendis.net/opds-pse/
-                        -- «count» MUST provide the number of pages of the document
-                        -- namespace may be not "pse"
                         local count, last_read
                         for k, v in pairs(link) do
                             if k:sub(-6) == ":count" then
@@ -782,18 +741,12 @@ function OPDSBrowser:genItemTableFromCatalog(catalog, item_url)
                             title = link.title,
                         })
                     end
-                    -- This statement grabs the catalog items that are
-                    -- indicated by title="pdf" or whose type is
-                    -- "application/pdf"
                     if link.title == "pdf" or link.type == "application/pdf"
                         and link.rel ~= "subsection" then
-                        -- Check for the presence of the pdf suffix and add it
-                        -- if it's missing.
                         local original_href = link.href
                         local parsed = url.parse(original_href)
                         if not parsed then parsed = { path = original_href } end
                         local path = parsed.path or ""
-                        -- Calibre web OPDS download links end with "/<filetype>/"
                         if not util.stringEndsWith(path, "/pdf/") then
                             local appended = false
                             if util.getFileNameSuffix(path) ~= "pdf" then
@@ -833,7 +786,6 @@ function OPDSBrowser:genItemTableFromCatalog(catalog, item_url)
                 if #author > 0 then
                     author = table.concat(author, ", ")
                 else
-                    -- we may get an empty table on https://gallica.bnf.fr/opds
                     author = nil
                 end
             end
@@ -843,26 +795,16 @@ function OPDSBrowser:genItemTableFromCatalog(catalog, item_url)
         end
 
         -- Add cover information for display
-        -- Only show indicator and add cover URL for actual books (items with acquisitions)
         if (item.thumbnail or item.image) and item.acquisitions and #item.acquisitions > 0 then
-            -- REMOVE THIS LINE:
-            -- item.text = "\u{1F5BC} " .. item.text  -- 🖼 Frame with picture emoji
+            self:_debugLog("Book entry with cover:", title)
 
-            logger.warn("OPDS+: Book entry found with cover!")
-            logger.warn("OPDS+:   Title:", item.text)
-            logger.warn("OPDS+:   Thumbnail:", item.thumbnail or "none")
-            logger.warn("OPDS+:   Image:", item.image or "none")
-
-            -- Add cover URL for lazy loading
             -- Prefer thumbnail over full image for performance
             if item.thumbnail then
                 item.cover_url = item.thumbnail
                 item.lazy_load_cover = true
-                logger.warn("OPDS+:   Set cover_url to thumbnail:", item.thumbnail)
             elseif item.image then
                 item.cover_url = item.image
                 item.lazy_load_cover = true
-                logger.warn("OPDS+:   Set cover_url to image:", item.image)
             end
         end
 
@@ -872,21 +814,15 @@ function OPDSBrowser:genItemTableFromCatalog(catalog, item_url)
         table.insert(item_table, item)
     end
 
-    if next(self.facet_groups) == nil then self.facet_groups = nil end -- Clear if empty
+    if next(self.facet_groups) == nil then self.facet_groups = nil end
 
     return item_table
 end
 
--- Requests and shows updated list of catalog entries
 function OPDSBrowser:updateCatalog(item_url, paths_updated)
-    logger.warn("========================================")
-    logger.warn("OPDS+: updateCatalog called")
-    logger.warn("OPDS+:   URL:", item_url)
-    logger.warn("========================================")
+    self:_debugLog("updateCatalog called for:", item_url)
 
     local menu_table = self:genItemTableFromURL(item_url)
-
-    logger.warn("OPDS+: Generated", #menu_table, "items")
 
     -- Count how many have covers
     local cover_count = 0
@@ -895,7 +831,6 @@ function OPDSBrowser:updateCatalog(item_url, paths_updated)
             cover_count = cover_count + 1
         end
     end
-    logger.warn("OPDS+:", cover_count, "items have cover_url")
 
     if #menu_table > 0 or self.facet_groups or self.search_url then
         if not paths_updated then
@@ -908,7 +843,7 @@ function OPDSBrowser:updateCatalog(item_url, paths_updated)
 
         -- Set appropriate title bar icon based on content
         if self.facet_groups or self.search_url then
-            -- Has facets/search - use facet menu (which now includes view toggle)
+            -- Has facets/search - use facet menu
             self.title_bar_left_icon = "appbar.menu"
             self.onLeftButtonTap = function()
                 self:showFacetMenu()
@@ -926,14 +861,11 @@ function OPDSBrowser:updateCatalog(item_url, paths_updated)
         end
 
         if self.page_num <= 1 then
-            -- Request more content, but don't change the page
             self:onNextPage(true)
         end
     end
 end
 
-
--- Requests and adds more catalog entries to fill out the page
 function OPDSBrowser:appendCatalog(item_url)
     local menu_table = self:genItemTableFromURL(item_url)
     if #menu_table > 0 then
@@ -946,12 +878,10 @@ function OPDSBrowser:appendCatalog(item_url)
     end
 end
 
--- Shows dialog to search in catalog
 function OPDSBrowser:searchCatalog(item_url)
     local dialog
     dialog = InputDialog:new{
         title = _("Search OPDS catalog"),
-        -- @translators: This is an input hint for something to search for in an OPDS catalog, namely a famous author everyone knows. It probably doesn't need to be localized, but this is just here in case another name or book title would be more appropriate outside of a European context.
         input_hint = _("Alexandre Dumas"),
         description = _("%s in url will be replaced by your input"),
         buttons = {
@@ -970,7 +900,6 @@ function OPDSBrowser:searchCatalog(item_url)
                         UIManager:close(dialog)
                         self.catalog_title = _("Search results")
                         local search_str = util.urlEncode(dialog:getInputText())
-                        -- Use function replacement to avoid % being treated as capture refs
                         item_url = item_url:gsub("%%s", function() return search_str end)
                         self:updateCatalog(item_url)
                     end,

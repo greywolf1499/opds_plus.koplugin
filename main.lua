@@ -14,6 +14,7 @@ local lfs = require("libs/libkoreader-lfs")
 local util = require("util")
 local _ = require("gettext")
 local T = require("ffi/util").template
+local Version = require("version")
 
 local OPDS = WidgetContainer:extend{
     name = "opdsplus",
@@ -137,6 +138,11 @@ function OPDS:init()
     end
     if not self.settings.grid_border_color then
         self.settings.grid_border_color = "dark_gray"
+    end
+
+    -- Initialize debug mode (default: false for production)
+    if self.settings.debug_mode == nil then
+        self.settings.debug_mode = false
     end
 
     self:onDispatcherRegisterActions()
@@ -334,7 +340,6 @@ function OPDS:addToMainMenu(menu_items)
                                         self:showGridLayoutMenu()
                                     end,
                                 },
-                                -- ADD THIS NEW MENU ITEM:
                                 {
                                     text = _("Grid Borders"),
                                     callback = function()
@@ -464,6 +469,37 @@ function OPDS:addToMainMenu(menu_items)
                                 },
                             },
                         },
+                        {
+                            text = _("Developer"),
+                            sub_item_table = {
+                                {
+                                    text = _("Debug Mode"),
+                                    checked_func = function()
+                                        return self.settings.debug_mode == true
+                                    end,
+                                    callback = function()
+                                        self.settings.debug_mode = not self.settings.debug_mode
+                                        self.opds_settings:saveSetting("settings", self.settings)
+                                        self.opds_settings:flush()
+                                        UIManager:show(InfoMessage:new{
+                                            text = self.settings.debug_mode and
+                                                _("Debug mode enabled.\n\nDetailed logging is now active.") or
+                                                _("Debug mode disabled.\n\nNormal logging restored."),
+                                            timeout = 2,
+                                        })
+                                    end,
+                                },
+                            },
+                        },
+                        {
+                            text = T(_("About OPDS Plus v%1"), Version.VERSION),
+                            callback = function()
+                                UIManager:show(InfoMessage:new{
+                                    text = T(_("OPDS Plus Plugin\nVersion: %1\n\nAn enhanced OPDS catalog browser with cover display support.\n\nFeatures:\n• List and Grid view modes\n• Customizable covers and fonts\n• Grid border options\n\nBased on KOReader's OPDS plugin"), Version.VERSION),
+                                    timeout = 5,
+                                })
+                            end,
+                        },
                     },
                 },
             },
@@ -494,7 +530,7 @@ function OPDS:showCoverSizeMenu()
                     UIManager:close(self.cover_size_dialog)
                     self:setCoverHeightRatio(preset.ratio, preset.name)
                     UIManager:show(InfoMessage:new{
-                        text = T(_("Cover size set to %1 (%2%%).\n\n%3\n\nChanges will apply when you next browse a catalog."),
+                        text = T(_("Cover size set to %1 (%2%).\n\n%3\n\nChanges will apply when you next browse a catalog."),
                             preset.name,
                             math.floor(preset.ratio * 100),
                             preset.description),
@@ -552,7 +588,7 @@ function OPDS:showCustomSizeDialog()
             local new_ratio = spin.value / 100
             self:setCoverHeightRatio(new_ratio, "Custom")
             UIManager:show(InfoMessage:new{
-                text = T(_("Cover size set to Custom (%1%%).\n\nChanges will apply when you next browse a catalog."),
+                text = T(_("Cover size set to Custom (%1%).\n\nChanges will apply when you next browse a catalog."),
                     spin.value),
                 timeout = 3,
             })
@@ -652,7 +688,7 @@ function OPDS:showGridLayoutMenu()
         {name = "Spacious", columns = 2, desc = _("Fewer books, larger covers")},
     }
 
-    for idx, preset in ipairs(presets) do  -- Changed from "_, preset" to "idx, preset"
+    for _, preset in ipairs(presets) do
         local is_current = (current_preset == preset.name and current_columns == preset.columns)
         local button_text = preset.name .. " (" .. preset.columns .. " " .. _("cols") .. ")"
         if is_current then
@@ -732,7 +768,7 @@ function OPDS:showGridColumnsMenu()
                 callback = function()
                     UIManager:close(self.grid_columns_dialog)
                     self.settings.grid_columns = cols
-                    self.settings.grid_size_preset = "Custom"  -- NEW: Mark as custom
+                    self.settings.grid_size_preset = "Custom"
                     self.opds_settings:saveSetting("settings", self.settings)
                     self.opds_settings:flush()
                     UIManager:show(InfoMessage:new{
@@ -744,7 +780,7 @@ function OPDS:showGridColumnsMenu()
         })
     end
 
-    -- NEW: Add separator and back button
+    -- Add separator and back button
     table.insert(buttons, {})
     table.insert(buttons, {
         {
@@ -785,7 +821,7 @@ function OPDS:showGridBorderMenu()
         {id = "individual", name = _("Individual Tiles"), desc = _("Each book has its own border")},
     }
 
-    for idx, style in ipairs(styles) do  -- CHANGED: from "_, style" to "idx, style"
+    for _, style in ipairs(styles) do
         local is_current = (current_style == style.id)
         local button_text = style.name
         if is_current then
@@ -900,7 +936,7 @@ function OPDS:showGridBorderColorMenu()
         {id = "black", name = _("Black"), desc = _("High contrast, bold borders")},
     }
 
-    for idx, color in ipairs(colors) do
+    for _, color in ipairs(colors) do
         local is_current = (current_color == color.id)
         local button_text = color.name
         if is_current then

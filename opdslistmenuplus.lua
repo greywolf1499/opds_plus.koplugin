@@ -23,10 +23,6 @@ local Screen = Device.screen
 local logger = require("logger")
 local _ = require("gettext")
 
-logger.warn("========================================")
-logger.warn("OPDS+ opdslistmenu.lua IS LOADING")
-logger.warn("========================================")
-
 -- ============================================
 -- CONFIGURATION - Can be overridden by settings
 -- ============================================
@@ -66,8 +62,6 @@ local function calculateCoverDimensions(custom_ratio)
 
     -- Calculate width maintaining aspect ratio
     local cover_width = math.floor(cover_height * COVER_CONFIG.book_aspect_ratio)
-
-    logger.dbg("OPDS+: Cover dimensions:", cover_width, "x", cover_height, "at", (ratio * 100) .. "%")
 
     return cover_width, cover_height
 end
@@ -140,7 +134,6 @@ local function createPlaceholderCover(width, height, status)
 end
 
 -- Parse title and author from entry data
--- OPDS provides title and author separately, but sometimes they're combined in text
 local function parseTitleAuthor(entry)
     local title = entry.title  -- Try dedicated title field first
     local author = entry.author  -- Try dedicated author field
@@ -195,8 +188,6 @@ local OPDSListMenuItem = InputContainer:extend{
 }
 
 function OPDSListMenuItem:init()
-    logger.dbg("OPDS+: OPDSListMenuItem:init() called for:", self.entry.text or "unknown")
-
     self.dimen = Geom:new{
         w = self.width,
         h = self.height,
@@ -223,7 +214,6 @@ function OPDSListMenuItem:init()
     -- Check if we should use real cover or placeholder
     if self.entry.cover_bb then
         -- Cover has been loaded - use it!
-        logger.dbg("OPDS+: Displaying LOADED cover for:", self.entry.text)
         cover_widget = ImageWidget:new{
             image = self.entry.cover_bb,
             width = self.cover_width,
@@ -232,15 +222,12 @@ function OPDSListMenuItem:init()
         }
     elseif self.entry.cover_url and self.entry.lazy_load_cover then
         -- Cover is being loaded - show loading placeholder
-        logger.dbg("OPDS+: Showing LOADING placeholder for:", self.entry.text)
         cover_widget = createPlaceholderCover(self.cover_width, self.cover_height, "loading")
     elseif self.entry.cover_url and self.entry.cover_failed then
         -- Cover failed to load - show error placeholder
-        logger.dbg("OPDS+: Showing ERROR placeholder for:", self.entry.text)
         cover_widget = createPlaceholderCover(self.cover_width, self.cover_height, "error")
     else
         -- No cover available - show no cover placeholder
-        logger.dbg("OPDS+: Showing NO COVER placeholder for:", self.entry.text)
         cover_widget = createPlaceholderCover(self.cover_width, self.cover_height, "no_cover")
     end
 
@@ -282,8 +269,6 @@ function OPDSListMenuItem:init()
     if info_color_name == "black" then
         info_color = Blitbuffer.COLOR_BLACK
     end
-
-    logger.dbg("OPDS+: Font settings - Title:", title_font, title_size, "Info:", info_font, info_size)
 
     -- Build text information widgets
     local text_group = VerticalGroup:new{
@@ -371,7 +356,6 @@ function OPDSListMenuItem:init()
 end
 
 function OPDSListMenuItem:update()
-    logger.dbg("OPDS+: OPDSListMenuItem:update() - refreshing with new cover")
     -- Re-initialize with updated entry data
     self:init()
     UIManager:setDirty(self.show_parent, function()
@@ -381,7 +365,6 @@ end
 
 -- Handle tap events - delegate to parent menu
 function OPDSListMenuItem:onTapSelect(arg, ges)
-    logger.dbg("OPDS+: OPDSListMenuItem:onTapSelect called for:", self.entry.text)
     if self.menu and self.menu.onMenuSelect then
         self.menu:onMenuSelect(self.entry)
         return true
@@ -391,7 +374,6 @@ end
 
 -- Handle hold events - delegate to parent menu
 function OPDSListMenuItem:onHoldSelect(arg, ges)
-    logger.dbg("OPDS+: OPDSListMenuItem:onHoldSelect called for:", self.entry.text)
     if self.menu and self.menu.onMenuHold then
         self.menu:onMenuHold(self.entry)
         return true
@@ -410,31 +392,29 @@ local OPDSListMenu = Menu:extend{
     _items_to_update = {},
 }
 
+function OPDSListMenu:_debugLog(...)
+    if self._manager and self._manager.settings and self._manager.settings.debug_mode then
+        logger.dbg("OPDS+ List:", ...)
+    end
+end
+
 -- Calculate and set cover dimensions
 function OPDSListMenu:setCoverDimensions()
     local custom_ratio = nil
 
-    logger.dbg("OPDS+: setCoverDimensions called")
-
     -- Try to get ratio from multiple possible locations
     if self._manager and self._manager.settings and self._manager.settings.cover_height_ratio then
         custom_ratio = self._manager.settings.cover_height_ratio
-        logger.dbg("OPDS+: Got ratio from settings:", custom_ratio)
     elseif self.settings and self.settings.cover_height_ratio then
         custom_ratio = self.settings.cover_height_ratio
-        logger.dbg("OPDS+: Got ratio from self.settings:", custom_ratio)
-    else
-        logger.dbg("OPDS+: No custom ratio found, using default")
     end
 
     self.cover_width, self.cover_height = calculateCoverDimensions(custom_ratio)
-    logger.dbg("OPDS+: Set cover dimensions to", self.cover_width, "x", self.cover_height)
+    self:_debugLog("Set cover dimensions to", self.cover_width, "x", self.cover_height)
 end
 
 -- Override _recalculateDimen to properly calculate items per page with cover heights
 function OPDSListMenu:_recalculateDimen()
-    logger.dbg("OPDS+: OPDSListMenu:_recalculateDimen() called")
-
     -- Make sure we have cover dimensions
     if not self.cover_width or not self.cover_height then
         self:setCoverDimensions()
@@ -465,9 +445,7 @@ function OPDSListMenu:_recalculateDimen()
         self.perpage = 1
     end
 
-    logger.dbg("OPDS+: Available height:", available_height)
-    logger.dbg("OPDS+: Item height:", self.item_height)
-    logger.dbg("OPDS+: Items per page:", self.perpage)
+    self:_debugLog("Items per page:", self.perpage)
 
     -- Calculate total pages
     self.page_num = math.ceil(#self.item_table / self.perpage)
@@ -488,11 +466,8 @@ function OPDSListMenu:_recalculateDimen()
 end
 
 function OPDSListMenu:updateItems(select_number)
-    logger.dbg("OPDS+: OPDSListMenu:updateItems() called")
-
     -- Cancel any previous image loading
     if self.halt_image_loading then
-        logger.dbg("OPDS+: Cancelling previous image loading")
         self.halt_image_loading()
         self.halt_image_loading = nil
     end
@@ -520,7 +495,6 @@ function OPDSListMenu:updateItems(select_number)
             info_color = self._manager.settings.info_color or "dark_gray",
             use_same_font = self._manager.settings.use_same_font,
         }
-        logger.dbg("OPDS+: Using font settings from _manager")
     elseif self.settings then
         font_settings = {
             title_font = self.settings.title_font or "smallinfofont",
@@ -532,7 +506,6 @@ function OPDSListMenu:updateItems(select_number)
             info_color = self.settings.info_color or "dark_gray",
             use_same_font = self.settings.use_same_font,
         }
-        logger.dbg("OPDS+: Using font settings from self.settings")
     end
 
     -- Handle defaults
@@ -546,8 +519,6 @@ function OPDSListMenu:updateItems(select_number)
     -- Build items for current page
     self._items_to_update = {}
     local idx_offset = (self.page - 1) * self.perpage
-
-    logger.dbg("OPDS+: Building page", self.page, "with", self.perpage, "items per page")
 
     for i = 1, self.perpage do
         local entry_idx = idx_offset + i
@@ -583,7 +554,6 @@ function OPDSListMenu:updateItems(select_number)
 
             -- Track items that need cover loading
             if entry.cover_url and entry.lazy_load_cover and not entry.cover_bb then
-                logger.dbg("OPDS+: Queued for loading:", entry.text:sub(1, 40))
                 table.insert(self._items_to_update, {
                     entry = entry,
                     widget = item,
@@ -591,8 +561,6 @@ function OPDSListMenu:updateItems(select_number)
             end
         end
     end
-
-    logger.dbg("OPDS+: Built", #self.item_group, "items,", #self._items_to_update, "need covers")
 
     -- Update page info
     self:updatePageInfo(select_number)
@@ -606,21 +574,15 @@ function OPDSListMenu:updateItems(select_number)
     -- Update page info with custom text
     if self.page_info then
         local custom_text = "≡ " .. self.page .. "/" .. self.page_num .. " (" .. self.perpage .. " items)"
-        logger.warn("OPDS+ List: Setting custom page info:", custom_text)
 
         -- Find and replace the text widget
         for i = 1, 10 do
             if self.page_info[i] and type(self.page_info[i]) == "table" and self.page_info[i].text then
-                logger.warn("OPDS+ List: Found text widget at index", i)
-
                 -- Get the original widget's properties (with fallbacks)
                 local old_widget = self.page_info[i]
                 local Font = require("ui/font")
                 local face = old_widget.face or Font:getFace("smallinfofont")
                 local fgcolor = old_widget.fgcolor or Blitbuffer.COLOR_BLACK
-
-                logger.warn("OPDS+ List: Old widget face:", old_widget.face and "exists" or "nil")
-                logger.warn("OPDS+ List: Old widget fgcolor:", old_widget.fgcolor)
 
                 -- Free the old widget
                 if old_widget.free then
@@ -635,8 +597,6 @@ function OPDSListMenu:updateItems(select_number)
                     fgcolor = fgcolor,
                 }
 
-                logger.warn("OPDS+ List: Created new text widget")
-
                 -- Mark dirty for full refresh
                 UIManager:setDirty(self.show_parent, "ui")
 
@@ -647,7 +607,7 @@ function OPDSListMenu:updateItems(select_number)
 
     -- Schedule cover loading
     if #self._items_to_update > 0 then
-        logger.dbg("OPDS+: Scheduling cover loading in 1 second...")
+        self:_debugLog("Scheduling cover loading for", #self._items_to_update, "items")
 
         -- Store the scheduled function so it can be cancelled if needed
         self._scheduled_cover_load = function()
@@ -666,8 +626,6 @@ function OPDSListMenu:getPageInfo()
 end
 
 function OPDSListMenu:_loadVisibleCovers()
-    logger.dbg("OPDS+: _loadVisibleCovers() starting")
-
     if #self._items_to_update == 0 then
         return
     end
@@ -681,18 +639,16 @@ function OPDSListMenu:_loadVisibleCovers()
         if url and not items_by_url[url] then
             table.insert(urls, url)
             items_by_url[url] = {item_data}
-            logger.dbg("OPDS+: Will load:", url)
         elseif url then
             table.insert(items_by_url[url], item_data)
         end
     end
 
     if #urls == 0 then
-        logger.dbg("OPDS+: No valid URLs to load!")
         return
     end
 
-    logger.dbg("OPDS+: Loading", #urls, "unique cover URLs")
+    self:_debugLog("Loading", #urls, "unique cover URLs")
 
     -- Load covers asynchronously
     local ImageLoader = require("image_loader")
@@ -701,11 +657,10 @@ function OPDSListMenu:_loadVisibleCovers()
     local username = self.root_catalog_username
     local password = self.root_catalog_password
 
-    logger.dbg("OPDS+: Using credentials:", username and "yes" or "no")
+    -- Get debug mode setting
+    local debug_mode = self._manager and self._manager.settings and self._manager.settings.debug_mode
 
     local batch, halt = ImageLoader:loadImages(urls, function(url, content)
-        logger.dbg("OPDS+: Cover downloaded from:", url)
-
         local items = items_by_url[url]
         if not items then
             logger.warn("OPDS+: ERROR - No items for URL:", url)
@@ -717,8 +672,6 @@ function OPDSListMenu:_loadVisibleCovers()
             local widget = item_data.widget
 
             entry.lazy_load_cover = false
-
-            logger.dbg("OPDS+: Rendering cover for:", entry.text:sub(1, 40))
 
             -- Render the cover image maintaining aspect ratio
             local ok, cover_bb = pcall(function()
@@ -732,7 +685,6 @@ function OPDSListMenu:_loadVisibleCovers()
             end)
 
             if ok and cover_bb then
-                logger.dbg("OPDS+: ✓ Cover rendered successfully!")
                 entry.cover_bb = cover_bb
                 entry.cover_failed = false
 
@@ -740,7 +692,7 @@ function OPDSListMenu:_loadVisibleCovers()
                 widget.entry = entry
                 widget:update()
             else
-                logger.warn("OPDS+: ✗ Failed to render cover:", tostring(cover_bb))
+                logger.warn("OPDS+: Failed to render cover:", tostring(cover_bb))
                 entry.cover_failed = true
 
                 -- Update the widget to show error placeholder
@@ -748,17 +700,13 @@ function OPDSListMenu:_loadVisibleCovers()
                 widget:update()
             end
         end
-    end, username, password)
-
-    logger.dbg("OPDS+: ImageLoader started")
+    end, username, password, debug_mode)
 
     self.halt_image_loading = halt
     self._items_to_update = {}
 end
 
 function OPDSListMenu:onCloseWidget()
-    logger.dbg("OPDS+: OPDSListMenu:onCloseWidget()")
-
     -- Clean up image loading
     if self.halt_image_loading then
         self.halt_image_loading()
@@ -778,7 +726,5 @@ function OPDSListMenu:onCloseWidget()
     -- Call parent cleanup
     Menu.onCloseWidget(self)
 end
-
-logger.warn("OPDS+: opdslistmenu.lua LOADED SUCCESSFULLY")
 
 return OPDSListMenu
