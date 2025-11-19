@@ -1,3 +1,14 @@
+![OPDS Plus Banner](.github/assets/hero_banner.png)
+
+<div align="center">
+
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/greywolf1499/opds_plus.koplugin?style=for-the-badge&color=orange)
+![GitHub all releases](https://img.shields.io/github/downloads/greywolf1499/opds_plus.koplugin/total?style=for-the-badge&color=yellow)
+![GitHub](https://img.shields.io/github/license/greywolf1499/opds_plus.koplugin?style=for-the-badge&color=blue)
+![Platform](https://img.shields.io/badge/Platform-KOReader-success?style=for-the-badge&logo=koreader)
+
+</div>
+
 # OPDS Plus - Enhanced OPDS Browser for KOReader
 
 **Version:** 1.1.0
