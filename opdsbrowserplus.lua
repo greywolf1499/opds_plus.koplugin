@@ -8,6 +8,7 @@ local DocumentRegistry = require("document/documentregistry")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
 local MultiInputDialog = require("ui/widget/multiinputdialog")
+local Menu = require("ui/widget/menu")
 local NetworkMgr = require("ui/network/manager")
 local Notification = require("ui/widget/notification")
 local OPDSParser = require("opdsparser")
@@ -33,35 +34,35 @@ local T = ffiUtil.template
 local OPDSCoverMenu = require("opdscovermenuplus")
 
 -- cache catalog parsed from feed xml
-local CatalogCache = Cache:new{
+local CatalogCache = Cache:new {
     -- Make it 20 slots, with no storage space constraints
     slots = 20,
 }
 
 -- Changed from Menu:extend to OPDSCoverMenu:extend to support cover images
-local OPDSBrowser = OPDSCoverMenu:extend{
-    catalog_type         = "application/atom%+xml",
-    search_type          = "application/opensearchdescription%+xml",
-    search_template_type = "application/atom%+xml",
-    acquisition_rel      = "^http://opds%-spec%.org/acquisition",
-    borrow_rel           = "http://opds-spec.org/acquisition/borrow",
-    stream_rel           = "http://vaemendis.net/opds-pse/stream",
-    facet_rel            = "http://opds-spec.org/facet",
-    image_rel            = {
+local OPDSBrowser = OPDSCoverMenu:extend {
+    catalog_type             = "application/atom%+xml",
+    search_type              = "application/opensearchdescription%+xml",
+    search_template_type     = "application/atom%+xml",
+    acquisition_rel          = "^http://opds%-spec%.org/acquisition",
+    borrow_rel               = "http://opds-spec.org/acquisition/borrow",
+    stream_rel               = "http://vaemendis.net/opds-pse/stream",
+    facet_rel                = "http://opds-spec.org/facet",
+    image_rel                = {
         ["http://opds-spec.org/image"] = true,
         ["http://opds-spec.org/cover"] = true,
         ["x-stanza-cover-image"] = true,
     },
-    thumbnail_rel        = {
+    thumbnail_rel            = {
         ["http://opds-spec.org/image/thumbnail"] = true,
         ["http://opds-spec.org/thumbnail"] = true,
         ["x-stanza-cover-image-thumbnail"] = true,
     },
 
-    root_catalog_title    = nil,
-    root_catalog_username = nil,
-    root_catalog_password = nil,
-    facet_groups          = nil,
+    root_catalog_title       = nil,
+    root_catalog_username    = nil,
+    root_catalog_password    = nil,
+    facet_groups             = nil,
 
     title_shrink_font_to_fit = true,
 }
@@ -101,7 +102,7 @@ function OPDSBrowser:toggleViewMode()
 
     -- Show notification
     local mode_text = new_mode == "grid" and _("Grid View") or _("List View")
-    UIManager:show(InfoMessage:new{
+    UIManager:show(InfoMessage:new {
         text = T(_("Switched to %1"), mode_text),
         timeout = 1,
     })
@@ -122,60 +123,60 @@ end
 
 function OPDSBrowser:showOPDSMenu()
     local dialog
-    dialog = ButtonDialog:new{
+    dialog = ButtonDialog:new {
         buttons = {
-            {{
-                    text = _("Add catalog"),
-                    callback = function()
-                        UIManager:close(dialog)
-                        self:addEditCatalog()
-                    end,
-                    align = "left",
-            }},
+            { {
+                text = _("Add catalog"),
+                callback = function()
+                    UIManager:close(dialog)
+                    self:addEditCatalog()
+                end,
+                align = "left",
+            } },
             {},
-            {{
-                    text = _("Sync all catalogs"),
-                    callback = function()
-                        UIManager:close(dialog)
-                        NetworkMgr:runWhenConnected(function()
-                            self.sync_force = false
-                            self:checkSyncDownload()
-                        end)
-                    end,
-                    align = "left",
-            }},
-            {{
-                    text = _("Force sync all catalogs"),
-                    callback = function()
-                        UIManager:close(dialog)
-                        NetworkMgr:runWhenConnected(function()
-                            self.sync_force = true
-                            self:checkSyncDownload()
-                        end)
-                    end,
-                    align = "left",
-            }},
-            {{
-                    text = _("Set max number of files to sync"),
-                    callback = function()
-                        self:setMaxSyncDownload()
-                    end,
-                    align = "left",
-            }},
-            {{
-                    text = _("Set sync folder"),
-                    callback = function()
-                        self:setSyncDir()
-                    end,
-                    align = "left",
-            }},
-            {{
-                    text = _("Set file types to sync"),
-                    callback = function()
-                        self:setSyncFiletypes()
-                    end,
-                    align = "left",
-            }},
+            { {
+                text = _("Sync all catalogs"),
+                callback = function()
+                    UIManager:close(dialog)
+                    NetworkMgr:runWhenConnected(function()
+                        self.sync_force = false
+                        self:checkSyncDownload()
+                    end)
+                end,
+                align = "left",
+            } },
+            { {
+                text = _("Force sync all catalogs"),
+                callback = function()
+                    UIManager:close(dialog)
+                    NetworkMgr:runWhenConnected(function()
+                        self.sync_force = true
+                        self:checkSyncDownload()
+                    end)
+                end,
+                align = "left",
+            } },
+            { {
+                text = _("Set max number of files to sync"),
+                callback = function()
+                    self:setMaxSyncDownload()
+                end,
+                align = "left",
+            } },
+            { {
+                text = _("Set sync folder"),
+                callback = function()
+                    self:setSyncDir()
+                end,
+                align = "left",
+            } },
+            { {
+                text = _("Set file types to sync"),
+                callback = function()
+                    self:setSyncFiletypes()
+                end,
+                align = "left",
+            } },
         },
         shrink_unneeded_width = true,
         anchor = function()
@@ -210,38 +211,38 @@ function OPDSBrowser:showFacetMenu()
             toggle_text = "\u{2261} " .. _("Switch to List View")
         end
 
-        table.insert(buttons, {{
+        table.insert(buttons, { {
             text = toggle_text,
             callback = function()
                 UIManager:close(dialog)
                 self:toggleViewMode()
             end,
             align = "left",
-        }})
+        } })
         table.insert(buttons, {})
     end
 
     -- Add sub-catalog to bookmarks option
-    table.insert(buttons, {{
+    table.insert(buttons, { {
         text = "\u{f067} " .. _("Add catalog"),
         callback = function()
             UIManager:close(dialog)
             self:addSubCatalog(catalog_url)
         end,
         align = "left",
-    }})
+    } })
     table.insert(buttons, {})
 
     -- Add search option if available
     if self.search_url then
-        table.insert(buttons, {{
+        table.insert(buttons, { {
             text = "\u{f002} " .. _("Search"),
             callback = function()
                 UIManager:close(dialog)
                 self:searchCatalog(self.search_url)
             end,
             align = "left",
-        }})
+        } })
         table.insert(buttons, {})
     end
 
@@ -260,20 +261,20 @@ function OPDSBrowser:showFacetMenu()
                 if link["opds:activeFacet"] == "true" then
                     facet_text = "✓ " .. facet_text
                 end
-                table.insert(buttons, {{
+                table.insert(buttons, { {
                     text = facet_text,
                     callback = function()
                         UIManager:close(dialog)
                         self:updateCatalog(url.absolute(catalog_url, link.href))
                     end,
                     align = "left",
-                }})
+                } })
             end
             table.insert(buttons, {})
         end
     end
 
-    dialog = ButtonDialog:new{
+    dialog = ButtonDialog:new {
         buttons = buttons,
         shrink_unneeded_width = true,
         anchor = function()
@@ -308,28 +309,28 @@ function OPDSBrowser:showCatalogMenu()
             toggle_text = "\u{2261} " .. _("Switch to List View")
         end
 
-        table.insert(buttons, {{
+        table.insert(buttons, { {
             text = toggle_text,
             callback = function()
                 UIManager:close(dialog)
                 self:toggleViewMode()
             end,
             align = "left",
-        }})
+        } })
         table.insert(buttons, {})
     end
 
     -- Add sub-catalog option
-    table.insert(buttons, {{
+    table.insert(buttons, { {
         text = "\u{f067} " .. _("Add catalog"),
         callback = function()
             UIManager:close(dialog)
             self:addSubCatalog(catalog_url)
         end,
         align = "left",
-    }})
+    } })
 
-    dialog = ButtonDialog:new{
+    dialog = ButtonDialog:new {
         buttons = buttons,
         shrink_unneeded_width = true,
         anchor = function()
@@ -400,7 +401,7 @@ function OPDSBrowser:addEditCatalog(item)
     end
 
     local dialog, check_button_raw_names, check_button_sync_catalog
-    dialog = MultiInputDialog:new{
+    dialog = MultiInputDialog:new {
         title = title,
         fields = fields,
         buttons = {
@@ -425,12 +426,12 @@ function OPDSBrowser:addEditCatalog(item)
             },
         },
     }
-    check_button_raw_names = CheckButton:new{
+    check_button_raw_names = CheckButton:new {
         text = _("Use server filenames"),
         checked = item and item.raw_names,
         parent = dialog,
     }
-    check_button_sync_catalog = CheckButton:new{
+    check_button_sync_catalog = CheckButton:new {
         text = _("Sync catalog"),
         checked = item and item.sync,
         parent = dialog,
@@ -443,7 +444,7 @@ end
 
 function OPDSBrowser:addSubCatalog(item_url)
     local dialog
-    dialog = InputDialog:new{
+    dialog = InputDialog:new {
         title = _("Add OPDS catalog"),
         input = self.root_catalog_title .. " - " .. self.catalog_title,
         buttons = {
@@ -462,8 +463,8 @@ function OPDSBrowser:addSubCatalog(item_url)
                         local name = dialog:getInputText()
                         if name ~= "" then
                             UIManager:close(dialog)
-                            local fields = {name, item_url,
-                                self.root_catalog_username, self.root_catalog_password, self.root_catalog_raw_names}
+                            local fields = { name, item_url,
+                                self.root_catalog_username, self.root_catalog_password, self.root_catalog_raw_names }
                             self:editCatalogFromInput(fields, nil, true)
                         end
                     end,
@@ -534,13 +535,16 @@ function OPDSBrowser:fetchFeed(item_url, headers_only)
 
     local text, icon
     if headers and code == 301 then
-        text = T(_("The catalog has been permanently moved. Please update catalog URL to '%1'."), BD.url(headers.location))
+        text = T(_("The catalog has been permanently moved. Please update catalog URL to '%1'."),
+            BD.url(headers.location))
     elseif headers and code == 302
         and item_url:match("^https")
         and headers.location:match("^http[^s]") then
-        text = T(_("Insecure HTTPS → HTTP downgrade attempted by redirect from:\n\n'%1'\n\nto\n\n'%2'.\n\nPlease inform the server administrator that many clients disallow this because it could be used for a downgrade attack."),
+        text = T(
+            _(
+                "Insecure HTTPS → HTTP downgrade attempted by redirect from:\n\n'%1'\n\nto\n\n'%2'.\n\nPlease inform the server administrator that many clients disallow this because it could be used for a downgrade attack."),
             BD.url(item_url), BD.url(headers.location))
-            icon = "notice-warning"
+        icon = "notice-warning"
     else
         local error_message = {
             ["401"] = _("Authentication required for catalog. Please add a username and password."),
@@ -548,9 +552,10 @@ function OPDSBrowser:fetchFeed(item_url, headers_only)
             ["404"] = _("Catalog not found."),
             ["406"] = _("Cannot get catalog. Server refuses to serve uncompressed content."),
         }
-        text = code and error_message[tostring(code)] or T(_("Cannot get catalog. Server response status: %1."), status or code)
+        text = code and error_message[tostring(code)] or
+            T(_("Cannot get catalog. Server response status: %1."), status or code)
     end
-    UIManager:show(InfoMessage:new{
+    UIManager:show(InfoMessage:new {
         text = text,
         icon = icon,
     })
@@ -615,7 +620,9 @@ end
 
 function OPDSBrowser:getSearchTemplate(osd_url)
     local search_descriptor = self:parseFeed(osd_url)
+    ---@diagnostic disable-next-line: undefined-field
     if search_descriptor and search_descriptor.OpenSearchDescription and search_descriptor.OpenSearchDescription.Url then
+        ---@diagnostic disable-next-line: undefined-field
         for _, candidate in ipairs(search_descriptor.OpenSearchDescription.Url) do
             if candidate.type and candidate.template and candidate.type:find(self.search_template_type) then
                 return candidate.template:gsub("{searchTerms}", "%%s")
@@ -628,9 +635,10 @@ function OPDSBrowser:genItemTableFromURL(item_url)
     local ok, catalog = pcall(self.parseFeed, self, item_url)
     if not ok then
         logger.info("Cannot get catalog info from", item_url, catalog)
-        UIManager:show(InfoMessage:new{
+        UIManager:show(InfoMessage:new {
             text = T(_("Cannot get catalog info from %1"), (item_url and BD.url(item_url) or "nil")),
         })
+        ---@diagnostic disable-next-line: cast-local-type
         catalog = nil
     end
     return self:genItemTableFromCatalog(catalog, item_url)
@@ -694,11 +702,11 @@ function OPDSBrowser:genItemTableFromCatalog(catalog, item_url)
             for ___, link in ipairs(entry.link) do
                 local link_href = build_href(link.href)
                 if link.type and link.type:find(self.catalog_type)
-                        and (not link.rel
-                             or link.rel == "subsection"
-                             or link.rel == "http://opds-spec.org/subsection"
-                             or link.rel == "http://opds-spec.org/sort/popular"
-                             or link.rel == "http://opds-spec.org/sort/new") then
+                    and (not link.rel
+                        or link.rel == "subsection"
+                        or link.rel == "http://opds-spec.org/subsection"
+                        or link.rel == "http://opds-spec.org/sort/popular"
+                        or link.rel == "http://opds-spec.org/sort/new") then
                     item.url = link_href
                 end
                 if link.rel or link.title then
@@ -723,10 +731,10 @@ function OPDSBrowser:genItemTableFromCatalog(catalog, item_url)
                         end
                         if count then
                             table.insert(item.acquisitions, {
-                                type  = link.type,
-                                href  = link_href,
-                                title = link.title,
-                                count = count,
+                                type      = link.type,
+                                href      = link_href,
+                                title     = link.title,
+                                count     = count,
                                 last_read = last_read and last_read > 0 and last_read or nil
                             })
                         end
@@ -880,7 +888,7 @@ end
 
 function OPDSBrowser:searchCatalog(item_url)
     local dialog
-    dialog = InputDialog:new{
+    dialog = InputDialog:new {
         title = _("Search OPDS catalog"),
         input_hint = _("Alexandre Dumas"),
         description = _("%s in url will be replaced by your input"),
@@ -921,9 +929,9 @@ function OPDSBrowser:showDownloads(item)
             BD.dirpath(path), file or _("<server filename>"))
     end
 
-    local buttons = {} -- buttons for ButtonDialog
-    local stream_buttons -- page stream buttons
-    local download_buttons = {} -- file type download buttons
+    local buttons = {}                            -- buttons for ButtonDialog
+    local stream_buttons                          -- page stream buttons
+    local download_buttons = {}                   -- file type download buttons
     for i, acquisition in ipairs(acquisitions) do -- filter out unsupported file types
         if acquisition.count then
             stream_buttons = {
@@ -932,7 +940,8 @@ function OPDSBrowser:showDownloads(item)
                         -- @translators "Stream" here refers to being able to read documents from an OPDS server without downloading them completely, on a page by page basis.
                         text = "\u{23EE} " .. _("Page stream"), -- prepend BLACK LEFT-POINTING DOUBLE TRIANGLE WITH BAR
                         callback = function()
-                            OPDSPSE:streamPages(acquisition.href, acquisition.count, false, self.root_catalog_username, self.root_catalog_password)
+                            OPDSPSE:streamPages(acquisition.href, acquisition.count, false, self.root_catalog_username,
+                                self.root_catalog_password)
                             UIManager:close(self.download_dialog)
                         end,
                     },
@@ -940,7 +949,8 @@ function OPDSBrowser:showDownloads(item)
                         -- @translators "Stream" here refers to being able to read documents from an OPDS server without downloading them completely, on a page by page basis.
                         text = _("Stream from page") .. " \u{23E9}", -- append BLACK RIGHT-POINTING DOUBLE TRIANGLE
                         callback = function()
-                            OPDSPSE:streamPages(acquisition.href, acquisition.count, true, self.root_catalog_username, self.root_catalog_password)
+                            OPDSPSE:streamPages(acquisition.href, acquisition.count, true, self.root_catalog_username,
+                                self.root_catalog_password)
                             UIManager:close(self.download_dialog)
                         end,
                     },
@@ -953,7 +963,8 @@ function OPDSBrowser:showDownloads(item)
                         -- @translators "Stream" here refers to being able to read documents from an OPDS server without downloading them completely, on a page by page basis.
                         text = "\u{25B6} " .. _("Resume stream from page") .. " " .. acquisition.last_read, -- prepend BLACK RIGHT-POINTING TRIANGLE
                         callback = function()
-                            OPDSPSE:streamPages(acquisition.href, acquisition.count, false, self.root_catalog_username, self.root_catalog_password, acquisition.last_read)
+                            OPDSPSE:streamPages(acquisition.href, acquisition.count, false, self.root_catalog_username,
+                                self.root_catalog_password, acquisition.last_read)
                             UIManager:close(self.download_dialog)
                         end,
                     },
@@ -973,7 +984,8 @@ function OPDSBrowser:showDownloads(item)
                     callback = function()
                         UIManager:close(self.download_dialog)
                         local local_path = self:getLocalDownloadPath(filename, filetype, acquisition.href)
-                        self:checkDownloadFile(local_path, acquisition.href, self.root_catalog_username, self.root_catalog_password, self.file_downloaded_callback)
+                        self:checkDownloadFile(local_path, acquisition.href, self.root_catalog_username,
+                            self.root_catalog_password, self.file_downloaded_callback)
                     end,
                     hold_callback = function()
                         UIManager:close(self.download_dialog)
@@ -999,10 +1011,10 @@ function OPDSBrowser:showDownloads(item)
             table.insert(buttons, download_buttons)
         else
             if buttons_nb % 2 == 1 then -- we need even number of buttons
-                table.insert(download_buttons, {text = ""})
+                table.insert(download_buttons, { text = "" })
             end
             for i = 1, buttons_nb, 2 do -- two buttons in a row
-                table.insert(buttons, {download_buttons[i], download_buttons[i+1]})
+                table.insert(buttons, { download_buttons[i], download_buttons[i + 1] })
             end
         end
         table.insert(buttons, {}) -- separator
@@ -1013,11 +1025,11 @@ function OPDSBrowser:showDownloads(item)
         end
         table.insert(buttons, {}) -- separator
     end
-    table.insert(buttons, { -- action buttons
+    table.insert(buttons, {       -- action buttons
         {
             text = _("Choose folder"),
             callback = function()
-                require("ui/downloadmgr"):new{
+                require("ui/downloadmgr"):new {
                     onConfirm = function(path)
                         logger.dbg("Download folder set to", path)
                         G_reader_settings:saveSetting("download_dir", path)
@@ -1030,7 +1042,7 @@ function OPDSBrowser:showDownloads(item)
             text = _("Change filename"),
             callback = function()
                 local dialog
-                dialog = InputDialog:new{
+                dialog = InputDialog:new {
                     title = _("Enter filename"),
                     input = filename or filename_orig,
                     input_hint = filename_orig,
@@ -1076,7 +1088,7 @@ function OPDSBrowser:showDownloads(item)
             text = _("Book information"),
             enabled = type(item.content) == "string",
             callback = function()
-                UIManager:show(TextViewer:new{
+                UIManager:show(TextViewer:new {
                     title = item.text,
                     title_multilines = true,
                     text = util.htmlToPlainTextIfHtml(item.content),
@@ -1086,7 +1098,7 @@ function OPDSBrowser:showDownloads(item)
         },
     })
 
-    self.download_dialog = ButtonDialog:new{
+    self.download_dialog = ButtonDialog:new {
         title = createTitle(self:getCurrentDownloadDir(), filename),
         buttons = buttons,
     }
@@ -1128,13 +1140,13 @@ function OPDSBrowser:checkDownloadFile(local_path, remote_url, username, passwor
         UIManager:scheduleIn(1, function()
             self:downloadFile(local_path, remote_url, username, password, caller_callback)
         end)
-        UIManager:show(InfoMessage:new{
+        UIManager:show(InfoMessage:new {
             text = _("Downloading…"),
             timeout = 1,
         })
     end
     if lfs.attributes(local_path) then
-        UIManager:show(ConfirmBox:new{
+        UIManager:show(ConfirmBox:new {
             text = T(_("The file %1 already exists. Do you want to overwrite it?"), BD.filepath(local_path)),
             ok_text = _("Overwrite"),
             ok_callback = function()
@@ -1175,7 +1187,7 @@ function OPDSBrowser:downloadFile(local_path, remote_url, username, password, ca
         return true
     elseif code == 302 and remote_url:match("^https") and headers.location:match("^http[^s]") then
         util.removeFile(local_path)
-        UIManager:show(InfoMessage:new{
+        UIManager:show(InfoMessage:new {
             text = T(_("Insecure HTTPS → HTTP downgrade attempted by redirect from:\n\n'%1'\n\nto\n\n'%2'.\n\nPlease inform the server administrator that many clients disallow this because it could be a downgrade attack."), BD.url(remote_url), BD.url(headers.location)),
             icon = "notice-warning",
         })
@@ -1196,7 +1208,7 @@ function OPDSBrowser:onMenuSelect(item)
     if item.acquisitions and item.acquisitions[1] then -- book
         logger.dbg("Downloads available:", item)
         self:showDownloads(item)
-    else -- catalog or Search item
+    else                         -- catalog or Search item
         if #self.paths == 0 then -- root list
             if item.idx == 1 then
                 if #self.downloads > 0 then
@@ -1229,7 +1241,7 @@ end
 function OPDSBrowser:onMenuHold(item)
     if #self.paths > 0 or item.idx == 1 then return true end -- not root list or Downloads item
     local dialog
-    dialog = ButtonDialog:new{
+    dialog = ButtonDialog:new {
         title = item.text,
         title_align = "center",
         buttons = {
@@ -1260,7 +1272,7 @@ function OPDSBrowser:onMenuHold(item)
                 {
                     text = _("Delete"),
                     callback = function()
-                        UIManager:show(ConfirmBox:new{
+                        UIManager:show(ConfirmBox:new {
                             text = _("Delete OPDS catalog?"),
                             ok_text = _("Delete"),
                             ok_callback = function()
@@ -1314,7 +1326,7 @@ function OPDSBrowser:onNextPage(fill_only)
         local hrefs = self.item_table.hrefs
         if hrefs and hrefs.next then
             if not self:appendCatalog(hrefs.next) then
-                break  -- reach end of paging
+                break -- reach end of paging
             end
         else
             break
@@ -1328,7 +1340,7 @@ function OPDSBrowser:onNextPage(fill_only)
 end
 
 function OPDSBrowser:showDownloadList()
-    self.download_list = Menu:new{
+    self.download_list = Menu:new {
         covers_fullscreen = true,
         is_borderless = true,
         is_popout = false,
@@ -1353,24 +1365,24 @@ end
 
 function OPDSBrowser:showDownloadListMenu()
     local dialog
-    dialog = ButtonDialog:new{
+    dialog = ButtonDialog:new {
         buttons = {
-            {{
-                    text = _("Download all"),
-                    callback = function()
-                        UIManager:close(dialog)
-                        self._manager:confirmDownloadDownloadList()
-                    end,
-                    align = "left",
-            }},
-            {{
-                    text = _("Remove all"),
-                    callback = function()
-                        UIManager:close(dialog)
-                        self._manager:confirmClearDownloadList()
-                    end,
-                    align = "left",
-            }},
+            { {
+                text = _("Download all"),
+                callback = function()
+                    UIManager:close(dialog)
+                    self._manager:confirmDownloadDownloadList()
+                end,
+                align = "left",
+            } },
+            { {
+                text = _("Remove all"),
+                callback = function()
+                    UIManager:close(dialog)
+                    self._manager:confirmClearDownloadList()
+                end,
+                align = "left",
+            } },
         },
         shrink_unneeded_width = true,
         anchor = function()
@@ -1395,7 +1407,7 @@ function OPDSBrowser:updateDownloadListItemTable(item_table)
 end
 
 function OPDSBrowser:confirmDownloadDownloadList()
-    UIManager:show(ConfirmBox:new{
+    UIManager:show(ConfirmBox:new {
         text = _("Download all books?\nExisting files will be overwritten."),
         ok_text = _("Download"),
         ok_callback = function()
@@ -1409,7 +1421,7 @@ function OPDSBrowser:confirmDownloadDownloadList()
 end
 
 function OPDSBrowser:confirmClearDownloadList()
-    UIManager:show(ConfirmBox:new{
+    UIManager:show(ConfirmBox:new {
         text = _("Remove all downloads?"),
         ok_text = _("Remove"),
         ok_callback = function()
@@ -1450,7 +1462,8 @@ function OPDSBrowser:showDownloadListItemDialog(item)
                         self._manager.file_downloaded_callback(local_path)
                     end
                     NetworkMgr:runWhenConnected(function()
-                        self._manager:checkDownloadFile(dl_item.file, dl_item.url, dl_item.username, dl_item.password, file_downloaded_callback)
+                        self._manager:checkDownloadFile(dl_item.file, dl_item.url, dl_item.username, dl_item.password,
+                            file_downloaded_callback)
                     end)
                 end,
             },
@@ -1483,7 +1496,7 @@ function OPDSBrowser:showDownloadListItemDialog(item)
         TextBoxWidget.PTF_BOLD_START, _("Description"), TextBoxWidget.PTF_BOLD_END, "\n",
         dl_item.info,
     })
-    textviewer = TextViewer:new{
+    textviewer = TextViewer:new {
         title = dl_item.catalog,
         text = text,
         text_type = "book_info",
@@ -1495,7 +1508,7 @@ end
 
 -- Download whole download list
 function OPDSBrowser:downloadDownloadList()
-    local info = InfoMessage:new{ text = _("Downloading… (tap to cancel)") }
+    local info = InfoMessage:new { text = _("Downloading… (tap to cancel)") }
     UIManager:show(info)
     UIManager:forceRePaint()
     local completed, downloaded = Trapper:dismissableRunInSubprocess(function()
@@ -1531,13 +1544,13 @@ function OPDSBrowser:downloadDownloadList()
         self:updateDownloadListItemTable()
         self.download_list_updated = true
         self._manager.updated = true
-        UIManager:show(InfoMessage:new{ text = T(N_("1 book downloaded", "%1 books downloaded", dl_count), dl_count) })
+        UIManager:show(InfoMessage:new { text = T(N_("1 book downloaded", "%1 books downloaded", dl_count), dl_count) })
     end
 end
 
 function OPDSBrowser:setMaxSyncDownload()
     local current_max_dl = self.settings.sync_max_dl or 50
-    local spin = SpinWidget:new{
+    local spin = SpinWidget:new {
         title_text = "Set maximum sync size",
         info_text = "Set the max number of books to download at a time",
         value = current_max_dl,
@@ -1562,7 +1575,7 @@ function OPDSBrowser:setSyncDir()
         force_chooser_dir = Device.home_dir
     end
 
-    require("ui/downloadmgr"):new{
+    require("ui/downloadmgr"):new {
         onConfirm = function(inbox)
             logger.info("set opds sync folder", inbox)
             self.settings.sync_dir = inbox
@@ -1575,7 +1588,7 @@ end
 function OPDSBrowser:setSyncFiletypes(filetype_list)
     local input = self.settings.filetypes
     local dialog
-    dialog = InputDialog:new{
+    dialog = InputDialog:new {
         title = _("File types to sync"),
         description = _("A comma separated list of desired filetypes"),
         input_hint = _("epub, mobi"),
@@ -1627,13 +1640,13 @@ end
 function OPDSBrowser:checkSyncDownload(idx)
     if self.settings.sync_dir then
         self.sync = true
-        local info = InfoMessage:new{
+        local info = InfoMessage:new {
             text = _("Synchronizing lists…"),
         }
         UIManager:show(info)
         UIManager:forceRePaint()
         if idx then
-            self:fillPendingSyncs(self.servers[idx-1]) -- First item is "Downloads"
+            self:fillPendingSyncs(self.servers[idx - 1]) -- First item is "Downloads"
         else
             for _, item in ipairs(self.servers) do
                 if item.sync then
@@ -1647,13 +1660,13 @@ function OPDSBrowser:checkSyncDownload(idx)
                 self:downloadPendingSyncs()
             end)
         else
-            UIManager:show(InfoMessage:new{
+            UIManager:show(InfoMessage:new {
                 text = _("Up to date!"),
             })
         end
         self.sync = false
     else
-        UIManager:show(InfoMessage:new{
+        UIManager:show(InfoMessage:new {
             text = _("Please choose a folder for sync downloads first"),
         })
     end
@@ -1670,9 +1683,9 @@ function OPDSBrowser:fillPendingSyncs(server)
     self.sync_max_dl            = self.settings.sync_max_dl or 50
 
     local file_list
-    local file_str = self.settings.filetypes
-    local new_last_download = nil
-    local dl_count = 1
+    local file_str              = self.settings.filetypes
+    local new_last_download     = nil
+    local dl_count              = 1
     if file_str then
         file_list = {}
         for filetype in util.gsplit(file_str, ",") do
@@ -1686,7 +1699,7 @@ function OPDSBrowser:fillPendingSyncs(server)
             local sub_table = {}
             local item
             if entry.url then
-                sub_table = self:getSyncDownloadList(entry.url)
+                sub_table = self:getSyncDownloadList(entry.url) or {}
             end
             if #sub_table > 0 then
                 -- The first element seems to be most compatible. Second element has most options
@@ -1725,7 +1738,6 @@ function OPDSBrowser:fillPendingSyncs(server)
         logger.dbg("Updating opds last download for server", server.title, "to", new_last_download)
         self:updateFieldInCatalog(server, "last_download", new_last_download)
     end
-
 end
 
 -- Get list of books to download bigger than sync_max_dl
@@ -1796,7 +1808,7 @@ end
 function OPDSBrowser:downloadPendingSyncs()
     local dl_list = self.pending_syncs
     local function dismissable_download()
-        local info = InfoMessage:new{ text = _("Downloading… (tap to cancel)") }
+        local info = InfoMessage:new { text = _("Downloading… (tap to cancel)") }
         UIManager:show(info)
         UIManager:forceRePaint()
         local completed, downloaded, duplicate_list = Trapper:dismissableRunInSubprocess(function()
@@ -1848,7 +1860,7 @@ function OPDSBrowser:downloadPendingSyncs()
             timeout = 3
         end
         if dl_count > 0 then
-            UIManager:show(InfoMessage:new{ text = T(N_("1 book downloaded", "%1 books downloaded", dl_count), dl_count), timeout = timeout,})
+            UIManager:show(InfoMessage:new { text = T(N_("1 book downloaded", "%1 books downloaded", dl_count), dl_count), timeout = timeout, })
         end
         self._manager.updated = true
         return duplicate_list
@@ -1863,7 +1875,7 @@ function OPDSBrowser:downloadPendingSyncs()
             table.insert(duplicate_files, entry.file)
         end
         local text = table.concat(duplicate_files, "\n")
-        textviewer = TextViewer:new{
+        textviewer = TextViewer:new {
             title = _("Duplicate files"),
             text = text,
             buttons_table = {
@@ -1914,4 +1926,5 @@ function OPDSBrowser:downloadPendingSyncs()
         UIManager:show(textviewer)
     end
 end
+
 return OPDSBrowser

@@ -16,7 +16,7 @@ local _ = require("gettext")
 local T = require("ffi/util").template
 local Version = require("opds_plus_version")
 
-local OPDS = WidgetContainer:extend{
+local OPDS = WidgetContainer:extend {
     name = "opdsplus",
     opds_settings_file = DataStorage:getSettingsDir() .. "/opdsplus.lua",
     settings = nil,
@@ -53,7 +53,7 @@ local OPDS = WidgetContainer:extend{
         {
             name = "Compact",
             description = "8 books per page",
-            ratio = 0.08,  -- Kept for backward compatibility with custom
+            ratio = 0.08, -- Kept for backward compatibility with custom
         },
         {
             name = "Regular",
@@ -79,14 +79,14 @@ local OPDS = WidgetContainer:extend{
         info_font = "smallinfofont",
         info_size = 14,
         info_bold = false,
-        info_color = "dark_gray",  -- dark_gray or black
-        use_same_font = true,  -- Use same font for title and info
+        info_color = "dark_gray", -- dark_gray or black
+        use_same_font = true,     -- Use same font for title and info
     },
     -- Default grid border settings
     default_grid_border_settings = {
-    border_style = "none",         -- "none", "hash", or "individual"
-    border_size = 2,                -- Border thickness in pixels (1-5)
-    border_color = "dark_gray",    -- "dark_gray", "light_gray", or "black"
+        border_style = "none",      -- "none", "hash", or "individual"
+        border_size = 2,            -- Border thickness in pixels (1-5)
+        border_color = "dark_gray", -- "dark_gray", "light_gray", or "black"
     },
 }
 
@@ -102,7 +102,7 @@ function OPDS:init()
 
     -- Initialize cover settings with defaults if not present
     if not self.settings.cover_height_ratio then
-        self.settings.cover_height_ratio = 0.10  -- Regular (10% default)
+        self.settings.cover_height_ratio = 0.10 -- Regular (10% default)
     end
     if not self.settings.cover_size_preset then
         self.settings.cover_size_preset = "Regular"
@@ -117,16 +117,16 @@ function OPDS:init()
 
     -- Initialize display mode settings
     if not self.settings.display_mode then
-        self.settings.display_mode = "list"  -- Default to list view
+        self.settings.display_mode = "list" -- Default to list view
     end
     if not self.settings.grid_columns then
-        self.settings.grid_columns = 3  -- Default to 3 columns
+        self.settings.grid_columns = 3 -- Default to 3 columns
     end
     if not self.settings.grid_cover_height_ratio then
-        self.settings.grid_cover_height_ratio = 0.20  -- 20% for grid view
+        self.settings.grid_cover_height_ratio = 0.20 -- 20% for grid view
     end
     if not self.settings.grid_size_preset then
-        self.settings.grid_size_preset = "Balanced"  -- Default preset
+        self.settings.grid_size_preset = "Balanced" -- Default preset
     end
 
     -- Initialize grid border settings with defaults
@@ -181,12 +181,12 @@ function OPDS:getAvailableFonts()
     local fonts = {}
 
     -- Add KOReader's built-in UI fonts first
-    table.insert(fonts, {name = "Default UI (Noto Sans)", value = "smallinfofont"})
-    table.insert(fonts, {name = "Alternative UI", value = "infofont"})
+    table.insert(fonts, { name = "Default UI (Noto Sans)", value = "smallinfofont" })
+    table.insert(fonts, { name = "Alternative UI", value = "infofont" })
 
     -- Scan font directories for available fonts
     local font_dirs = {
-        "./fonts",  -- KOReader's font directory
+        "./fonts", -- KOReader's font directory
     }
 
     -- Add user's font directory if it exists
@@ -227,7 +227,7 @@ function OPDS:getAvailableFonts()
                                 end
                             end
                         end
-                    -- Also check subdirectories
+                        -- Also check subdirectories
                     elseif mode == "directory" then
                         local subdir_path = path
                         for subentry in lfs.dir(subdir_path) do
@@ -266,7 +266,7 @@ end
 
 function OPDS:onDispatcherRegisterActions()
     Dispatcher:registerAction("opdsplus_show_catalog",
-        {category="none", event="ShowOPDSPlusCatalog", title=_("OPDS Plus Catalog"), filemanager=true,}
+        { category = "none", event = "ShowOPDSPlusCatalog", title = _("OPDS Plus Catalog"), filemanager = true, }
     )
 end
 
@@ -297,7 +297,7 @@ function OPDS:addToMainMenu(menu_items)
                                         self.settings.display_mode = "list"
                                         self.opds_settings:saveSetting("settings", self.settings)
                                         self.opds_settings:flush()
-                                        UIManager:show(InfoMessage:new{
+                                        UIManager:show(InfoMessage:new {
                                             text = _("Display mode set to List View.\n\nChanges will apply when you next browse a catalog."),
                                             timeout = 2,
                                         })
@@ -312,7 +312,7 @@ function OPDS:addToMainMenu(menu_items)
                                         self.settings.display_mode = "grid"
                                         self.opds_settings:saveSetting("settings", self.settings)
                                         self.opds_settings:flush()
-                                        UIManager:show(InfoMessage:new{
+                                        UIManager:show(InfoMessage:new {
                                             text = _("Display mode set to Grid View.\n\nChanges will apply when you next browse a catalog."),
                                             timeout = 2,
                                         })
@@ -359,7 +359,7 @@ function OPDS:addToMainMenu(menu_items)
                                     callback = function()
                                         local current = self:getSetting("use_same_font")
                                         self:saveSetting("use_same_font", not current)
-                                        UIManager:show(InfoMessage:new{
+                                        UIManager:show(InfoMessage:new {
                                             text = not current and
                                                 _("Now using the same font for title and details.\n\nChanges apply on next catalog browse.") or
                                                 _("Now using separate fonts for title and details.\n\nChanges apply on next catalog browse."),
@@ -390,7 +390,7 @@ function OPDS:addToMainMenu(menu_items)
                                             callback = function()
                                                 local current = self:getSetting("title_bold")
                                                 self:saveSetting("title_bold", not current)
-                                                UIManager:show(InfoMessage:new{
+                                                UIManager:show(InfoMessage:new {
                                                     text = not current and
                                                         _("Title is now bold.") or
                                                         _("Title is now regular weight."),
@@ -415,7 +415,8 @@ function OPDS:addToMainMenu(menu_items)
                                         {
                                             text = _("Info Size"),
                                             callback = function()
-                                                self:showSizeSelectionMenu("info_size", _("Information Font Size"), 10, 20, 14)
+                                                self:showSizeSelectionMenu("info_size", _("Information Font Size"), 10,
+                                                    20, 14)
                                             end,
                                         },
                                         {
@@ -426,7 +427,7 @@ function OPDS:addToMainMenu(menu_items)
                                             callback = function()
                                                 local current = self:getSetting("info_bold")
                                                 self:saveSetting("info_bold", not current)
-                                                UIManager:show(InfoMessage:new{
+                                                UIManager:show(InfoMessage:new {
                                                     text = not current and
                                                         _("Information text is now bold.") or
                                                         _("Information text is now regular weight."),
@@ -444,7 +445,7 @@ function OPDS:addToMainMenu(menu_items)
                                                     end,
                                                     callback = function()
                                                         self:saveSetting("info_color", "dark_gray")
-                                                        UIManager:show(InfoMessage:new{
+                                                        UIManager:show(InfoMessage:new {
                                                             text = _("Information text color set to dark gray."),
                                                             timeout = 2,
                                                         })
@@ -457,7 +458,7 @@ function OPDS:addToMainMenu(menu_items)
                                                     end,
                                                     callback = function()
                                                         self:saveSetting("info_color", "black")
-                                                        UIManager:show(InfoMessage:new{
+                                                        UIManager:show(InfoMessage:new {
                                                             text = _("Information text color set to black."),
                                                             timeout = 2,
                                                         })
@@ -481,7 +482,7 @@ function OPDS:addToMainMenu(menu_items)
                                         self.settings.debug_mode = not self.settings.debug_mode
                                         self.opds_settings:saveSetting("settings", self.settings)
                                         self.opds_settings:flush()
-                                        UIManager:show(InfoMessage:new{
+                                        UIManager:show(InfoMessage:new {
                                             text = self.settings.debug_mode and
                                                 _("Debug mode enabled.\n\nDetailed logging is now active.") or
                                                 _("Debug mode disabled.\n\nNormal logging restored."),
@@ -494,7 +495,7 @@ function OPDS:addToMainMenu(menu_items)
                         {
                             text = T(_("About OPDS Plus v%1"), Version.VERSION),
                             callback = function()
-                                UIManager:show(InfoMessage:new{
+                                UIManager:show(InfoMessage:new {
                                     text = T(_("OPDS Plus Plugin\nVersion: %1\n\nAn enhanced OPDS catalog browser with cover display support.\n\nFeatures:\n• List and Grid view modes\n• Customizable covers and fonts\n• Grid border options\n\nBased on KOReader's OPDS plugin"), Version.VERSION),
                                     timeout = 5,
                                 })
@@ -529,7 +530,7 @@ function OPDS:showCoverSizeMenu()
                 callback = function()
                     UIManager:close(self.cover_size_dialog)
                     self:setCoverHeightRatio(preset.ratio, preset.name)
-                    UIManager:show(InfoMessage:new{
+                    UIManager:show(InfoMessage:new {
                         text = T(_("Cover size set to %1 (%2%).\n\n%3\n\nChanges will apply when you next browse a catalog."),
                             preset.name,
                             math.floor(preset.ratio * 100),
@@ -561,7 +562,7 @@ function OPDS:showCoverSizeMenu()
     })
 
     -- Create and show dialog
-    self.cover_size_dialog = ButtonDialog:new{
+    self.cover_size_dialog = ButtonDialog:new {
         title = _("Cover Size Settings\n\nSelect a preset or choose custom size"),
         title_align = "center",
         buttons = buttons,
@@ -572,8 +573,8 @@ end
 function OPDS:showCustomSizeDialog()
     local current_ratio = self:getCoverHeightRatio()
     local current_percent = math.floor(current_ratio * 100)
-
-    local spin_widget = SpinWidget:new{
+    local spin_widget
+    spin_widget = SpinWidget:new {
         title_text = _("Custom Cover Size"),
         info_text = _("Adjust the size of book covers as a percentage of screen height.\n\n• Smaller values = more books per page\n• Larger values = bigger covers, fewer books per page\n\nRecommended range: 8-20%"),
         value = current_percent,
@@ -587,7 +588,7 @@ function OPDS:showCustomSizeDialog()
         callback = function(spin)
             local new_ratio = spin.value / 100
             self:setCoverHeightRatio(new_ratio, "Custom")
-            UIManager:show(InfoMessage:new{
+            UIManager:show(InfoMessage:new {
                 text = T(_("Cover size set to Custom (%1%).\n\nChanges will apply when you next browse a catalog."),
                     spin.value),
                 timeout = 3,
@@ -623,7 +624,7 @@ function OPDS:showFontSelectionMenu(setting_key, title)
                 callback = function()
                     UIManager:close(self.font_dialog)
                     self:saveSetting(setting_key, font_info.value)
-                    UIManager:show(InfoMessage:new{
+                    UIManager:show(InfoMessage:new {
                         text = T(_("%1 set to:\n%2\n\nChanges will apply when you next browse a catalog."),
                             title,
                             font_info.name),
@@ -640,7 +641,7 @@ function OPDS:showFontSelectionMenu(setting_key, title)
     end
 
     -- Create and show dialog
-    self.font_dialog = ButtonDialog:new{
+    self.font_dialog = ButtonDialog:new {
         title = T(_("%1 Selection\n\nChoose a font"), title),
         title_align = "center",
         buttons = buttons,
@@ -651,7 +652,7 @@ end
 function OPDS:showSizeSelectionMenu(setting_key, title, min_size, max_size, default_size)
     local current_size = self:getSetting(setting_key)
 
-    local spin_widget = SpinWidget:new{
+    local spin_widget = SpinWidget:new {
         title_text = title,
         info_text = _("Adjust the font size.\n\nChanges will apply when you next browse a catalog."),
         value = current_size,
@@ -664,7 +665,7 @@ function OPDS:showSizeSelectionMenu(setting_key, title, min_size, max_size, defa
         default_value = default_size,
         callback = function(spin)
             self:saveSetting(setting_key, spin.value)
-            UIManager:show(InfoMessage:new{
+            UIManager:show(InfoMessage:new {
                 text = T(_("%1 set to %2pt.\n\nChanges will apply when you next browse a catalog."),
                     title,
                     spin.value),
@@ -683,9 +684,9 @@ function OPDS:showGridLayoutMenu()
 
     -- Preset buttons with column counts
     local presets = {
-        {name = "Compact", columns = 4, desc = _("More books per page, smaller covers")},
-        {name = "Balanced", columns = 3, desc = _("Good balance of size and quantity")},
-        {name = "Spacious", columns = 2, desc = _("Fewer books, larger covers")},
+        { name = "Compact",  columns = 4, desc = _("More books per page, smaller covers") },
+        { name = "Balanced", columns = 3, desc = _("Good balance of size and quantity") },
+        { name = "Spacious", columns = 2, desc = _("Fewer books, larger covers") },
     }
 
     for i, preset in ipairs(presets) do
@@ -704,7 +705,7 @@ function OPDS:showGridLayoutMenu()
                     self.settings.grid_size_preset = preset.name
                     self.opds_settings:saveSetting("settings", self.settings)
                     self.opds_settings:flush()
-                    UIManager:show(InfoMessage:new{
+                    UIManager:show(InfoMessage:new {
                         text = T(_("Grid layout set to %1\n\n%2\n\nChanges will apply when you next browse a catalog in grid view."),
                             preset.name, preset.desc),
                         timeout = 2.5,
@@ -734,7 +735,7 @@ function OPDS:showGridLayoutMenu()
         },
     })
 
-    self.grid_layout_dialog = ButtonDialog:new{
+    self.grid_layout_dialog = ButtonDialog:new {
         title = _("Grid Layout Presets\n\nChoose how books are displayed in grid view"),
         title_align = "center",
         buttons = buttons,
@@ -771,7 +772,7 @@ function OPDS:showGridColumnsMenu()
                     self.settings.grid_size_preset = "Custom"
                     self.opds_settings:saveSetting("settings", self.settings)
                     self.opds_settings:flush()
-                    UIManager:show(InfoMessage:new{
+                    UIManager:show(InfoMessage:new {
                         text = T(_("Grid columns set to %1 (Custom).\n\nChanges will apply when you next browse a catalog in grid mode."), cols),
                         timeout = 2,
                     })
@@ -792,7 +793,7 @@ function OPDS:showGridColumnsMenu()
         },
     })
 
-    self.grid_columns_dialog = ButtonDialog:new{
+    self.grid_columns_dialog = ButtonDialog:new {
         title = _("Custom Grid Columns\n\nManually choose column count"),
         title_align = "center",
         buttons = buttons,
@@ -816,9 +817,9 @@ function OPDS:showGridBorderMenu()
     })
 
     local styles = {
-        {id = "none", name = _("No Borders"), desc = _("Clean, borderless grid")},
-        {id = "hash", name = _("Hash Grid"), desc = _("Shared borders like # pattern")},
-        {id = "individual", name = _("Individual Tiles"), desc = _("Each book has its own border")},
+        { id = "none",       name = _("No Borders"),       desc = _("Clean, borderless grid") },
+        { id = "hash",       name = _("Hash Grid"),        desc = _("Shared borders like # pattern") },
+        { id = "individual", name = _("Individual Tiles"), desc = _("Each book has its own border") },
     }
 
     for i, style in ipairs(styles) do
@@ -836,7 +837,7 @@ function OPDS:showGridBorderMenu()
                     self.settings.grid_border_style = style.id
                     self.opds_settings:saveSetting("settings", self.settings)
                     self.opds_settings:flush()
-                    UIManager:show(InfoMessage:new{
+                    UIManager:show(InfoMessage:new {
                         text = T(_("Border style set to: %1\n\n%2\n\nChanges will apply when you next browse a catalog in grid view."),
                             style.name, style.desc),
                         timeout = 2.5,
@@ -871,8 +872,8 @@ function OPDS:showGridBorderMenu()
 
         -- Border Color
         local color_display = current_color == "dark_gray" and _("Dark Gray") or
-                             current_color == "light_gray" and _("Light Gray") or
-                             _("Black")
+            current_color == "light_gray" and _("Light Gray") or
+            _("Black")
         table.insert(buttons, {
             {
                 text = T(_("Border Color: %1"), color_display),
@@ -884,7 +885,7 @@ function OPDS:showGridBorderMenu()
         })
     end
 
-    self.grid_border_dialog = ButtonDialog:new{
+    self.grid_border_dialog = ButtonDialog:new {
         title = _("Grid Border Settings\n\nCustomize the appearance of grid borders"),
         title_align = "center",
         buttons = buttons,
@@ -894,8 +895,8 @@ end
 
 function OPDS:showGridBorderSizeMenu()
     local current_size = self.settings.grid_border_size or 2
-
-    local spin_widget = SpinWidget:new{
+    local spin_widget
+    spin_widget = SpinWidget:new {
         title_text = _("Border Thickness"),
         info_text = _("Adjust the thickness of grid borders.\n\n• Thinner borders = more subtle\n• Thicker borders = more defined\n\nRecommended: 2-3px"),
         value = current_size,
@@ -910,7 +911,7 @@ function OPDS:showGridBorderSizeMenu()
             self.settings.grid_border_size = spin.value
             self.opds_settings:saveSetting("settings", self.settings)
             self.opds_settings:flush()
-            UIManager:show(InfoMessage:new{
+            UIManager:show(InfoMessage:new {
                 text = T(_("Border thickness set to %1px.\n\nChanges will apply when you next browse a catalog in grid view."),
                     spin.value),
                 timeout = 2,
@@ -931,9 +932,9 @@ function OPDS:showGridBorderColorMenu()
     local buttons = {}
 
     local colors = {
-        {id = "light_gray", name = _("Light Gray"), desc = _("Subtle, minimal contrast")},
-        {id = "dark_gray", name = _("Dark Gray"), desc = _("Balanced, clear definition")},
-        {id = "black", name = _("Black"), desc = _("High contrast, bold borders")},
+        { id = "light_gray", name = _("Light Gray"), desc = _("Subtle, minimal contrast") },
+        { id = "dark_gray",  name = _("Dark Gray"),  desc = _("Balanced, clear definition") },
+        { id = "black",      name = _("Black"),      desc = _("High contrast, bold borders") },
     }
 
     for i, color in ipairs(colors) do
@@ -951,7 +952,7 @@ function OPDS:showGridBorderColorMenu()
                     self.settings.grid_border_color = color.id
                     self.opds_settings:saveSetting("settings", self.settings)
                     self.opds_settings:flush()
-                    UIManager:show(InfoMessage:new{
+                    UIManager:show(InfoMessage:new {
                         text = T(_("Border color set to: %1\n\n%2\n\nChanges will apply when you next browse a catalog in grid view."),
                             color.name, color.desc),
                         timeout = 2.5,
@@ -975,7 +976,7 @@ function OPDS:showGridBorderColorMenu()
         },
     })
 
-    self.grid_border_color_dialog = ButtonDialog:new{
+    self.grid_border_color_dialog = ButtonDialog:new {
         title = _("Border Color\n\nChoose the color for grid borders"),
         title_align = "center",
         buttons = buttons,
@@ -984,7 +985,7 @@ function OPDS:showGridBorderColorMenu()
 end
 
 function OPDS:onShowOPDSCatalog()
-    self.opds_browser = OPDSBrowser:new{
+    self.opds_browser = OPDSBrowser:new {
         servers = self.servers,
         downloads = self.downloads,
         settings = self.settings,
@@ -1018,7 +1019,7 @@ end
 
 function OPDS:showFileDownloadedDialog(file)
     self.last_downloaded_file = file
-    UIManager:show(ConfirmBox:new{
+    UIManager:show(ConfirmBox:new {
         text = T(_("File saved to:\n%1\nWould you like to read the downloaded book now?"), BD.filepath(file)),
         ok_text = _("Read now"),
         ok_callback = function()
