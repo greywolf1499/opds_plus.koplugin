@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a Question
+    url: https://github.com/greywolf1499/opds_plus.koplugin/discussions/new?category=q-a
+    about: Please ask and answer questions here.
+  - name: Request a Feature
+    url: https://github.com/greywolf1499/opds_plus.koplugin/issues/new?template=feature_request.md
+    about: Suggest an idea for this project
+  - name: Report a Bug
+    url: https://github.com/greywolf1499/opds_plus.koplugin/issues/new?template=bug_report.md
+    about: Report a reproducible bug
