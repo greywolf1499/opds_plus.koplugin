@@ -4,7 +4,7 @@ local OPDSGridMenu = require("opdsgridmenuplus")
 local UIManager = require("ui/uimanager")
 local logger = require("logger")
 
-local OPDSCoverMenu = Menu:extend{
+local OPDSCoverMenu = Menu:extend {
     title_shrink_font_to_fit = true,
     _last_mode_had_covers = nil,
     _last_display_mode = nil,
@@ -51,10 +51,6 @@ function OPDSCoverMenu:updateItems(select_number)
     end
 
     self:_debugLog("updateItems - has_covers:", has_covers, "display_mode:", display_mode)
-
-    -- Check if we're switching modes
-    local mode_changed = (self._last_mode_had_covers ~= nil) and (self._last_mode_had_covers ~= has_covers)
-    local display_mode_changed = (self._last_display_mode ~= nil) and (self._last_display_mode ~= display_mode)
 
     if has_covers then
         -- Choose between list and grid based on setting
