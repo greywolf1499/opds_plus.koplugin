@@ -1,4 +1,3 @@
-local BD = require("ui/bidi")
 local Blitbuffer = require("ffi/blitbuffer")
 local Device = require("device")
 local Font = require("ui/font")
@@ -44,7 +43,7 @@ local GRID_CONFIG = {
     max_cover_height = 400,
 
     -- Standard book aspect ratio
-    book_aspect_ratio = 2/3,
+    book_aspect_ratio = 2 / 3,
 
     -- Spacing
     cell_padding = 6,
@@ -75,8 +74,8 @@ local function createGridPlaceholder(width, height, status)
     local placeholder_bg_color = Blitbuffer.COLOR_LIGHT_GRAY
     local text_color = Blitbuffer.COLOR_DARK_GRAY
 
-    local display_text = ""
-    local icon = ""
+    local display_text
+    local icon
 
     if status == "loading" then
         icon = "⏳"
@@ -93,34 +92,34 @@ local function createGridPlaceholder(width, height, status)
     if font_size < 10 then font_size = 10 end
     if font_size > 14 then font_size = 14 end
 
-    local icon_widget = TextWidget:new{
+    local icon_widget = TextWidget:new {
         text = icon,
         face = Font:getFace("infofont", font_size * 2),
         fgcolor = text_color,
     }
 
-    local text_widget = TextWidget:new{
+    local text_widget = TextWidget:new {
         text = display_text,
         face = Font:getFace("smallinfofont", font_size),
         fgcolor = text_color,
     }
 
-    local placeholder = FrameContainer:new{
+    local placeholder = FrameContainer:new {
         width = width,
         height = height,
         padding = 0,
         margin = 0,
         bordersize = Size.border.default or 2,
         background = placeholder_bg_color,
-        CenterContainer:new{
-            dimen = Geom:new{
+        CenterContainer:new {
+            dimen = Geom:new {
                 w = width,
                 h = height,
             },
-            VerticalGroup:new{
+            VerticalGroup:new {
                 align = "center",
                 icon_widget,
-                VerticalSpan:new{ width = font_size / 2 },
+                VerticalSpan:new { width = font_size / 2 },
                 text_widget,
             },
         },
@@ -154,7 +153,7 @@ end
 -- ============================================
 -- GRID CELL WIDGET
 -- ============================================
-local OPDSGridCell = InputContainer:extend{
+local OPDSGridCell = InputContainer:extend {
     entry = nil,
     cover_width = nil,
     cover_height = nil,
@@ -167,20 +166,20 @@ local OPDSGridCell = InputContainer:extend{
 }
 
 function OPDSGridCell:init()
-    self.dimen = Geom:new{
+    self.dimen = Geom:new {
         w = self.cell_width,
         h = self.cell_height,
     }
 
     self.ges_events = {
         TapSelect = {
-            GestureRange:new{
+            GestureRange:new {
                 ges = "tap",
                 range = self.dimen,
             },
         },
         HoldSelect = {
-            GestureRange:new{
+            GestureRange:new {
                 ges = "hold",
                 range = self.dimen,
             },
@@ -190,7 +189,7 @@ function OPDSGridCell:init()
     -- Create cover widget
     local cover_widget
     if self.entry.cover_bb then
-        cover_widget = ImageWidget:new{
+        cover_widget = ImageWidget:new {
             image = self.entry.cover_bb,
             width = self.cover_width,
             height = self.cover_height,
@@ -250,9 +249,9 @@ function OPDSGridCell:init()
         end
 
         local RenderText = require("ui/rendertext")
-        local text_width = RenderText:sizeUtf8Text(0, Screen:getWidth(), face, text).x
+        local measured_width = RenderText:sizeUtf8Text(0, Screen:getWidth(), face, text).x
 
-        if text_width <= max_width then
+        if measured_width <= max_width then
             return text
         end
 
@@ -291,12 +290,12 @@ function OPDSGridCell:init()
     end
 
     -- Build text group with FIXED heights for each element
-    local text_group = VerticalGroup:new{
+    local text_group = VerticalGroup:new {
         align = "center",
     }
 
     -- Title - with smart truncation
-    local title_widget = TextBoxWidget:new{
+    local title_widget = TextBoxWidget:new {
         text = title,
         face = Font:getFace(title_font, title_size),
         bold = title_bold,
@@ -307,15 +306,15 @@ function OPDSGridCell:init()
         line_height = 0,
     }
 
-    local title_container = FrameContainer:new{
+    local title_container = FrameContainer:new {
         width = text_width,
         height = title_fixed_height,
         padding = 0,
         margin = 0,
         bordersize = 0,
         background = Blitbuffer.COLOR_WHITE,
-        CenterContainer:new{
-            dimen = Geom:new{
+        CenterContainer:new {
+            dimen = Geom:new {
                 w = text_width,
                 h = title_fixed_height,
             },
@@ -326,32 +325,32 @@ function OPDSGridCell:init()
 
     -- Author - with truncation
     if GRID_CONFIG.show_author then
-        table.insert(text_group, VerticalSpan:new{ width = title_author_gap })
+        table.insert(text_group, VerticalSpan:new { width = title_author_gap })
 
         local author_widget
         if author and author ~= "" then
             local author_face = Font:getFace(info_font, info_size)
             local author_text = truncateText(author, author_face, text_width)
 
-            author_widget = TextWidget:new{
+            author_widget = TextWidget:new {
                 text = author_text,
                 face = author_face,
                 max_width = text_width,
                 fgcolor = info_color,
             }
         else
-            author_widget = VerticalSpan:new{ width = 0 }
+            author_widget = VerticalSpan:new { width = 0 }
         end
 
-        local author_container = FrameContainer:new{
+        local author_container = FrameContainer:new {
             width = text_width,
             height = author_fixed_height,
             padding = 0,
             margin = 0,
             bordersize = 0,
             background = Blitbuffer.COLOR_WHITE,
-            CenterContainer:new{
-                dimen = Geom:new{
+            CenterContainer:new {
+                dimen = Geom:new {
                     w = text_width,
                     h = author_fixed_height,
                 },
@@ -363,16 +362,13 @@ function OPDSGridCell:init()
 
     -- Wrap entire text group in fixed-height container
     local TopContainer = require("ui/widget/container/topcontainer")
-    local text_container = TopContainer:new{
-        dimen = Geom:new{
+    local text_container = TopContainer:new {
+        dimen = Geom:new {
             w = text_width,
             h = text_area_height,
         },
         text_group,
     }
-
-    -- Assemble cell
-    local CenterContainer = require("ui/widget/container/centercontainer")
 
     local border_style = (self.border_settings and self.border_settings.style) or "none"
     local border_size = (self.border_settings and self.border_settings.size) or 2
@@ -384,7 +380,7 @@ function OPDSGridCell:init()
         cell_bordersize = border_size
     end
 
-    self[1] = FrameContainer:new{
+    self[1] = FrameContainer:new {
         width = self.cell_width,
         height = self.cell_height,
         padding = GRID_CONFIG.cell_padding,
@@ -392,15 +388,15 @@ function OPDSGridCell:init()
         bordersize = cell_bordersize,
         color = border_color,
         background = Blitbuffer.COLOR_WHITE,
-        CenterContainer:new{
-            dimen = Geom:new{
+        CenterContainer:new {
+            dimen = Geom:new {
                 w = self.cell_width - (GRID_CONFIG.cell_padding * 2),
                 h = self.cell_height - (GRID_CONFIG.cell_padding * 2),
             },
-            VerticalGroup:new{
+            VerticalGroup:new {
                 align = "center",
                 cover_widget,
-                VerticalSpan:new{ width = cover_text_gap },
+                VerticalSpan:new { width = cover_text_gap },
                 text_container,
             },
         },
@@ -439,7 +435,7 @@ end
 -- ============================================
 -- GRID MENU
 -- ============================================
-local OPDSGridMenu = Menu:extend{
+local OPDSGridMenu = Menu:extend {
     cover_width = nil,
     cover_height = nil,
     cell_width = nil,
@@ -472,7 +468,7 @@ function OPDSGridMenu:setGridDimensions()
         else
             -- Custom columns
             columns = self._manager.settings.grid_columns or GRID_CONFIG.default_columns
-            target_rows = 2  -- Default target for custom
+            target_rows = 2 -- Default target for custom
         end
     end
 
@@ -598,7 +594,7 @@ function OPDSGridMenu:_recalculateDimen()
             rows_per_page = new_rows
 
             self:_debugLog("Optimized: Adjusted to fit", rows_per_page, "rows (was wasting",
-                          math.floor(remaining_space), "px)")
+                math.floor(remaining_space), "px)")
         end
     end
 
@@ -606,7 +602,7 @@ function OPDSGridMenu:_recalculateDimen()
     if self.perpage < 1 then self.perpage = 1 end
 
     self:_debugLog("Final grid - Rows:", rows_per_page, "Items:", self.perpage,
-                   "Whitespace:", math.floor(available_height - used_height), "px")
+        "Whitespace:", math.floor(available_height - used_height), "px")
 
     -- Calculate total pages
     self.page_num = math.ceil(#self.item_table / self.perpage)
@@ -616,7 +612,7 @@ function OPDSGridMenu:_recalculateDimen()
     end
 
     self.item_width = available_width
-    self.item_dimen = Geom:new{
+    self.item_dimen = Geom:new {
         x = 0,
         y = 0,
         w = self.item_width,
@@ -694,10 +690,10 @@ function OPDSGridMenu:updateItems(select_number)
 
         -- Create complete grid with hash borders
         for row = 1, rows_per_page do
-            local row_group = HorizontalGroup:new{ align = "top" }
+            local row_group = HorizontalGroup:new { align = "top" }
 
             if centering_offset > 0 then
-                table.insert(row_group, HorizontalSpan:new{ width = centering_offset })
+                table.insert(row_group, HorizontalSpan:new { width = centering_offset })
             end
 
             for col = 1, self.columns do
@@ -705,7 +701,7 @@ function OPDSGridMenu:updateItems(select_number)
                 local entry = self.item_table[entry_idx]
 
                 if entry then
-                    local cell = OPDSGridCell:new{
+                    local cell = OPDSGridCell:new {
                         entry = entry,
                         cell_width = self.cell_width,
                         cell_height = self.cell_height,
@@ -714,7 +710,7 @@ function OPDSGridMenu:updateItems(select_number)
                         show_parent = self.show_parent,
                         menu = self,
                         font_settings = font_settings,
-                        border_settings = {style = "none"},  -- No individual borders for hash
+                        border_settings = { style = "none" }, -- No individual borders for hash
                     }
 
                     table.insert(row_group, cell)
@@ -723,13 +719,13 @@ function OPDSGridMenu:updateItems(select_number)
                         table.insert(self._items_to_update, { entry = entry, widget = cell })
                     end
                 else
-                    table.insert(row_group, HorizontalSpan:new{ width = self.cell_width })
+                    table.insert(row_group, HorizontalSpan:new { width = self.cell_width })
                 end
 
                 -- Add vertical line between columns (but not after last)
                 if col < self.columns then
-                    local line = LineWidget:new{
-                        dimen = Geom:new{
+                    local line = LineWidget:new {
+                        dimen = Geom:new {
                             w = border_size,
                             h = self.cell_height,
                         },
@@ -740,23 +736,23 @@ function OPDSGridMenu:updateItems(select_number)
             end
 
             if centering_offset > 0 then
-                table.insert(row_group, HorizontalSpan:new{ width = centering_offset })
+                table.insert(row_group, HorizontalSpan:new { width = centering_offset })
             end
 
             table.insert(self.item_group, row_group)
-            table.insert(self.layout, {row_group})
+            table.insert(self.layout, { row_group })
 
             -- Add horizontal line between rows (but not after last)
             if row < rows_per_page then
                 local h_line_width = total_cells_width + (border_size * (self.columns - 1))
-                local h_line_group = HorizontalGroup:new{}
+                local h_line_group = HorizontalGroup:new {}
 
                 if centering_offset > 0 then
-                    table.insert(h_line_group, HorizontalSpan:new{ width = centering_offset })
+                    table.insert(h_line_group, HorizontalSpan:new { width = centering_offset })
                 end
 
-                local line = LineWidget:new{
-                    dimen = Geom:new{
+                local line = LineWidget:new {
+                    dimen = Geom:new {
                         w = h_line_width,
                         h = border_size,
                     },
@@ -765,7 +761,7 @@ function OPDSGridMenu:updateItems(select_number)
                 table.insert(h_line_group, line)
 
                 if centering_offset > 0 then
-                    table.insert(h_line_group, HorizontalSpan:new{ width = centering_offset })
+                    table.insert(h_line_group, HorizontalSpan:new { width = centering_offset })
                 end
 
                 table.insert(self.item_group, h_line_group)
@@ -774,10 +770,10 @@ function OPDSGridMenu:updateItems(select_number)
     else
         -- Standard grid (none or individual borders)
         for row = 1, rows_per_page do
-            local row_group = HorizontalGroup:new{ align = "top" }
+            local row_group = HorizontalGroup:new { align = "top" }
 
             if centering_offset > 0 then
-                table.insert(row_group, HorizontalSpan:new{ width = centering_offset })
+                table.insert(row_group, HorizontalSpan:new { width = centering_offset })
             end
 
             for col = 1, self.columns do
@@ -785,7 +781,7 @@ function OPDSGridMenu:updateItems(select_number)
                 local entry = self.item_table[entry_idx]
 
                 if entry then
-                    local cell = OPDSGridCell:new{
+                    local cell = OPDSGridCell:new {
                         entry = entry,
                         cell_width = self.cell_width,
                         cell_height = self.cell_height,
@@ -803,23 +799,23 @@ function OPDSGridMenu:updateItems(select_number)
                         table.insert(self._items_to_update, { entry = entry, widget = cell })
                     end
                 else
-                    table.insert(row_group, HorizontalSpan:new{ width = self.cell_width })
+                    table.insert(row_group, HorizontalSpan:new { width = self.cell_width })
                 end
 
                 if col < self.columns then
-                    table.insert(row_group, HorizontalSpan:new{ width = GRID_CONFIG.cell_margin })
+                    table.insert(row_group, HorizontalSpan:new { width = GRID_CONFIG.cell_margin })
                 end
             end
 
             if centering_offset > 0 then
-                table.insert(row_group, HorizontalSpan:new{ width = centering_offset })
+                table.insert(row_group, HorizontalSpan:new { width = centering_offset })
             end
 
             table.insert(self.item_group, row_group)
-            table.insert(self.layout, {row_group})
+            table.insert(self.layout, { row_group })
 
             if row < rows_per_page then
-                table.insert(self.item_group, VerticalSpan:new{ width = GRID_CONFIG.row_spacing })
+                table.insert(self.item_group, VerticalSpan:new { width = GRID_CONFIG.row_spacing })
             end
         end
     end
@@ -835,13 +831,11 @@ function OPDSGridMenu:updateItems(select_number)
 
     -- Custom page info
     if self.page_info then
-        local columns = self.columns or 3
         local custom_text = "▦ " .. self.page .. "/" .. self.page_num .. " (" .. self.perpage .. " items)"
 
         for i = 1, 10 do
             if self.page_info[i] and type(self.page_info[i]) == "table" and self.page_info[i].text then
                 local old_widget = self.page_info[i]
-                local Font = require("ui/font")
                 local face = old_widget.face or Font:getFace("smallinfofont")
                 local fgcolor = old_widget.fgcolor or Blitbuffer.COLOR_BLACK
 
@@ -849,8 +843,7 @@ function OPDSGridMenu:updateItems(select_number)
                     old_widget:free()
                 end
 
-                local TextWidget = require("ui/widget/textwidget")
-                self.page_info[i] = TextWidget:new{
+                self.page_info[i] = TextWidget:new {
                     text = custom_text,
                     face = face,
                     fgcolor = fgcolor,
@@ -894,7 +887,7 @@ function OPDSGridMenu:_loadVisibleCovers()
         local url = item_data.entry.cover_url
         if url and not items_by_url[url] then
             table.insert(urls, url)
-            items_by_url[url] = {item_data}
+            items_by_url[url] = { item_data }
         elseif url then
             table.insert(items_by_url[url], item_data)
         end
@@ -913,7 +906,7 @@ function OPDSGridMenu:_loadVisibleCovers()
     -- Get debug mode setting
     local debug_mode = self._manager and self._manager.settings and self._manager.settings.debug_mode
 
-    local batch, halt = ImageLoader:loadImages(urls, function(url, content)
+    local _, halt = ImageLoader:loadImages(urls, function(url, content)
         local items = items_by_url[url]
         if not items then return end
 
