@@ -184,7 +184,7 @@ Access settings from: **OPDS Plus Catalog → Settings**
 ## 🔧 Technical Details
 
 ### Requirements
-- KOReader v2021.04 or later
+- KOReader v2025.10, minimum
 - Network connectivity for browsing online catalogs
 
 ### File Structure
