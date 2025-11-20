@@ -294,9 +294,12 @@ function OPDSGridCell:init()
         align = "center",
     }
 
-    -- Title - with smart truncation
+    -- Title
+    local title_face = Font:getFace(title_font, title_size)
+    local title_text = truncateText(title, title_face, text_width * 2)
+
     local title_widget = TextBoxWidget:new {
-        text = title,
+        text = title_text,
         face = Font:getFace(title_font, title_size),
         bold = title_bold,
         width = text_width,

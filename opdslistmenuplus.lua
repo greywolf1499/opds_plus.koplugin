@@ -338,8 +338,11 @@ function OPDSListMenuItem:init()
     }
 
     -- Title
+    local title_face = Font:getFace(title_font, title_size)
+    local title_text = truncateText(title, title_face, text_width * 2)
+
     local title_widget = TextBoxWidget:new {
-        text = title,
+        text = title_text,
         face = Font:getFace(title_font, title_size),
         width = text_width,
         alignment = "left",
