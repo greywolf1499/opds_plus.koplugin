@@ -1,4 +1,3 @@
-local BD = require("ui/bidi")
 local Blitbuffer = require("ffi/blitbuffer")
 local Device = require("device")
 local Font = require("ui/font")
@@ -9,7 +8,6 @@ local HorizontalGroup = require("ui/widget/horizontalgroup")
 local HorizontalSpan = require("ui/widget/horizontalspan")
 local ImageWidget = require("ui/widget/imagewidget")
 local InputContainer = require("ui/widget/container/inputcontainer")
-local LeftContainer = require("ui/widget/container/leftcontainer")
 local Menu = require("ui/widget/menu")
 local RenderImage = require("ui/renderimage")
 local Size = require("ui/size")
@@ -40,7 +38,7 @@ local COVER_CONFIG = {
     max_cover_height = 300,
 
     -- Standard book aspect ratio (portrait orientation)
-    book_aspect_ratio = 2/3,
+    book_aspect_ratio = 2 / 3,
 
     -- Spacing and padding
     item_top_padding = 6,
@@ -67,7 +65,8 @@ local function calculateOptimalCoverSize(available_height, target_items, min_hei
     -- If we can fit more items by making covers slightly smaller, do it
     if actual_items < target_items then
         -- Try to squeeze one more item in
-        local adjusted_height = math.floor((available_height - (padding_per_item * (actual_items + 1))) / (actual_items + 1))
+        local adjusted_height = math.floor((available_height - (padding_per_item * (actual_items + 1))) /
+            (actual_items + 1))
         if adjusted_height >= min_height then
             cover_height = adjusted_height
             actual_items = actual_items + 1
@@ -86,58 +85,57 @@ local function createPlaceholderCover(width, height, status)
     -- status can be: "loading", "no_cover", "error"
 
     local placeholder_bg_color = Blitbuffer.COLOR_LIGHT_GRAY
-    local border_color = Blitbuffer.COLOR_DARK_GRAY
     local text_color = Blitbuffer.COLOR_DARK_GRAY
 
     -- Determine text to display
-    local display_text = ""
-    local icon = ""
+    local display_text
+    local icon
 
     if status == "loading" then
-        icon = "⏳"  -- Hourglass emoji
+        icon = "⏳" -- Hourglass emoji
         display_text = _("Loading...")
     elseif status == "error" then
-        icon = "⚠"  -- Warning emoji
+        icon = "⚠" -- Warning emoji
         display_text = _("Failed to load")
-    else  -- "no_cover" or default
-        icon = "📖"  -- Book emoji
+    else -- "no_cover" or default
+        icon = "📖" -- Book emoji
         display_text = _("No Cover")
     end
 
     -- Create text widgets
-    local font_size = math.floor(height / 8)  -- Scale font with cover size
+    local font_size = math.floor(height / 8) -- Scale font with cover size
     if font_size < 10 then font_size = 10 end
     if font_size > 16 then font_size = 16 end
 
-    local icon_widget = TextWidget:new{
+    local icon_widget = TextWidget:new {
         text = icon,
-        face = Font:getFace("infofont", font_size * 2),  -- Icon is larger
+        face = Font:getFace("infofont", font_size * 2), -- Icon is larger
         fgcolor = text_color,
     }
 
-    local text_widget = TextWidget:new{
+    local text_widget = TextWidget:new {
         text = display_text,
         face = Font:getFace("smallinfofont", font_size),
         fgcolor = text_color,
     }
 
     -- Assemble the placeholder
-    local placeholder = FrameContainer:new{
+    local placeholder = FrameContainer:new {
         width = width,
         height = height,
         padding = 0,
         margin = 0,
         bordersize = Size.border.default or 2,
         background = placeholder_bg_color,
-        CenterContainer:new{
-            dimen = Geom:new{
+        CenterContainer:new {
+            dimen = Geom:new {
                 w = width,
                 h = height,
             },
-            VerticalGroup:new{
+            VerticalGroup:new {
                 align = "center",
                 icon_widget,
-                VerticalSpan:new{ width = font_size / 2 },
+                VerticalSpan:new { width = font_size / 2 },
                 text_widget,
             },
         },
@@ -148,8 +146,8 @@ end
 
 -- Parse title and author from entry data
 local function parseTitleAuthor(entry)
-    local title = entry.title  -- Try dedicated title field first
-    local author = entry.author  -- Try dedicated author field
+    local title = entry.title   -- Try dedicated title field first
+    local author = entry.author -- Try dedicated author field
 
     -- If we don't have a separate title, try to parse from text
     if not title or title == "" then
@@ -189,19 +187,19 @@ local function formatSeriesInfo(series, series_index)
 end
 
 -- This is a simplified menu that displays OPDS catalog items with cover images
-local OPDSListMenuItem = InputContainer:extend{
+local OPDSListMenuItem = InputContainer:extend {
     entry = nil,
     cover_width = nil,
     cover_height = nil,
     width = nil,
     height = nil,
     show_parent = nil,
-    menu = nil,  -- Reference to parent menu
-    font_settings = nil,  -- Table with all font settings
+    menu = nil,          -- Reference to parent menu
+    font_settings = nil, -- Table with all font settings
 }
 
 function OPDSListMenuItem:init()
-    self.dimen = Geom:new{
+    self.dimen = Geom:new {
         w = self.width,
         h = self.height,
     }
@@ -209,13 +207,13 @@ function OPDSListMenuItem:init()
     -- Set up gesture events for tap and hold
     self.ges_events = {
         TapSelect = {
-            GestureRange:new{
+            GestureRange:new {
                 ges = "tap",
                 range = self.dimen,
             },
         },
         HoldSelect = {
-            GestureRange:new{
+            GestureRange:new {
                 ges = "hold",
                 range = self.dimen,
             },
@@ -226,7 +224,7 @@ function OPDSListMenuItem:init()
 
     -- Check if we should use real cover or placeholder
     if self.entry.cover_bb then
-        cover_widget = ImageWidget:new{
+        cover_widget = ImageWidget:new {
             image = self.entry.cover_bb,
             width = self.cover_width,
             height = self.cover_height,
@@ -265,7 +263,7 @@ function OPDSListMenuItem:init()
     local title_bold = (self.font_settings and self.font_settings.title_bold)
     if title_bold == nil then title_bold = true end
 
-    local info_font = title_font  -- Default to same as title
+    local info_font = title_font -- Default to same as title
     if self.font_settings and not self.font_settings.use_same_font then
         info_font = self.font_settings.info_font or "smallinfofont"
     end
@@ -286,9 +284,9 @@ function OPDSListMenuItem:init()
         end
 
         local RenderText = require("ui/rendertext")
-        local text_width = RenderText:sizeUtf8Text(0, Screen:getWidth(), face, text).x
+        local measured_width = RenderText:sizeUtf8Text(0, Screen:getWidth(), face, text).x
 
-        if text_width <= max_width then
+        if measured_width <= max_width then
             return text
         end
 
@@ -335,12 +333,12 @@ function OPDSListMenuItem:init()
     end
 
     -- Build text information widgets
-    local text_group = VerticalGroup:new{
+    local text_group = VerticalGroup:new {
         align = "left",
     }
 
     -- Title
-    local title_widget = TextBoxWidget:new{
+    local title_widget = TextBoxWidget:new {
         text = title,
         face = Font:getFace(title_font, title_size),
         width = text_width,
@@ -351,12 +349,12 @@ function OPDSListMenuItem:init()
 
     -- Author (if available)
     if author and author ~= "" then
-        table.insert(text_group, VerticalSpan:new{ width = text_padding })
+        table.insert(text_group, VerticalSpan:new { width = text_padding })
 
         local author_face = Font:getFace(info_font, info_size)
         local author_text = truncateText(author, author_face, text_width)
 
-        table.insert(text_group, TextWidget:new{
+        table.insert(text_group, TextWidget:new {
             text = author_text,
             face = author_face,
             max_width = text_width,
@@ -368,14 +366,14 @@ function OPDSListMenuItem:init()
     -- Series information (if available and valid)
     local series_text = formatSeriesInfo(self.entry.series, self.entry.series_index)
     if series_text then
-        table.insert(text_group, VerticalSpan:new{ width = text_padding })
+        table.insert(text_group, VerticalSpan:new { width = text_padding })
 
         local series_face = Font:getFace(info_font, info_size - 1)
         local icon = "📚 "
         local full_series = icon .. series_text
         local truncated_series = truncateText(full_series, series_face, text_width)
 
-        table.insert(text_group, TextWidget:new{
+        table.insert(text_group, TextWidget:new {
             text = truncated_series,
             face = series_face,
             max_width = text_width,
@@ -386,8 +384,8 @@ function OPDSListMenuItem:init()
 
     -- Mandatory info (file format, etc.) if available
     if self.entry.mandatory then
-        table.insert(text_group, VerticalSpan:new{ width = text_padding })
-        table.insert(text_group, TextWidget:new{
+        table.insert(text_group, VerticalSpan:new { width = text_padding })
+        table.insert(text_group, TextWidget:new {
             text = self.entry.mandatory,
             face = Font:getFace(info_font, info_size - 2),
             max_width = text_width,
@@ -399,30 +397,30 @@ function OPDSListMenuItem:init()
     -- Assemble the complete item with proper spacing
     local TopContainer = require("ui/widget/container/topcontainer")
 
-    self[1] = FrameContainer:new{
+    self[1] = FrameContainer:new {
         width = self.width,
         height = self.height,
         padding = 0,
         margin = 0,
         bordersize = 0,
         background = Blitbuffer.COLOR_WHITE,
-        VerticalGroup:new{
+        VerticalGroup:new {
             align = "left",
-            VerticalSpan:new{ width = top_padding },
-            HorizontalGroup:new{
+            VerticalSpan:new { width = top_padding },
+            HorizontalGroup:new {
                 align = "top",
-                HorizontalSpan:new{ width = cover_left_margin },
+                HorizontalSpan:new { width = cover_left_margin },
                 cover_widget,
-                HorizontalSpan:new{ width = cover_right_margin },
-                TopContainer:new{
-                    dimen = Geom:new{
+                HorizontalSpan:new { width = cover_right_margin },
+                TopContainer:new {
+                    dimen = Geom:new {
                         w = text_width,
                         h = text_height,
                     },
                     text_group,
                 },
             },
-            VerticalSpan:new{ width = bottom_padding },
+            VerticalSpan:new { width = bottom_padding },
         }
     }
 
@@ -460,7 +458,7 @@ function OPDSListMenuItem:free()
 end
 
 -- Main OPDS List Menu that extends the standard Menu
-local OPDSListMenu = Menu:extend{
+local OPDSListMenu = Menu:extend {
     cover_width = nil,
     cover_height = nil,
     _items_to_update = {},
@@ -475,7 +473,7 @@ end
 -- Calculate and set cover dimensions based on available space
 function OPDSListMenu:setCoverDimensions()
     -- Get the preset/target from settings
-    local preset_name = "Regular"  -- Default
+    local preset_name = "Regular" -- Default
     if self._manager and self._manager.settings and self._manager.settings.cover_size_preset then
         preset_name = self._manager.settings.cover_size_preset
     end
@@ -483,7 +481,7 @@ function OPDSListMenu:setCoverDimensions()
     -- For custom sizes, we need a different approach
     if preset_name == "Custom" then
         -- Use the stored ratio for custom
-        local custom_ratio = 0.10  -- Default fallback
+        local custom_ratio = 0.10 -- Default fallback
         if self._manager and self._manager.settings and self._manager.settings.cover_height_ratio then
             custom_ratio = self._manager.settings.cover_height_ratio
         end
@@ -504,7 +502,7 @@ function OPDSListMenu:setCoverDimensions()
     -- We need to estimate available height
     -- This is approximate since we're called before the menu is fully laid out
     local screen_height = Screen:getHeight()
-    local estimated_ui_overhead = 100  -- Title bar + page info + margins
+    local estimated_ui_overhead = 100 -- Title bar + page info + margins
     local available_height = screen_height - estimated_ui_overhead
 
     -- Calculate optimal size
@@ -515,7 +513,8 @@ function OPDSListMenu:setCoverDimensions()
         COVER_CONFIG.max_cover_height
     )
 
-    self:_debugLog("Preset:", preset_name, "Target items:", preset.target_items, "Cover size:", self.cover_width, "x", self.cover_height)
+    self:_debugLog("Preset:", preset_name, "Target items:", preset.target_items, "Cover size:", self.cover_width, "x",
+        self.cover_height)
 end
 
 -- Override _recalculateDimen with improved space utilization
@@ -530,7 +529,7 @@ function OPDSListMenu:_recalculateDimen()
 
     -- Subtract height of other UI elements
     if not self.is_borderless then
-        available_height = available_height - 2  -- borders
+        available_height = available_height - 2 -- borders
     end
     if not self.no_title and self.title_bar then
         available_height = available_height - self.title_bar.dimen.h
@@ -567,12 +566,12 @@ function OPDSListMenu:_recalculateDimen()
             self.perpage = new_items
 
             self:_debugLog("Optimized: Adjusted cover to fit", self.perpage, "items (was wasting",
-                          math.floor(remaining_space), "px)")
+                math.floor(remaining_space), "px)")
         end
     end
 
     self:_debugLog("Final layout - Items per page:", self.perpage, "Whitespace:",
-                   math.floor(available_height - (self.perpage * self.item_height)), "px")
+        math.floor(available_height - (self.perpage * self.item_height)), "px")
 
     -- Calculate total pages
     self.page_num = math.ceil(#self.item_table / self.perpage)
@@ -584,7 +583,7 @@ function OPDSListMenu:_recalculateDimen()
 
     -- Set item width and dimensions
     self.item_width = self.inner_dimen.w
-    self.item_dimen = Geom:new{
+    self.item_dimen = Geom:new {
         x = 0,
         y = 0,
         w = self.item_width,
@@ -655,7 +654,7 @@ function OPDSListMenu:updateItems(select_number)
             local item_width = self.content_width or Screen:getWidth()
             local item_height = self.item_height
 
-            local item = OPDSListMenuItem:new{
+            local item = OPDSListMenuItem:new {
                 entry = entry,
                 width = item_width,
                 height = item_height,
@@ -671,13 +670,13 @@ function OPDSListMenu:updateItems(select_number)
             -- Add separator line between items (but not after the last one)
             if i < self.perpage and entry_idx < #self.item_table then
                 local LineWidget = require("ui/widget/linewidget")
-                table.insert(self.item_group, LineWidget:new{
-                    dimen = Geom:new{ w = item_width, h = Size.line.thin },
+                table.insert(self.item_group, LineWidget:new {
+                    dimen = Geom:new { w = item_width, h = Size.line.thin },
                     background = Blitbuffer.COLOR_DARK_GRAY,
                 })
             end
 
-            table.insert(self.layout, {item})  -- Wrap in table for focus manager
+            table.insert(self.layout, { item }) -- Wrap in table for focus manager
 
             -- Track items that need cover loading
             if entry.cover_url and entry.lazy_load_cover and not entry.cover_bb then
@@ -707,7 +706,6 @@ function OPDSListMenu:updateItems(select_number)
             if self.page_info[i] and type(self.page_info[i]) == "table" and self.page_info[i].text then
                 -- Get the original widget's properties (with fallbacks)
                 local old_widget = self.page_info[i]
-                local Font = require("ui/font")
                 local face = old_widget.face or Font:getFace("smallinfofont")
                 local fgcolor = old_widget.fgcolor or Blitbuffer.COLOR_BLACK
 
@@ -717,8 +715,7 @@ function OPDSListMenu:updateItems(select_number)
                 end
 
                 -- Create new TextWidget with updated text
-                local TextWidget = require("ui/widget/textwidget")
-                self.page_info[i] = TextWidget:new{
+                self.page_info[i] = TextWidget:new {
                     text = custom_text,
                     face = face,
                     fgcolor = fgcolor,
@@ -765,7 +762,7 @@ function OPDSListMenu:_loadVisibleCovers()
         local url = item_data.entry.cover_url
         if url and not items_by_url[url] then
             table.insert(urls, url)
-            items_by_url[url] = {item_data}
+            items_by_url[url] = { item_data }
         elseif url then
             table.insert(items_by_url[url], item_data)
         end
@@ -787,7 +784,7 @@ function OPDSListMenu:_loadVisibleCovers()
     -- Get debug mode setting
     local debug_mode = self._manager and self._manager.settings and self._manager.settings.debug_mode
 
-    local batch, halt = ImageLoader:loadImages(urls, function(url, content)
+    local _, halt = ImageLoader:loadImages(urls, function(url, content)
         local items = items_by_url[url]
         if not items then
             logger.warn("OPDS+: ERROR - No items for URL:", url)
