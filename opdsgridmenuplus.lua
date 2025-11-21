@@ -499,13 +499,27 @@ function OPDSGridMenu:setGridDimensions()
     local estimated_ui_overhead = 100
     local available_height = screen_height - estimated_ui_overhead - GRID_CONFIG.top_margin - GRID_CONFIG.bottom_margin
 
+    -- [Get settings for borders]
+    local border_style = "none"
+    local border_size = 2
+    if self._manager and self._manager.settings then
+        border_style = self._manager.settings.grid_border_style or "none"
+        border_size = self._manager.settings.grid_border_size or 2
+    end
+
+    -- Calculate effective border deduction for "individual" style
+    local border_deduction = 0
+    if border_style == "individual" then
+        border_deduction = border_size * 2
+    end
+
     -- Calculate cell width based on columns
     local total_gap_width = GRID_CONFIG.cell_margin * (self.columns - 1)
     local available_for_cells = available_width - total_gap_width
     self.cell_width = math.floor(available_for_cells / self.columns)
 
     -- Cover width should fit in cell with padding
-    local max_cover_width = self.cell_width - (GRID_CONFIG.cell_padding * 2)
+    local max_cover_width = self.cell_width - (GRID_CONFIG.cell_padding * 2) - border_deduction
 
     -- Calculate cover height from width maintaining aspect ratio
     local cover_height_from_width = math.floor(max_cover_width / GRID_CONFIG.book_aspect_ratio)
@@ -530,7 +544,7 @@ function OPDSGridMenu:setGridDimensions()
     local target_row_height = math.floor(available_for_rows / target_rows)
 
     -- Calculate max cover height that fits in target row height
-    local max_cover_from_rows = target_row_height - text_area_height - (GRID_CONFIG.cell_padding * 2)
+    local max_cover_from_rows = target_row_height - text_area_height - (GRID_CONFIG.cell_padding * 2) - border_deduction
 
     -- Use the more restrictive constraint
     self.cover_height = math.min(cover_height_from_width, max_cover_from_rows)
@@ -543,9 +557,10 @@ function OPDSGridMenu:setGridDimensions()
     self.cover_width = math.floor(self.cover_height * GRID_CONFIG.book_aspect_ratio)
 
     -- Calculate final cell height
-    self.cell_height = self.cover_height + text_area_height + (GRID_CONFIG.cell_padding * 2)
+    self.cell_height = self.cover_height + text_area_height + (GRID_CONFIG.cell_padding * 2) + border_deduction
 
     self:_debugLog("Grid preset:", preset_name, "Columns:", columns, "Target rows:", target_rows)
+    self:_debugLog("Grid preset:", preset_name, "Border:", border_style, border_size .. "px")
     self:_debugLog("Cell:", self.cell_width, "x", self.cell_height, "Cover:", self.cover_width, "x", self.cover_height)
 end
 
@@ -570,6 +585,15 @@ function OPDSGridMenu:_recalculateDimen()
     end
 
     available_height = available_height - GRID_CONFIG.top_margin - GRID_CONFIG.bottom_margin
+
+    -- [Get border settings again for optimization logic]
+    local border_style = "none"
+    local border_size = 2
+    if self._manager and self._manager.settings then
+        border_style = self._manager.settings.grid_border_style or "none"
+        border_size = self._manager.settings.grid_border_size or 2
+    end
+    local border_deduction = (border_style == "individual") and (border_size * 2) or 0
 
     -- Calculate rows per page
     local row_height = self.cell_height + GRID_CONFIG.row_spacing
@@ -599,7 +623,7 @@ function OPDSGridMenu:_recalculateDimen()
         local cover_text_gap = 6
         local text_area_height = title_height + author_height + cover_text_gap
 
-        local new_cover_height = new_cell_height - text_area_height - (GRID_CONFIG.cell_padding * 2)
+        local new_cover_height = new_cell_height - text_area_height - (GRID_CONFIG.cell_padding * 2) - border_deduction
 
         if new_cover_height >= GRID_CONFIG.min_cover_height then
             self.cover_height = new_cover_height
@@ -738,6 +762,17 @@ function OPDSGridMenu:updateItems(select_number)
 
                 -- Add vertical line between columns (but not after last)
                 if col < self.columns then
+                    -- Calculate spacing around the line
+                    local total_gap = GRID_CONFIG.cell_margin
+                    local line_width = border_size
+                    local space_side = math.floor((total_gap - line_width) / 2)
+
+                    -- 1. Left spacing
+                    if space_side > 0 then
+                        table.insert(row_group, HorizontalSpan:new { width = space_side })
+                    end
+
+                    -- 2. The Line itself
                     local line = LineWidget:new {
                         dimen = Geom:new {
                             w = border_size,
@@ -746,6 +781,12 @@ function OPDSGridMenu:updateItems(select_number)
                         background = border_color,
                     }
                     table.insert(row_group, line)
+
+                    -- 3. Right spacing (ensure total adds up to cell_margin)
+                    local remaining = total_gap - line_width - space_side
+                    if remaining > 0 then
+                        table.insert(row_group, HorizontalSpan:new { width = remaining })
+                    end
                 end
             end
 
