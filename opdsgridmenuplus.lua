@@ -391,6 +391,9 @@ function OPDSGridCell:init()
         cell_bordersize = border_size
     end
 
+    local inner_width = self.cell_width - (GRID_CONFIG.cell_padding * 2) - (cell_bordersize * 2)
+    local inner_height = self.cell_height - (GRID_CONFIG.cell_padding * 2) - (cell_bordersize * 2)
+
     self[1] = FrameContainer:new {
         width = self.cell_width,
         height = self.cell_height,
@@ -401,8 +404,8 @@ function OPDSGridCell:init()
         background = Blitbuffer.COLOR_WHITE,
         CenterContainer:new {
             dimen = Geom:new {
-                w = self.cell_width - (GRID_CONFIG.cell_padding * 2),
-                h = self.cell_height - (GRID_CONFIG.cell_padding * 2),
+                w = inner_width,
+                h = inner_height,
             },
             VerticalGroup:new {
                 align = "center",
