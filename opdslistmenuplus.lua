@@ -220,23 +220,32 @@ function OPDSListMenuItem:init()
         },
     }
 
-    local cover_widget
+    local inner_cover_widget
 
     -- Check if we should use real cover or placeholder
     if self.entry.cover_bb then
-        cover_widget = ImageWidget:new {
+        inner_cover_widget = ImageWidget:new {
             image = self.entry.cover_bb,
             width = self.cover_width,
             height = self.cover_height,
             alpha = true,
         }
     elseif self.entry.cover_url and self.entry.lazy_load_cover then
-        cover_widget = createPlaceholderCover(self.cover_width, self.cover_height, "loading")
+        inner_cover_widget = createPlaceholderCover(self.cover_width, self.cover_height, "loading")
     elseif self.entry.cover_url and self.entry.cover_failed then
-        cover_widget = createPlaceholderCover(self.cover_width, self.cover_height, "error")
+        inner_cover_widget = createPlaceholderCover(self.cover_width, self.cover_height, "error")
     else
-        cover_widget = createPlaceholderCover(self.cover_width, self.cover_height, "no_cover")
+        inner_cover_widget = createPlaceholderCover(self.cover_width, self.cover_height, "no_cover")
     end
+
+    -- Wrap in a fixed container to prevent layout shifting during updates
+    local cover_widget = CenterContainer:new {
+        dimen = Geom:new {
+            w = self.cover_width,
+            h = self.cover_height,
+        },
+        inner_cover_widget
+    }
 
     -- Calculate spacing and dimensions
     local top_padding = COVER_CONFIG.item_top_padding

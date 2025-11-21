@@ -187,21 +187,29 @@ function OPDSGridCell:init()
     }
 
     -- Create cover widget
-    local cover_widget
+    local inner_cover_widget
     if self.entry.cover_bb then
-        cover_widget = ImageWidget:new {
+        inner_cover_widget = ImageWidget:new {
             image = self.entry.cover_bb,
             width = self.cover_width,
             height = self.cover_height,
             alpha = true,
         }
     elseif self.entry.cover_url and self.entry.lazy_load_cover then
-        cover_widget = createGridPlaceholder(self.cover_width, self.cover_height, "loading")
+        inner_cover_widget = createGridPlaceholder(self.cover_width, self.cover_height, "loading")
     elseif self.entry.cover_url and self.entry.cover_failed then
-        cover_widget = createGridPlaceholder(self.cover_width, self.cover_height, "error")
+        inner_cover_widget = createGridPlaceholder(self.cover_width, self.cover_height, "error")
     else
-        cover_widget = createGridPlaceholder(self.cover_width, self.cover_height, "no_cover")
+        inner_cover_widget = createGridPlaceholder(self.cover_width, self.cover_height, "no_cover")
     end
+
+    local cover_widget = CenterContainer:new {
+        dimen = Geom:new {
+            w = self.cover_width,
+            h = self.cover_height,
+        },
+        inner_cover_widget
+    }
 
     -- Parse title and author
     local title, author = parseTitleAuthor(self.entry)
