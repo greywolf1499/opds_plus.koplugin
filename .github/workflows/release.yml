@@ -24,7 +24,7 @@ jobs:
             -x '*.zip'
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: opds_plus.koplugin
           path: opds_plus.koplugin.zip
