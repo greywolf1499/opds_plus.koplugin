@@ -1,3 +1,4 @@
+local UIUtils = require("ui.utils")
 local Blitbuffer = require("ffi/blitbuffer")
 local Device = require("device")
 local Font = require("ui/font")
@@ -10,7 +11,6 @@ local ImageWidget = require("ui/widget/imagewidget")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local Menu = require("ui/widget/menu")
 local RenderImage = require("ui/renderimage")
-local Size = require("ui/size")
 local TextBoxWidget = require("ui/widget/textboxwidget")
 local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
@@ -69,87 +69,6 @@ local function getBorderColor(color_name)
     end
 end
 
--- Create placeholder cover for grid
-local function createGridPlaceholder(width, height, status)
-    local placeholder_bg_color = Blitbuffer.COLOR_LIGHT_GRAY
-    local text_color = Blitbuffer.COLOR_DARK_GRAY
-
-    local display_text
-    local icon
-
-    if status == "loading" then
-        icon = "⏳"
-        display_text = _("Loading...")
-    elseif status == "error" then
-        icon = "⚠"
-        display_text = _("Failed")
-    else
-        icon = "📖"
-        display_text = _("No Cover")
-    end
-
-    local font_size = math.floor(height / 10)
-    if font_size < 10 then font_size = 10 end
-    if font_size > 14 then font_size = 14 end
-
-    local icon_widget = TextWidget:new {
-        text = icon,
-        face = Font:getFace("infofont", font_size * 2),
-        fgcolor = text_color,
-    }
-
-    local text_widget = TextWidget:new {
-        text = display_text,
-        face = Font:getFace("smallinfofont", font_size),
-        fgcolor = text_color,
-    }
-
-    local placeholder = FrameContainer:new {
-        width = width,
-        height = height,
-        padding = 0,
-        margin = 0,
-        bordersize = Size.border.default or 2,
-        background = placeholder_bg_color,
-        CenterContainer:new {
-            dimen = Geom:new {
-                w = width,
-                h = height,
-            },
-            VerticalGroup:new {
-                align = "center",
-                icon_widget,
-                VerticalSpan:new { width = font_size / 2 },
-                text_widget,
-            },
-        },
-    }
-
-    return placeholder
-end
-
--- Parse title and author (reuse from list view logic)
-local function parseTitleAuthor(entry)
-    local title = entry.title
-    local author = entry.author
-
-    if not title or title == "" then
-        if entry.text then
-            local title_part, author_part = entry.text:match("^(.+)%s*%-%s*(.+)$")
-            if title_part and author_part then
-                title = title_part
-                if not author or author == "" then
-                    author = author_part
-                end
-            else
-                title = entry.text
-            end
-        end
-    end
-
-    return title or _("Unknown"), author
-end
-
 -- ============================================
 -- GRID CELL WIDGET
 -- ============================================
@@ -196,11 +115,11 @@ function OPDSGridCell:init()
             alpha = true,
         }
     elseif self.entry.cover_url and self.entry.lazy_load_cover then
-        inner_cover_widget = createGridPlaceholder(self.cover_width, self.cover_height, "loading")
+        inner_cover_widget = UIUtils.createPlaceholderCover(self.cover_width, self.cover_height, "loading")
     elseif self.entry.cover_url and self.entry.cover_failed then
-        inner_cover_widget = createGridPlaceholder(self.cover_width, self.cover_height, "error")
+        inner_cover_widget = UIUtils.createPlaceholderCover(self.cover_width, self.cover_height, "error")
     else
-        inner_cover_widget = createGridPlaceholder(self.cover_width, self.cover_height, "no_cover")
+        inner_cover_widget = UIUtils.createPlaceholderCover(self.cover_width, self.cover_height, "no_cover")
     end
 
     local cover_widget = CenterContainer:new {
@@ -212,7 +131,7 @@ function OPDSGridCell:init()
     }
 
     -- Parse title and author
-    local title, author = parseTitleAuthor(self.entry)
+    local title, author = UIUtils.parseTitleAuthor(self.entry)
 
     -- Get font settings
     local title_font = (self.font_settings and self.font_settings.title_font) or "smallinfofont"
@@ -250,53 +169,6 @@ function OPDSGridCell:init()
     local max_text_area = self.cell_height - self.cover_height - (GRID_CONFIG.cell_padding * 2)
     text_area_height = math.min(text_area_height, max_text_area)
 
-    -- Helper function to truncate text with ellipsis
-    local function truncateText(text, face, max_width)
-        if not text or text == "" then
-            return text
-        end
-
-        local RenderText = require("ui/rendertext")
-        local measured_width = RenderText:sizeUtf8Text(0, Screen:getWidth(), face, text).x
-
-        if measured_width <= max_width then
-            return text
-        end
-
-        local ellipsis = "…"
-        local ellipsis_width = RenderText:sizeUtf8Text(0, Screen:getWidth(), face, ellipsis).x
-        local available_width = max_width - ellipsis_width
-
-        local left, right = 1, #text
-        local best_length = 1
-
-        while left <= right do
-            local mid = math.floor((left + right) / 2)
-            local test_text = require("util").splitToChars(text)
-            local truncated = ""
-            for i = 1, mid do
-                truncated = truncated .. (test_text[i] or "")
-            end
-
-            local test_width = RenderText:sizeUtf8Text(0, Screen:getWidth(), face, truncated).x
-
-            if test_width <= available_width then
-                best_length = mid
-                left = mid + 1
-            else
-                right = mid - 1
-            end
-        end
-
-        local result_chars = require("util").splitToChars(text)
-        local result = ""
-        for i = 1, best_length do
-            result = result .. (result_chars[i] or "")
-        end
-
-        return result .. ellipsis
-    end
-
     -- Build text group with FIXED heights for each element
     local text_group = VerticalGroup:new {
         align = "center",
@@ -304,7 +176,7 @@ function OPDSGridCell:init()
 
     -- Title
     local title_face = Font:getFace(title_font, title_size)
-    local title_text = truncateText(title, title_face, text_width * 2)
+    local title_text = UIUtils.truncateText(title, title_face, text_width * 2)
 
     local title_widget = TextBoxWidget:new {
         text = title_text,
@@ -341,7 +213,7 @@ function OPDSGridCell:init()
         local author_widget
         if author and author ~= "" then
             local author_face = Font:getFace(info_font, info_size)
-            local author_text = truncateText(author, author_face, text_width)
+            local author_text = UIUtils.truncateText(author, author_face, text_width)
 
             author_widget = TextWidget:new {
                 text = author_text,

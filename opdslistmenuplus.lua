@@ -1,3 +1,4 @@
+local UIUtils = require("ui.utils")
 local Blitbuffer = require("ffi/blitbuffer")
 local Device = require("device")
 local Font = require("ui/font")
@@ -80,112 +81,6 @@ end
 
 -- ============================================
 
--- Create a placeholder cover widget with text
-local function createPlaceholderCover(width, height, status)
-    -- status can be: "loading", "no_cover", "error"
-
-    local placeholder_bg_color = Blitbuffer.COLOR_LIGHT_GRAY
-    local text_color = Blitbuffer.COLOR_DARK_GRAY
-
-    -- Determine text to display
-    local display_text
-    local icon
-
-    if status == "loading" then
-        icon = "⏳" -- Hourglass emoji
-        display_text = _("Loading...")
-    elseif status == "error" then
-        icon = "⚠" -- Warning emoji
-        display_text = _("Failed to load")
-    else -- "no_cover" or default
-        icon = "📖" -- Book emoji
-        display_text = _("No Cover")
-    end
-
-    -- Create text widgets
-    local font_size = math.floor(height / 8) -- Scale font with cover size
-    if font_size < 10 then font_size = 10 end
-    if font_size > 16 then font_size = 16 end
-
-    local icon_widget = TextWidget:new {
-        text = icon,
-        face = Font:getFace("infofont", font_size * 2), -- Icon is larger
-        fgcolor = text_color,
-    }
-
-    local text_widget = TextWidget:new {
-        text = display_text,
-        face = Font:getFace("smallinfofont", font_size),
-        fgcolor = text_color,
-    }
-
-    -- Assemble the placeholder
-    local placeholder = FrameContainer:new {
-        width = width,
-        height = height,
-        padding = 0,
-        margin = 0,
-        bordersize = Size.border.default or 2,
-        background = placeholder_bg_color,
-        CenterContainer:new {
-            dimen = Geom:new {
-                w = width,
-                h = height,
-            },
-            VerticalGroup:new {
-                align = "center",
-                icon_widget,
-                VerticalSpan:new { width = font_size / 2 },
-                text_widget,
-            },
-        },
-    }
-
-    return placeholder
-end
-
--- Parse title and author from entry data
-local function parseTitleAuthor(entry)
-    local title = entry.title   -- Try dedicated title field first
-    local author = entry.author -- Try dedicated author field
-
-    -- If we don't have a separate title, try to parse from text
-    if not title or title == "" then
-        if entry.text then
-            -- Try to split "Title - Author" format
-            local title_part, author_part = entry.text:match("^(.+)%s*%-%s*(.+)$")
-            if title_part and author_part then
-                title = title_part
-                -- Only use parsed author if we don't already have one
-                if not author or author == "" then
-                    author = author_part
-                end
-            else
-                -- Couldn't split, use text as title
-                title = entry.text
-            end
-        end
-    end
-
-    return title or _("Unknown"), author
-end
-
--- Format series information for display
-local function formatSeriesInfo(series, series_index)
-    -- Only show if we have a non-empty series name
-    if not series or series == "" then
-        return nil
-    end
-
-    -- If we have both series and index
-    if series_index and series_index ~= "" then
-        return series .. " #" .. series_index
-    end
-
-    -- Just series name
-    return series
-end
-
 -- This is a simplified menu that displays OPDS catalog items with cover images
 local OPDSListMenuItem = InputContainer:extend {
     entry = nil,
@@ -231,11 +126,11 @@ function OPDSListMenuItem:init()
             alpha = true,
         }
     elseif self.entry.cover_url and self.entry.lazy_load_cover then
-        inner_cover_widget = createPlaceholderCover(self.cover_width, self.cover_height, "loading")
+        inner_cover_widget = UIUtils.createPlaceholderCover(self.cover_width, self.cover_height, "loading")
     elseif self.entry.cover_url and self.entry.cover_failed then
-        inner_cover_widget = createPlaceholderCover(self.cover_width, self.cover_height, "error")
+        inner_cover_widget = UIUtils.createPlaceholderCover(self.cover_width, self.cover_height, "error")
     else
-        inner_cover_widget = createPlaceholderCover(self.cover_width, self.cover_height, "no_cover")
+        inner_cover_widget = UIUtils.createPlaceholderCover(self.cover_width, self.cover_height, "no_cover")
     end
 
     -- Wrap in a fixed container to prevent layout shifting during updates
@@ -264,7 +159,7 @@ function OPDSListMenuItem:init()
     end
 
     -- Parse title and author from entry
-    local title, author = parseTitleAuthor(self.entry)
+    local title, author = UIUtils.parseTitleAuthor(self.entry)
 
     -- Get font settings from font_settings table
     local title_font = (self.font_settings and self.font_settings.title_font) or "smallinfofont"
@@ -286,61 +181,6 @@ function OPDSListMenuItem:init()
         info_color = Blitbuffer.COLOR_BLACK
     end
 
-    -- Helper function to truncate text with ellipsis
-    local function truncateText(text, face, max_width)
-        if not text or text == "" then
-            return text
-        end
-
-        local RenderText = require("ui/rendertext")
-        local measured_width = RenderText:sizeUtf8Text(0, Screen:getWidth(), face, text).x
-
-        if measured_width <= max_width then
-            return text
-        end
-
-        -- Text is too long, need to truncate
-        local ellipsis = "…"
-        local ellipsis_width = RenderText:sizeUtf8Text(0, Screen:getWidth(), face, ellipsis).x
-        local available_width = max_width - ellipsis_width
-
-        -- Binary search for the right length
-        local left, right = 1, #text
-        local best_length = 1
-
-        while left <= right do
-            local mid = math.floor((left + right) / 2)
-            local test_text = require("util").splitToChars(text)
-            local truncated = ""
-            for i = 1, mid do
-                truncated = truncated .. (test_text[i] or "")
-            end
-
-            local test_width = RenderText:sizeUtf8Text(0, Screen:getWidth(), face, truncated).x
-
-            if test_width <= available_width then
-                best_length = mid
-                left = mid + 1
-            else
-                right = mid - 1
-            end
-        end
-
-        local result_chars = require("util").splitToChars(text)
-        local result = ""
-        for i = 1, best_length do
-            result = result .. (result_chars[i] or "")
-        end
-
-        -- Try to break at word boundary
-        local last_space = result:reverse():find(" ")
-        if last_space and last_space < 15 then
-            result = result:sub(1, -(last_space + 1))
-        end
-
-        return result .. ellipsis
-    end
-
     -- Build text information widgets
     local text_group = VerticalGroup:new {
         align = "left",
@@ -348,7 +188,7 @@ function OPDSListMenuItem:init()
 
     -- Title
     local title_face = Font:getFace(title_font, title_size)
-    local title_text = truncateText(title, title_face, text_width * 2)
+    local title_text = UIUtils.truncateText(title, title_face, text_width * 2)
 
     local title_widget = TextBoxWidget:new {
         text = title_text,
@@ -364,7 +204,7 @@ function OPDSListMenuItem:init()
         table.insert(text_group, VerticalSpan:new { width = text_padding })
 
         local author_face = Font:getFace(info_font, info_size)
-        local author_text = truncateText(author, author_face, text_width)
+        local author_text = UIUtils.truncateText(author, author_face, text_width)
 
         table.insert(text_group, TextWidget:new {
             text = author_text,
@@ -376,14 +216,14 @@ function OPDSListMenuItem:init()
     end
 
     -- Series information (if available and valid)
-    local series_text = formatSeriesInfo(self.entry.series, self.entry.series_index)
+    local series_text = UIUtils.formatSeriesInfo(self.entry.series, self.entry.series_index)
     if series_text then
         table.insert(text_group, VerticalSpan:new { width = text_padding })
 
         local series_face = Font:getFace(info_font, info_size - 1)
         local icon = "📚 "
         local full_series = icon .. series_text
-        local truncated_series = truncateText(full_series, series_face, text_width)
+        local truncated_series = UIUtils.truncateText(full_series, series_face, text_width)
 
         table.insert(text_group, TextWidget:new {
             text = truncated_series,
