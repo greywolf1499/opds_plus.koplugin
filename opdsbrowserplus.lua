@@ -37,6 +37,9 @@ local OPDSCoverMenu = require("opdscovermenuplus")
 local OPDSConstants = require("opds_constants")
 local OPDSUtils = require("opds_utils")
 
+-- Import the OPDS menu builder
+local OPDSMenuBuilder = require("ui/opds_menu_builder")
+
 -- cache catalog parsed from feed xml
 local CatalogCache = Cache:new {
     -- Make it 20 slots, with no storage space constraints
@@ -118,221 +121,25 @@ function OPDSBrowser:toggleViewMode()
 end
 
 function OPDSBrowser:showOPDSMenu()
-    local dialog
-    dialog = ButtonDialog:new {
-        buttons = {
-            { {
-                text = _("Add catalog"),
-                callback = function()
-                    UIManager:close(dialog)
-                    self:addEditCatalog()
-                end,
-                align = "left",
-            } },
-            {},
-            { {
-                text = _("Sync all catalogs"),
-                callback = function()
-                    UIManager:close(dialog)
-                    NetworkMgr:runWhenConnected(function()
-                        self.sync_force = false
-                        self:checkSyncDownload()
-                    end)
-                end,
-                align = "left",
-            } },
-            { {
-                text = _("Force sync all catalogs"),
-                callback = function()
-                    UIManager:close(dialog)
-                    NetworkMgr:runWhenConnected(function()
-                        self.sync_force = true
-                        self:checkSyncDownload()
-                    end)
-                end,
-                align = "left",
-            } },
-            { {
-                text = _("Set max number of files to sync"),
-                callback = function()
-                    self:setMaxSyncDownload()
-                end,
-                align = "left",
-            } },
-            { {
-                text = _("Set sync folder"),
-                callback = function()
-                    self:setSyncDir()
-                end,
-                align = "left",
-            } },
-            { {
-                text = _("Set file types to sync"),
-                callback = function()
-                    self:setSyncFiletypes()
-                end,
-                align = "left",
-            } },
-        },
-        shrink_unneeded_width = true,
-        anchor = function()
-            return self.title_bar.left_button.image.dimen
-        end,
-    }
+    local dialog = OPDSMenuBuilder.buildOPDSMenu(self)
     UIManager:show(dialog)
 end
 
 -- Shows facet menu for OPDS catalogs with facets/search support
 function OPDSBrowser:showFacetMenu()
-    local buttons = {}
-    local dialog
     local catalog_url = self.paths[#self.paths].url
+    local has_covers = OPDSMenuBuilder.hasCovers(self.item_table)
 
-    -- Check if we have covers to show view toggle
-    local has_covers = false
-    for _, item in ipairs(self.item_table or {}) do
-        if item.cover_url then
-            has_covers = true
-            break
-        end
-    end
-
-    -- Add view toggle option FIRST if we have covers
-    if has_covers then
-        local current_mode = self._manager.settings.display_mode or "list"
-        local toggle_text
-        if current_mode == "list" then
-            toggle_text = OPDSConstants.ICONS.GRID_VIEW .. " " .. _("Switch to Grid View")
-        else
-            toggle_text = OPDSConstants.ICONS.LIST_VIEW .. " " .. _("Switch to List View")
-        end
-
-        table.insert(buttons, { {
-            text = toggle_text,
-            callback = function()
-                UIManager:close(dialog)
-                self:toggleViewMode()
-            end,
-            align = "left",
-        } })
-        table.insert(buttons, {})
-    end
-
-    -- Add sub-catalog to bookmarks option
-    table.insert(buttons, { {
-        text = OPDSConstants.ICONS.ADD_CATALOG .. " " .. _("Add catalog"),
-        callback = function()
-            UIManager:close(dialog)
-            self:addSubCatalog(catalog_url)
-        end,
-        align = "left",
-    } })
-    table.insert(buttons, {})
-
-    -- Add search option if available
-    if self.search_url then
-        table.insert(buttons, { {
-            text = OPDSConstants.ICONS.SEARCH .. " " .. _("Search"),
-            callback = function()
-                UIManager:close(dialog)
-                self:searchCatalog(self.search_url)
-            end,
-            align = "left",
-        } })
-        table.insert(buttons, {})
-    end
-
-    -- Add facet groups
-    if self.facet_groups then
-        for group_name, facets in ffiUtil.orderedPairs(self.facet_groups) do
-            table.insert(buttons, {
-                { text = OPDSConstants.ICONS.FILTER .. " " .. group_name, enabled = false, align = "left" }
-            })
-
-            for __, link in ipairs(facets) do
-                local facet_text = link.title
-                if link["thr:count"] then
-                    facet_text = T(_("%1 (%2)"), facet_text, link["thr:count"])
-                end
-                if link["opds:activeFacet"] == "true" then
-                    facet_text = "✓ " .. facet_text
-                end
-                table.insert(buttons, { {
-                    text = facet_text,
-                    callback = function()
-                        UIManager:close(dialog)
-                        self:updateCatalog(url.absolute(catalog_url, link.href))
-                    end,
-                    align = "left",
-                } })
-            end
-            table.insert(buttons, {})
-        end
-    end
-
-    dialog = ButtonDialog:new {
-        buttons = buttons,
-        shrink_unneeded_width = true,
-        anchor = function()
-            return self.title_bar.left_button.image.dimen
-        end,
-    }
+    local dialog = OPDSMenuBuilder.buildFacetMenu(self, catalog_url, has_covers)
     UIManager:show(dialog)
 end
 
 -- Shows menu for catalogs without facets but with covers (for view toggle)
 function OPDSBrowser:showCatalogMenu()
-    local buttons = {}
-    local dialog
     local catalog_url = self.paths[#self.paths].url
+    local has_covers = OPDSMenuBuilder.hasCovers(self.item_table)
 
-    -- Check if we have covers
-    local has_covers = false
-    for _, item in ipairs(self.item_table or {}) do
-        if item.cover_url then
-            has_covers = true
-            break
-        end
-    end
-
-    -- Add view toggle if we have covers
-    if has_covers then
-        local current_mode = self._manager.settings.display_mode or "list"
-        local toggle_text
-        if current_mode == "list" then
-            toggle_text = "\u{25A6} " .. _("Switch to Grid View")
-        else
-            toggle_text = "\u{2261} " .. _("Switch to List View")
-        end
-
-        table.insert(buttons, { {
-            text = toggle_text,
-            callback = function()
-                UIManager:close(dialog)
-                self:toggleViewMode()
-            end,
-            align = "left",
-        } })
-        table.insert(buttons, {})
-    end
-
-    -- Add sub-catalog option
-    table.insert(buttons, { {
-        text = "\u{f067} " .. _("Add catalog"),
-        callback = function()
-            UIManager:close(dialog)
-            self:addSubCatalog(catalog_url)
-        end,
-        align = "left",
-    } })
-
-    dialog = ButtonDialog:new {
-        buttons = buttons,
-        shrink_unneeded_width = true,
-        anchor = function()
-            return self.title_bar.left_button.image.dimen
-        end,
-    }
+    local dialog = OPDSMenuBuilder.buildCatalogMenu(self, catalog_url, has_covers)
     UIManager:show(dialog)
 end
 
@@ -350,104 +157,13 @@ function OPDSBrowser:genItemTableFromRoot()
 end
 
 function OPDSBrowser:addEditCatalog(item)
-    local fields = {
-        {
-            hint = _("Catalog name"),
-        },
-        {
-            hint = _("Catalog URL"),
-        },
-        {
-            hint = _("Username (optional)"),
-        },
-        {
-            hint = _("Password (optional)"),
-            text_type = "password",
-        },
-    }
-    local title
-    if item then
-        title = _("Edit OPDS catalog")
-        fields[1].text = item.text
-        fields[2].text = item.url
-        fields[3].text = item.username
-        fields[4].text = item.password
-    else
-        title = _("Add OPDS catalog")
-    end
-
-    local dialog, check_button_raw_names, check_button_sync_catalog
-    dialog = MultiInputDialog:new {
-        title = title,
-        fields = fields,
-        buttons = {
-            {
-                {
-                    text = _("Cancel"),
-                    id = "close",
-                    callback = function()
-                        UIManager:close(dialog)
-                    end,
-                },
-                {
-                    text = _("Save"),
-                    callback = function()
-                        local new_fields = dialog:getFields()
-                        new_fields[5] = check_button_raw_names.checked or nil
-                        new_fields[6] = check_button_sync_catalog.checked or nil
-                        self:editCatalogFromInput(new_fields, item)
-                        UIManager:close(dialog)
-                    end,
-                },
-            },
-        },
-    }
-    check_button_raw_names = CheckButton:new {
-        text = _("Use server filenames"),
-        checked = item and item.raw_names,
-        parent = dialog,
-    }
-    check_button_sync_catalog = CheckButton:new {
-        text = _("Sync catalog"),
-        checked = item and item.sync,
-        parent = dialog,
-    }
-    dialog:addWidget(check_button_raw_names)
-    dialog:addWidget(check_button_sync_catalog)
+    local dialog = OPDSMenuBuilder.buildCatalogEditDialog(self, item)
     UIManager:show(dialog)
     dialog:onShowKeyboard()
 end
 
 function OPDSBrowser:addSubCatalog(item_url)
-    local dialog
-    dialog = InputDialog:new {
-        title = _("Add OPDS catalog"),
-        input = self.root_catalog_title .. " - " .. self.catalog_title,
-        buttons = {
-            {
-                {
-                    text = _("Cancel"),
-                    id = "close",
-                    callback = function()
-                        UIManager:close(dialog)
-                    end,
-                },
-                {
-                    text = _("Save"),
-                    is_enter_default = true,
-                    callback = function()
-                        local name = dialog:getInputText()
-                        if name ~= "" then
-                            UIManager:close(dialog)
-                            local fields = { name, item_url,
-                                self.root_catalog_username, self.root_catalog_password, self.root_catalog_raw_names }
-                            self:editCatalogFromInput(fields, nil, true)
-                        end
-                    end,
-                },
-            },
-        },
-    }
+    local dialog = OPDSMenuBuilder.buildSubCatalogDialog(self, item_url)
     UIManager:show(dialog)
     dialog:onShowKeyboard()
 end
@@ -824,34 +540,7 @@ function OPDSBrowser:appendCatalog(item_url)
 end
 
 function OPDSBrowser:searchCatalog(item_url)
-    local dialog
-    dialog = InputDialog:new {
-        title = _("Search OPDS catalog"),
-        input_hint = _("Alexandre Dumas"),
-        description = _("%s in url will be replaced by your input"),
-        buttons = {
-            {
-                {
-                    text = _("Cancel"),
-                    id = "close",
-                    callback = function()
-                        UIManager:close(dialog)
-                    end,
-                },
-                {
-                    text = _("Search"),
-                    is_enter_default = true,
-                    callback = function()
-                        UIManager:close(dialog)
-                        self.catalog_title = _("Search results")
-                        local search_str = util.urlEncode(dialog:getInputText())
-                        item_url = item_url:gsub("%%s", function() return search_str end)
-                        self:updateCatalog(item_url)
-                    end,
-                },
-            },
-        },
-    }
+    local dialog = OPDSMenuBuilder.buildSearchDialog(self, item_url)
     UIManager:show(dialog)
     dialog:onShowKeyboard()
 end
@@ -899,7 +588,7 @@ function OPDSBrowser:showDownloads(item)
                     {
                         -- @translators "Stream" here refers to being able to read documents from an OPDS server without downloading them completely, on a page by page basis.
                         text = OPDSConstants.ICONS.STREAM_RESUME ..
-                        " " .. _("Resume stream from page") .. " " .. acquisition.last_read,                                             -- prepend BLACK RIGHT-POINTING TRIANGLE
+                            " " .. _("Resume stream from page") .. " " .. acquisition.last_read, -- prepend BLACK RIGHT-POINTING TRIANGLE
                         callback = function()
                             OPDSPSE:streamPages(acquisition.href, acquisition.count, false, self.root_catalog_username,
                                 self.root_catalog_password, acquisition.last_read)
