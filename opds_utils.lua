@@ -133,7 +133,7 @@ end
 
 -- Parse author from entry (handles various formats)
 -- @param entry_author table Author information from OPDS entry
--- @param default string Default value if parsing fails
+-- @param _default string Default value if parsing fails
 -- @return string|nil Parsed author name or nil
 function OPDSUtils.parseEntryAuthor(entry_author, _default)
 	_default = _default or "Unknown Author"
