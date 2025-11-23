@@ -135,8 +135,8 @@ end
 -- @param entry_author table Author information from OPDS entry
 -- @param default string Default value if parsing fails
 -- @return string|nil Parsed author name or nil
-function OPDSUtils.parseEntryAuthor(entry_author, default)
-	default = default or "Unknown Author"
+function OPDSUtils.parseEntryAuthor(entry_author, _default)
+	_default = _default or "Unknown Author"
 
 	if type(entry_author) ~= "table" or not entry_author.name then
 		return nil
