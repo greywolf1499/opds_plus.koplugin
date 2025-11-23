@@ -135,8 +135,8 @@ end
 -- @param entry_author table Author information from OPDS entry
 -- @param _default string Default value if parsing fails
 -- @return string|nil Parsed author name or nil
-function OPDSUtils.parseEntryAuthor(entry_author, _default)
-	_default = _default or "Unknown Author"
+function OPDSUtils.parseEntryAuthor(entry_author, default)
+	default = default or "Unknown Author"
 
 	if type(entry_author) ~= "table" or not entry_author.name then
 		return nil
@@ -147,12 +147,15 @@ function OPDSUtils.parseEntryAuthor(entry_author, _default)
 	if type(author) == "table" then
 		if #author > 0 then
 			author = table.concat(author, ", ")
+			return author
 		else
 			return nil
 		end
+	elseif type(author) == "string" then
+		return author
 	end
 
-	return author
+	return default
 end
 
 -- Check if a link should be treated as a catalog navigation link
