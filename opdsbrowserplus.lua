@@ -33,31 +33,27 @@ local T = ffiUtil.template
 -- Import the custom cover menu for displaying book covers
 local OPDSCoverMenu = require("opdscovermenuplus")
 
+-- Import constants and utilities
+local OPDSConstants = require("opds_constants")
+local OPDSUtils = require("opds_utils")
+
 -- cache catalog parsed from feed xml
 local CatalogCache = Cache:new {
     -- Make it 20 slots, with no storage space constraints
-    slots = 20,
+    slots = OPDSConstants.CACHE_SLOTS,
 }
 
 -- Changed from Menu:extend to OPDSCoverMenu:extend to support cover images
 local OPDSBrowser = OPDSCoverMenu:extend {
-    catalog_type             = "application/atom%+xml",
-    search_type              = "application/opensearchdescription%+xml",
-    search_template_type     = "application/atom%+xml",
-    acquisition_rel          = "^http://opds%-spec%.org/acquisition",
-    borrow_rel               = "http://opds-spec.org/acquisition/borrow",
-    stream_rel               = "http://vaemendis.net/opds-pse/stream",
-    facet_rel                = "http://opds-spec.org/facet",
-    image_rel                = {
-        ["http://opds-spec.org/image"] = true,
-        ["http://opds-spec.org/cover"] = true,
-        ["x-stanza-cover-image"] = true,
-    },
-    thumbnail_rel            = {
-        ["http://opds-spec.org/image/thumbnail"] = true,
-        ["http://opds-spec.org/thumbnail"] = true,
-        ["x-stanza-cover-image-thumbnail"] = true,
-    },
+    catalog_type             = OPDSConstants.CATALOG_TYPE,
+    search_type              = OPDSConstants.SEARCH_TYPE,
+    search_template_type     = OPDSConstants.SEARCH_TEMPLATE_TYPE,
+    acquisition_rel          = OPDSConstants.ACQUISITION_REL,
+    borrow_rel               = OPDSConstants.BORROW_REL,
+    stream_rel               = OPDSConstants.STREAM_REL,
+    facet_rel                = OPDSConstants.FACET_REL,
+    image_rel                = OPDSConstants.IMAGE_REL,
+    thumbnail_rel            = OPDSConstants.THUMBNAIL_REL,
 
     root_catalog_title       = nil,
     root_catalog_username    = nil,
@@ -70,7 +66,7 @@ local OPDSBrowser = OPDSCoverMenu:extend {
 function OPDSBrowser:init()
     self.item_table = self:genItemTableFromRoot()
     self.catalog_title = nil
-    self.title_bar_left_icon = "appbar.menu"
+    self.title_bar_left_icon = OPDSConstants.ICONS.MENU
     self.onLeftButtonTap = function()
         self:showOPDSMenu()
     end
@@ -206,9 +202,9 @@ function OPDSBrowser:showFacetMenu()
         local current_mode = self._manager.settings.display_mode or "list"
         local toggle_text
         if current_mode == "list" then
-            toggle_text = "\u{25A6} " .. _("Switch to Grid View")
+            toggle_text = OPDSConstants.ICONS.GRID_VIEW .. " " .. _("Switch to Grid View")
         else
-            toggle_text = "\u{2261} " .. _("Switch to List View")
+            toggle_text = OPDSConstants.ICONS.LIST_VIEW .. " " .. _("Switch to List View")
         end
 
         table.insert(buttons, { {
@@ -224,7 +220,7 @@ function OPDSBrowser:showFacetMenu()
 
     -- Add sub-catalog to bookmarks option
     table.insert(buttons, { {
-        text = "\u{f067} " .. _("Add catalog"),
+        text = OPDSConstants.ICONS.ADD_CATALOG .. " " .. _("Add catalog"),
         callback = function()
             UIManager:close(dialog)
             self:addSubCatalog(catalog_url)
@@ -236,7 +232,7 @@ function OPDSBrowser:showFacetMenu()
     -- Add search option if available
     if self.search_url then
         table.insert(buttons, { {
-            text = "\u{f002} " .. _("Search"),
+            text = OPDSConstants.ICONS.SEARCH .. " " .. _("Search"),
             callback = function()
                 UIManager:close(dialog)
                 self:searchCatalog(self.search_url)
@@ -250,7 +246,7 @@ function OPDSBrowser:showFacetMenu()
     if self.facet_groups then
         for group_name, facets in ffiUtil.orderedPairs(self.facet_groups) do
             table.insert(buttons, {
-                { text = "\u{f0b0} " .. group_name, enabled = false, align = "left" }
+                { text = OPDSConstants.ICONS.FILTER .. " " .. group_name, enabled = false, align = "left" }
             })
 
             for __, link in ipairs(facets) do
@@ -340,26 +336,6 @@ function OPDSBrowser:showCatalogMenu()
     UIManager:show(dialog)
 end
 
-local function buildRootEntry(server)
-    local icons = ""
-    if server.username then
-        icons = "\u{f2c0}"
-    end
-    if server.sync then
-        icons = "\u{f46a} " .. icons
-    end
-    return {
-        text       = server.title,
-        mandatory  = icons,
-        url        = server.url,
-        username   = server.username,
-        password   = server.password,
-        raw_names  = server.raw_names,
-        searchable = server.url and server.url:match("%%s") and true or false,
-        sync       = server.sync,
-    }
-end
-
 function OPDSBrowser:genItemTableFromRoot()
     local item_table = {
         {
@@ -368,7 +344,7 @@ function OPDSBrowser:genItemTableFromRoot()
         },
     }
     for _, server in ipairs(self.servers) do
-        table.insert(item_table, buildRootEntry(server))
+        table.insert(item_table, OPDSUtils.buildRootEntry(server))
     end
     return item_table
 end
@@ -485,7 +461,7 @@ function OPDSBrowser:editCatalogFromInput(fields, item, no_refresh)
         raw_names = fields[5],
         sync      = fields[6],
     }
-    local new_item = buildRootEntry(new_server)
+    local new_item = OPDSUtils.buildRootEntry(new_server)
     local new_idx, itemnumber
     if item then
         new_idx = item.idx
@@ -591,13 +567,7 @@ function OPDSBrowser:getServerFileName(item_url, filetype)
     local filename
 
     if headers then
-        local disposition = headers["content-disposition"]
-        if disposition then
-            filename = disposition:match('filename="([^"]+)"')
-            if not filename then
-                filename = disposition:match('filename=([^;]+)')
-            end
-        end
+        filename = OPDSUtils.parseContentDisposition(headers["content-disposition"])
 
         if not filename and headers["location"] then
             filename = headers["location"]:gsub(".*/", "")
@@ -605,15 +575,10 @@ function OPDSBrowser:getServerFileName(item_url, filetype)
     end
 
     if not filename then
-        filename = item_url:gsub(".*/", ""):gsub("?.*", "")
+        filename = OPDSUtils.extractFilenameFromUrl(item_url)
     end
 
-    if filename and filetype then
-        local current_suffix = util.getFileNameSuffix(filename)
-        if not current_suffix then
-            filename = filename .. "." .. filetype:lower()
-        end
-    end
+    filename = OPDSUtils.ensureFileExtension(filename, filetype)
 
     return filename
 end
@@ -657,7 +622,7 @@ function OPDSBrowser:genItemTableFromCatalog(catalog, item_url)
     self.facet_groups = {}
 
     local function build_href(href)
-        return url.absolute(item_url, href)
+        return OPDSUtils.buildAbsoluteUrl(item_url, href)
     end
 
     local has_opensearch = false
@@ -701,12 +666,7 @@ function OPDSBrowser:genItemTableFromCatalog(catalog, item_url)
         if entry.link then
             for ___, link in ipairs(entry.link) do
                 local link_href = build_href(link.href)
-                if link.type and link.type:find(self.catalog_type)
-                    and (not link.rel
-                        or link.rel == "subsection"
-                        or link.rel == "http://opds-spec.org/subsection"
-                        or link.rel == "http://opds-spec.org/sort/popular"
-                        or link.rel == "http://opds-spec.org/sort/new") then
+                if OPDSUtils.isCatalogNavigationLink(link, self.catalog_type) then
                     item.url = link_href
                 end
                 if link.rel or link.title then
@@ -714,21 +674,14 @@ function OPDSBrowser:genItemTableFromCatalog(catalog, item_url)
                         table.insert(item.acquisitions, {
                             type = "borrow",
                         })
-                    elseif link.rel and link.rel:match(self.acquisition_rel) then
+                    elseif OPDSUtils.isAcquisitionLink(link, self.acquisition_rel) then
                         table.insert(item.acquisitions, {
                             type  = link.type,
                             href  = link_href,
                             title = link.title,
                         })
                     elseif link.rel == self.stream_rel then
-                        local count, last_read
-                        for k, v in pairs(link) do
-                            if k:sub(-6) == ":count" then
-                                count = tonumber(v)
-                            elseif k:sub(-9) == ":lastRead" then
-                                last_read = tonumber(v)
-                            end
-                        end
+                        local count, last_read = OPDSUtils.extractPSEStreamInfo(link)
                         if count then
                             table.insert(item.acquisitions, {
                                 type      = link.type,
@@ -778,29 +731,13 @@ function OPDSBrowser:genItemTableFromCatalog(catalog, item_url)
                 end
             end
         end
-        local title = _("Unknown")
-        if type(entry.title) == "string" then
-            title = entry.title
-        elseif type(entry.title) == "table" then
-            if type(entry.title.type) == "string" and entry.title.div ~= "" then
-                title = entry.title.div
-            end
-        end
+        local title = OPDSUtils.parseEntryTitle(entry.title, _(OPDSConstants.DEFAULT_TITLE))
         item.text = title
-        local author = _("Unknown Author")
-        if type(entry.author) == "table" and entry.author.name then
-            author = entry.author.name
-            if type(author) == "table" then
-                if #author > 0 then
-                    author = table.concat(author, ", ")
-                else
-                    author = nil
-                end
-            end
-            if author then
-                item.text = title .. " - " .. author
-            end
+        local author = OPDSUtils.parseEntryAuthor(entry.author, _(OPDSConstants.DEFAULT_AUTHOR))
+        if author then
+            item.text = title .. " - " .. author
         end
+
 
         -- Add cover information for display
         if (item.thumbnail or item.image) and item.acquisitions and #item.acquisitions > 0 then
@@ -852,13 +789,13 @@ function OPDSBrowser:updateCatalog(item_url, paths_updated)
         -- Set appropriate title bar icon based on content
         if self.facet_groups or self.search_url then
             -- Has facets/search - use facet menu
-            self.title_bar_left_icon = "appbar.menu"
+            self.title_bar_left_icon = OPDSConstants.ICONS.MENU
             self.onLeftButtonTap = function()
                 self:showFacetMenu()
             end
         else
             -- No facets - use catalog menu for view toggle + add catalog
-            self.title_bar_left_icon = cover_count > 0 and "appbar.menu" or "plus"
+            self.title_bar_left_icon = cover_count > 0 and OPDSConstants.ICONS.MENU or OPDSConstants.ICONS.PLUS
             self.onLeftButtonTap = function()
                 if cover_count > 0 then
                     self:showCatalogMenu()
@@ -926,7 +863,7 @@ function OPDSBrowser:showDownloads(item)
 
     local function createTitle(path, file) -- title for ButtonDialog
         return T(_("Download folder:\n%1\n\nDownload filename:\n%2\n\nDownload file type:"),
-            BD.dirpath(path), file or _("<server filename>"))
+            BD.dirpath(path), file or _(OPDSConstants.DEFAULT_FILENAME))
     end
 
     local buttons = {}                            -- buttons for ButtonDialog
@@ -938,7 +875,7 @@ function OPDSBrowser:showDownloads(item)
                 {
                     {
                         -- @translators "Stream" here refers to being able to read documents from an OPDS server without downloading them completely, on a page by page basis.
-                        text = "\u{23EE} " .. _("Page stream"), -- prepend BLACK LEFT-POINTING DOUBLE TRIANGLE WITH BAR
+                        text = OPDSConstants.ICONS.STREAM_START .. " " .. _("Page stream"), -- prepend BLACK LEFT-POINTING DOUBLE TRIANGLE WITH BAR
                         callback = function()
                             OPDSPSE:streamPages(acquisition.href, acquisition.count, false, self.root_catalog_username,
                                 self.root_catalog_password)
@@ -947,7 +884,7 @@ function OPDSBrowser:showDownloads(item)
                     },
                     {
                         -- @translators "Stream" here refers to being able to read documents from an OPDS server without downloading them completely, on a page by page basis.
-                        text = _("Stream from page") .. " \u{23E9}", -- append BLACK RIGHT-POINTING DOUBLE TRIANGLE
+                        text = _("Stream from page") .. " " .. OPDSConstants.ICONS.STREAM_NEXT, -- append BLACK RIGHT-POINTING DOUBLE TRIANGLE
                         callback = function()
                             OPDSPSE:streamPages(acquisition.href, acquisition.count, true, self.root_catalog_username,
                                 self.root_catalog_password)
@@ -961,7 +898,8 @@ function OPDSBrowser:showDownloads(item)
                 table.insert(stream_buttons, {
                     {
                         -- @translators "Stream" here refers to being able to read documents from an OPDS server without downloading them completely, on a page by page basis.
-                        text = "\u{25B6} " .. _("Resume stream from page") .. " " .. acquisition.last_read, -- prepend BLACK RIGHT-POINTING TRIANGLE
+                        text = OPDSConstants.ICONS.STREAM_RESUME ..
+                        " " .. _("Resume stream from page") .. " " .. acquisition.last_read,                                             -- prepend BLACK RIGHT-POINTING TRIANGLE
                         callback = function()
                             OPDSPSE:streamPages(acquisition.href, acquisition.count, false, self.root_catalog_username,
                                 self.root_catalog_password, acquisition.last_read)
@@ -980,7 +918,7 @@ function OPDSBrowser:showDownloads(item)
             if filetype then -- supported file type
                 local text = url.unescape(acquisition.title or string.upper(filetype))
                 table.insert(download_buttons, {
-                    text = text .. "\u{2B07}", -- append DOWNWARDS BLACK ARROW
+                    text = text .. OPDSConstants.ICONS.DOWNLOAD, -- append DOWNWARDS BLACK ARROW
                     callback = function()
                         UIManager:close(self.download_dialog)
                         local local_path = self:getLocalDownloadPath(filename, filetype, acquisition.href)
