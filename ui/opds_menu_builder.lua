@@ -1,7 +1,6 @@
 -- UI Menu Builder for OPDS Browser
 -- Handles construction of all menu dialogs
 
-local BD = require("ui/bidi")
 local ButtonDialog = require("ui/widget/buttondialog")
 local InputDialog = require("ui/widget/inputdialog")
 local MultiInputDialog = require("ui/widget/multiinputdialog")
