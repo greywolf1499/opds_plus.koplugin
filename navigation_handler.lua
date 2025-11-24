@@ -5,7 +5,6 @@ local DocumentRegistry = require("document/documentregistry")
 local url = require("socket.url")
 local util = require("util")
 local _ = require("gettext")
-local T = require("ffi/util").template
 
 local OPDSConstants = require("opds_constants")
 local OPDSUtils = require("opds_utils")
@@ -317,6 +316,7 @@ function NavigationHandler.appendCatalog(item_url, browser)
 				username = browser.root_catalog_username,
 				password = browser.root_catalog_password,
 			}
+			-- luacheck: ignore 212
 			local items, facets, search = NavigationHandler.genItemTableFromCatalog(
 				catalog, url, context,
 				function(...) if browser._debugLog then browser:_debugLog(...) end end)
