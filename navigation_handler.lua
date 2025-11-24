@@ -1,11 +1,7 @@
 -- Navigation Handler for OPDS Browser
 -- Handles catalog navigation, browsing history, and feed parsing
 
-local BD = require("ui/bidi")
 local DocumentRegistry = require("document/documentregistry")
-local InfoMessage = require("ui/widget/infomessage")
-local UIManager = require("ui/uimanager")
-local logger = require("logger")
 local url = require("socket.url")
 local util = require("util")
 local _ = require("gettext")

@@ -2,7 +2,6 @@ local BD = require("ui/bidi")
 local ButtonDialog = require("ui/widget/buttondialog")
 local ConfirmBox = require("ui/widget/confirmbox")
 local Device = require("device")
-local DocumentRegistry = require("document/documentregistry")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
 local Menu = require("ui/widget/menu")
@@ -13,7 +12,6 @@ local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
 local ffiUtil = require("ffi/util")
 local logger = require("logger")
-local url = require("socket.url")
 local util = require("util")
 local _ = require("gettext")
 local T = ffiUtil.template
@@ -23,7 +21,6 @@ local OPDSCoverMenu = require("opdscovermenuplus")
 
 -- Import constants and utilities
 local OPDSConstants = require("opds_constants")
-local OPDSUtils = require("opds_utils")
 
 -- Import the OPDS menu builder
 local OPDSMenuBuilder = require("ui/opds_menu_builder")
