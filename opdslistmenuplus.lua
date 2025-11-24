@@ -627,7 +627,7 @@ function OPDSListMenu:_loadVisibleCovers()
     self:_debugLog("Loading", #urls, "unique cover URLs")
 
     -- Load covers asynchronously
-    local ImageLoader = require("image_loader")
+    local ImageLoader = require("services.image_loader")
 
     -- Get credentials from the menu (these are set in OPDSBrowser)
     local username = self.root_catalog_username

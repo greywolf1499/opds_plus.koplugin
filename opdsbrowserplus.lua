@@ -26,17 +26,17 @@ local Constants = require("models.constants")
 local OPDSMenuBuilder = require("ui/opds_menu_builder")
 
 -- Import the download manager
-local DownloadManager = require("download_manager")
+local DownloadManager = require("core.download_manager")
 local DownloadDialogBuilder = require("ui/download_dialog_builder")
 
 -- Import the feed fetcher
-local FeedFetcher = require("feed_fetcher")
+local FeedFetcher = require("core.feed_fetcher")
 
 -- Import the catalog manager
-local CatalogManager = require("catalog_manager")
+local CatalogManager = require("core.catalog_manager")
 
 -- Import the navigation handler
-local NavigationHandler = require("navigation_handler")
+local NavigationHandler = require("core.navigation_handler")
 
 -- Import the debug utility
 local Debug = require("utils.debug")

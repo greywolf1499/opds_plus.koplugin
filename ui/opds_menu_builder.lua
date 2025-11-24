@@ -233,7 +233,7 @@ end
 -- @param item table|nil Catalog item to edit (nil for new catalog)
 -- @return table MultiInputDialog widget
 function OPDSMenuBuilder.buildCatalogEditDialog(browser, item)
-	local CatalogManager = require("catalog_manager")
+	local CatalogManager = require("core.catalog_manager")
 	local InfoMessage = require("ui/widget/infomessage")
 
 	local fields = {

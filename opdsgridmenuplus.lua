@@ -826,7 +826,7 @@ function OPDSGridMenu:_loadVisibleCovers()
 
     self:_debugLog("Loading", #urls, "covers")
 
-    local ImageLoader = require("image_loader")
+    local ImageLoader = require("services.image_loader")
     local username = self.root_catalog_username
     local password = self.root_catalog_password
 

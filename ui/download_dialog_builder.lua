@@ -14,7 +14,7 @@ local util = require("util")
 local _ = require("gettext")
 
 local Constants = require("models.constants")
-local OPDSPSE = require("opdspse")
+local OPDSPSE = require("services.kavita")
 
 local DownloadDialogBuilder = {}
 
@@ -29,7 +29,7 @@ function DownloadDialogBuilder.buildDownloadDialog(browser, item, filename, crea
 	local buttons = {}
 	local stream_buttons
 	local download_buttons = {}
-	local DownloadManager = require("download_manager")
+	local DownloadManager = require("core.download_manager")
 
 	-- Track the original filename for reset
 	local filename_orig = filename
@@ -252,7 +252,7 @@ end
 function DownloadDialogBuilder.buildDownloadListItemDialog(download_list_browser, item)
 	local dl_item = download_list_browser._manager.downloads[item.idx]
 	local textviewer
-	local DownloadManager = require("download_manager")
+	local DownloadManager = require("core.download_manager")
 
 	local function remove_item()
 		textviewer:onClose()
@@ -335,7 +335,7 @@ function DownloadDialogBuilder.buildDownloadAllConfirmation(browser)
 		ok_callback = function()
 			NetworkMgr:runWhenConnected(function()
 				Trapper:wrap(function()
-					local DownloadManager = require("download_manager")
+					local DownloadManager = require("core.download_manager")
 					DownloadManager.downloadDownloadList(browser)
 				end)
 			end)
@@ -351,7 +351,7 @@ function DownloadDialogBuilder.buildClearQueueConfirmation(browser)
 		text = _("Remove all downloads?"),
 		ok_text = _("Remove"),
 		ok_callback = function()
-			local DownloadManager = require("download_manager")
+			local DownloadManager = require("core.download_manager")
 			DownloadManager.clearDownloadQueue(browser)
 			browser.download_list:close_callback()
 		end,

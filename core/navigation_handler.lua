@@ -50,7 +50,7 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 					-- Search support
 					if link.type:find(browser_context.search_type) then
 						if link.href then
-							local FeedFetcher = require("feed_fetcher")
+							local FeedFetcher = require("core.feed_fetcher")
 							search_url = build_href(FeedFetcher.getSearchTemplate(
 								build_href(link.href),
 								browser_context.search_template_type,
@@ -208,7 +208,7 @@ end
 -- @param paths_updated boolean Whether paths have already been updated
 -- @return boolean True if successful
 function NavigationHandler.updateCatalog(item_url, browser, paths_updated)
-	local FeedFetcher = require("feed_fetcher")
+	local FeedFetcher = require("core.feed_fetcher")
 
 	if browser._debugLog then
 		browser:_debugLog("updateCatalog called for:", item_url)
@@ -294,7 +294,7 @@ end
 -- @param browser table Browser instance
 -- @return boolean True if items were appended
 function NavigationHandler.appendCatalog(item_url, browser)
-	local FeedFetcher = require("feed_fetcher")
+	local FeedFetcher = require("core.feed_fetcher")
 
 	local menu_table = FeedFetcher.genItemTableFromURL(
 		item_url,
