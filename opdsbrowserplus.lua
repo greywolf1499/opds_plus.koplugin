@@ -1,6 +1,5 @@
 local BD = require("ui/bidi")
 local ButtonDialog = require("ui/widget/buttondialog")
-local Cache = require("cache")
 local ConfirmBox = require("ui/widget/confirmbox")
 local Device = require("device")
 local DocumentRegistry = require("document/documentregistry")
@@ -8,17 +7,12 @@ local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
 local Menu = require("ui/widget/menu")
 local NetworkMgr = require("ui/network/manager")
-local OPDSParser = require("opdsparser")
 local SpinWidget = require("ui/widget/spinwidget")
 local TextViewer = require("ui/widget/textviewer")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
-local http = require("socket.http")
 local ffiUtil = require("ffi/util")
 local logger = require("logger")
-local ltn12 = require("ltn12")
-local socket = require("socket")
-local socketutil = require("socketutil")
 local url = require("socket.url")
 local util = require("util")
 local _ = require("gettext")
@@ -38,11 +32,8 @@ local OPDSMenuBuilder = require("ui/opds_menu_builder")
 local DownloadManager = require("download_manager")
 local DownloadDialogBuilder = require("ui/download_dialog_builder")
 
--- cache catalog parsed from feed xml
-local CatalogCache = Cache:new {
-    -- Make it 20 slots, with no storage space constraints
-    slots = OPDSConstants.CACHE_SLOTS,
-}
+-- Import the feed fetcher
+local FeedFetcher = require("feed_fetcher")
 
 -- Changed from Menu:extend to OPDSCoverMenu:extend to support cover images
 local OPDSBrowser = OPDSCoverMenu:extend {
@@ -200,127 +191,34 @@ function OPDSBrowser:deleteCatalog(item)
 end
 
 function OPDSBrowser:fetchFeed(item_url, headers_only)
-    local sink = {}
-    socketutil:set_timeout(socketutil.LARGE_BLOCK_TIMEOUT, socketutil.LARGE_TOTAL_TIMEOUT)
-    local request = {
-        url      = item_url,
-        method   = headers_only and "HEAD" or "GET",
-        headers  = {
-            ["Accept-Encoding"] = "identity",
-        },
-        sink     = ltn12.sink.table(sink),
-        user     = self.root_catalog_username,
-        password = self.root_catalog_password,
-    }
-    local code, headers, status = socket.skip(1, http.request(request))
-    socketutil:reset_timeout()
-
-    if headers_only then
-        return headers
-    end
-    if code == 200 then
-        local xml = table.concat(sink)
-        return xml ~= "" and xml
-    end
-
-    local text, icon
-    if headers and code == 301 then
-        text = T(_("The catalog has been permanently moved. Please update catalog URL to '%1'."),
-            BD.url(headers.location))
-    elseif headers and code == 302
-        and item_url:match("^https")
-        and headers.location:match("^http[^s]") then
-        text = T(
-            _(
-                "Insecure HTTPS → HTTP downgrade attempted by redirect from:\n\n'%1'\n\nto\n\n'%2'.\n\nPlease inform the server administrator that many clients disallow this because it could be used for a downgrade attack."),
-            BD.url(item_url), BD.url(headers.location))
-        icon = "notice-warning"
-    else
-        local error_message = {
-            ["401"] = _("Authentication required for catalog. Please add a username and password."),
-            ["403"] = _("Failed to authenticate. Please check your username and password."),
-            ["404"] = _("Catalog not found."),
-            ["406"] = _("Cannot get catalog. Server refuses to serve uncompressed content."),
-        }
-        text = code and error_message[tostring(code)] or
-            T(_("Cannot get catalog. Server response status: %1."), status or code)
-    end
-    UIManager:show(InfoMessage:new {
-        text = text,
-        icon = icon,
-    })
-    logger.dbg(string.format("OPDS: Failed to fetch catalog `%s`: %s", item_url, text))
+    return FeedFetcher.fetchFeed(item_url, headers_only,
+        self.root_catalog_username, self.root_catalog_password)
 end
 
 function OPDSBrowser:parseFeed(item_url)
-    local headers = self:fetchFeed(item_url, true)
-    local feed_last_modified = headers and headers["last-modified"]
-    local feed
-    if feed_last_modified then
-        local hash = "opds|catalog|" .. item_url .. "|" .. feed_last_modified
-        feed = CatalogCache:check(hash)
-        if feed then
-            self:_debugLog("Cache hit for", item_url)
-        else
-            self:_debugLog("Cache miss, fetching", item_url)
-            feed = self:fetchFeed(item_url)
-            if feed then
-                CatalogCache:insert(hash, feed)
-            end
-        end
-    else
-        feed = self:fetchFeed(item_url)
-    end
-    if feed then
-        return OPDSParser:parse(feed)
-    end
+    return FeedFetcher.parseFeed(item_url,
+        self.root_catalog_username, self.root_catalog_password,
+        function(...) self:_debugLog(...) end)
 end
 
 function OPDSBrowser:getServerFileName(item_url, filetype)
-    local headers = self:fetchFeed(item_url, true)
-    local filename
-
-    if headers then
-        filename = OPDSUtils.parseContentDisposition(headers["content-disposition"])
-
-        if not filename and headers["location"] then
-            filename = headers["location"]:gsub(".*/", "")
-        end
-    end
-
-    if not filename then
-        filename = OPDSUtils.extractFilenameFromUrl(item_url)
-    end
-
-    filename = OPDSUtils.ensureFileExtension(filename, filetype)
-
-    return filename
+    return FeedFetcher.getServerFileName(item_url, filetype,
+        self.root_catalog_username, self.root_catalog_password)
 end
 
 function OPDSBrowser:getSearchTemplate(osd_url)
-    local search_descriptor = self:parseFeed(osd_url)
-    ---@diagnostic disable-next-line: undefined-field
-    if search_descriptor and search_descriptor.OpenSearchDescription and search_descriptor.OpenSearchDescription.Url then
-        ---@diagnostic disable-next-line: undefined-field
-        for _, candidate in ipairs(search_descriptor.OpenSearchDescription.Url) do
-            if candidate.type and candidate.template and candidate.type:find(self.search_template_type) then
-                return candidate.template:gsub("{searchTerms}", "%%s")
-            end
-        end
-    end
+    return FeedFetcher.getSearchTemplate(osd_url, self.search_template_type,
+        self.root_catalog_username, self.root_catalog_password,
+        function(...) self:_debugLog(...) end)
 end
 
 function OPDSBrowser:genItemTableFromURL(item_url)
-    local ok, catalog = pcall(self.parseFeed, self, item_url)
-    if not ok then
-        logger.info("Cannot get catalog info from", item_url, catalog)
-        UIManager:show(InfoMessage:new {
-            text = T(_("Cannot get catalog info from %1"), (item_url and BD.url(item_url) or "nil")),
-        })
-        ---@diagnostic disable-next-line: cast-local-type
-        catalog = nil
-    end
-    return self:genItemTableFromCatalog(catalog, item_url)
+    return FeedFetcher.genItemTableFromURL(item_url,
+        self.root_catalog_username, self.root_catalog_password,
+        function(...) self:_debugLog(...) end,
+        function(catalog, catalog_url)
+            return self:genItemTableFromCatalog(catalog, catalog_url)
+        end)
 end
 
 function OPDSBrowser:genItemTableFromCatalog(catalog, item_url)
