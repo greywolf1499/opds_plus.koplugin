@@ -6,7 +6,7 @@ local url = require("socket.url")
 local util = require("util")
 local _ = require("gettext")
 
-local OPDSConstants = require("opds_constants")
+local Constants = require("models.constants")
 local OPDSUtils = require("opds_utils")
 
 local NavigationHandler = {}
@@ -168,9 +168,9 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 		end
 
 		-- Parse title and author
-		local title = OPDSUtils.parseEntryTitle(entry.title, _(OPDSConstants.DEFAULT_TITLE))
+		local title = OPDSUtils.parseEntryTitle(entry.title, _(Constants.DEFAULT_TITLE))
 		item.text = title
-		local author = OPDSUtils.parseEntryAuthor(entry.author, _(OPDSConstants.DEFAULT_AUTHOR))
+		local author = OPDSUtils.parseEntryAuthor(entry.author, _(Constants.DEFAULT_AUTHOR))
 		if author then
 			item.text = title .. " - " .. author
 		end
@@ -263,13 +263,13 @@ function NavigationHandler.updateCatalog(item_url, browser, paths_updated)
 		-- Set appropriate title bar icon based on content
 		if browser.facet_groups or browser.search_url then
 			-- Has facets/search - use facet menu
-			browser.title_bar_left_icon = OPDSConstants.ICONS.MENU
+			browser.title_bar_left_icon = Constants.ICONS.MENU
 			browser.onLeftButtonTap = function()
 				browser:showFacetMenu()
 			end
 		else
 			-- No facets - use catalog menu for view toggle + add catalog
-			browser.title_bar_left_icon = cover_count > 0 and OPDSConstants.ICONS.MENU or OPDSConstants.ICONS.PLUS
+			browser.title_bar_left_icon = cover_count > 0 and Constants.ICONS.MENU or Constants.ICONS.PLUS
 			browser.onLeftButtonTap = function()
 				if cover_count > 0 then
 					browser:showCatalogMenu()

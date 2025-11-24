@@ -13,7 +13,7 @@ local url = require("socket.url")
 local util = require("util")
 local _ = require("gettext")
 
-local OPDSConstants = require("opds_constants")
+local Constants = require("models.constants")
 local OPDSPSE = require("opdspse")
 
 local DownloadDialogBuilder = {}
@@ -40,7 +40,7 @@ function DownloadDialogBuilder.buildDownloadDialog(browser, item, filename, crea
 			stream_buttons = {
 				{
 					{
-						text = OPDSConstants.ICONS.STREAM_START .. " " .. _("Page stream"),
+						text = Constants.ICONS.STREAM_START .. " " .. _("Page stream"),
 						callback = function()
 							OPDSPSE:streamPages(acquisition.href, acquisition.count, false,
 								browser.root_catalog_username, browser.root_catalog_password)
@@ -48,7 +48,7 @@ function DownloadDialogBuilder.buildDownloadDialog(browser, item, filename, crea
 						end,
 					},
 					{
-						text = _("Stream from page") .. " " .. OPDSConstants.ICONS.STREAM_NEXT,
+						text = _("Stream from page") .. " " .. Constants.ICONS.STREAM_NEXT,
 						callback = function()
 							OPDSPSE:streamPages(acquisition.href, acquisition.count, true,
 								browser.root_catalog_username, browser.root_catalog_password)
@@ -61,7 +61,7 @@ function DownloadDialogBuilder.buildDownloadDialog(browser, item, filename, crea
 			if acquisition.last_read then
 				table.insert(stream_buttons, {
 					{
-						text = OPDSConstants.ICONS.STREAM_RESUME .. " " ..
+						text = Constants.ICONS.STREAM_RESUME .. " " ..
 							_("Resume stream from page") .. " " .. acquisition.last_read,
 						callback = function()
 							OPDSPSE:streamPages(acquisition.href, acquisition.count, false,
@@ -82,7 +82,7 @@ function DownloadDialogBuilder.buildDownloadDialog(browser, item, filename, crea
 			if filetype then
 				local text = url.unescape(acquisition.title or string.upper(filetype))
 				table.insert(download_buttons, {
-					text = text .. OPDSConstants.ICONS.DOWNLOAD,
+					text = text .. Constants.ICONS.DOWNLOAD,
 					callback = function()
 						UIManager:close(browser.download_dialog)
 						local local_path = DownloadManager.getLocalDownloadPath(

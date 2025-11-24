@@ -14,14 +14,14 @@ local socketutil = require("socketutil")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
-local OPDSConstants = require("opds_constants")
+local Constants = require("models.constants")
 local OPDSUtils = require("opds_utils")
 
 local FeedFetcher = {}
 
 -- Create the catalog cache
 local CatalogCache = Cache:new {
-	slots = OPDSConstants.CACHE_SLOTS,
+	slots = Constants.CACHE_SLOTS,
 }
 
 -- Fetch raw XML feed from URL

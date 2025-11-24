@@ -20,7 +20,7 @@ local T = ffiUtil.template
 local OPDSCoverMenu = require("opdscovermenuplus")
 
 -- Import constants and utilities
-local OPDSConstants = require("opds_constants")
+local Constants = require("models.constants")
 
 -- Import the OPDS menu builder
 local OPDSMenuBuilder = require("ui/opds_menu_builder")
@@ -40,15 +40,15 @@ local NavigationHandler = require("navigation_handler")
 
 -- Changed from Menu:extend to OPDSCoverMenu:extend to support cover images
 local OPDSBrowser = OPDSCoverMenu:extend {
-    catalog_type             = OPDSConstants.CATALOG_TYPE,
-    search_type              = OPDSConstants.SEARCH_TYPE,
-    search_template_type     = OPDSConstants.SEARCH_TEMPLATE_TYPE,
-    acquisition_rel          = OPDSConstants.ACQUISITION_REL,
-    borrow_rel               = OPDSConstants.BORROW_REL,
-    stream_rel               = OPDSConstants.STREAM_REL,
-    facet_rel                = OPDSConstants.FACET_REL,
-    image_rel                = OPDSConstants.IMAGE_REL,
-    thumbnail_rel            = OPDSConstants.THUMBNAIL_REL,
+    catalog_type             = Constants.CATALOG_TYPE,
+    search_type              = Constants.SEARCH_TYPE,
+    search_template_type     = Constants.SEARCH_TEMPLATE_TYPE,
+    acquisition_rel          = Constants.ACQUISITION_REL,
+    borrow_rel               = Constants.BORROW_REL,
+    stream_rel               = Constants.STREAM_REL,
+    facet_rel                = Constants.FACET_REL,
+    image_rel                = Constants.IMAGE_REL,
+    thumbnail_rel            = Constants.THUMBNAIL_REL,
 
     root_catalog_title       = nil,
     root_catalog_username    = nil,
@@ -61,7 +61,7 @@ local OPDSBrowser = OPDSCoverMenu:extend {
 function OPDSBrowser:init()
     self.item_table = self:genItemTableFromRoot()
     self.catalog_title = nil
-    self.title_bar_left_icon = OPDSConstants.ICONS.MENU
+    self.title_bar_left_icon = Constants.ICONS.MENU
     self.onLeftButtonTap = function()
         self:showOPDSMenu()
     end
@@ -246,7 +246,7 @@ function OPDSBrowser:showDownloads(item)
 
     local function createTitle(path, file)
         return T(_("Download folder:\n%1\n\nDownload filename:\n%2\n\nDownload file type:"),
-            BD.dirpath(path), file or _(OPDSConstants.DEFAULT_FILENAME))
+            BD.dirpath(path), file or _(Constants.DEFAULT_FILENAME))
     end
 
     self.download_dialog = DownloadDialogBuilder.buildDownloadDialog(self, item, filename, createTitle)
