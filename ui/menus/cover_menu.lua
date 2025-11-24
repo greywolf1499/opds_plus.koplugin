@@ -2,7 +2,6 @@ local Menu = require("ui/widget/menu")
 local OPDSListMenu = require("ui.menus.list_menu")
 local OPDSGridMenu = require("ui.menus.grid_menu")
 local UIManager = require("ui/uimanager")
-local logger = require("logger")
 local Debug = require("utils.debug")
 
 local OPDSCoverMenu = Menu:extend {

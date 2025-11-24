@@ -2,7 +2,7 @@
 -- Handles catalog navigation, browsing history, and feed parsing
 
 local DocumentRegistry = require("document/documentregistry")
-local url = require("socket.url")
+local socket_url = require("socket.url")
 local util = require("util")
 local _ = require("gettext")
 
@@ -139,7 +139,7 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 					if link.title == "pdf" or link.type == "application/pdf"
 						and link.rel ~= "subsection" then
 						local original_href = link.href
-						local parsed = url.parse(original_href)
+						local parsed = socket_url.parse(original_href)
 						if not parsed then parsed = { path = original_href } end
 						local path = parsed.path or ""
 
@@ -155,7 +155,7 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 							end
 							if appended then
 								parsed.path = path
-								local new_href = url.build(parsed)
+								local new_href = socket_url.build(parsed)
 								table.insert(item.acquisitions, {
 									type = link.title,
 									href = build_href(new_href),

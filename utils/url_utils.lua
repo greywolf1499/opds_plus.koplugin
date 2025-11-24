@@ -2,7 +2,6 @@
 -- Handles URL construction, parsing, and manipulation
 
 local url = require("socket.url")
-local logger = require("logger")
 
 local UrlUtils = {}
 
