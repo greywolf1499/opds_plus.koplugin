@@ -56,7 +56,7 @@ function DownloadManager.getLocalDownloadPath(browser, filename, filetype, remot
 	local download_dir = DownloadManager.getCurrentDownloadDir(browser)
 
 	filename = filename and filename .. "." .. filetype:lower()
-		or browser:getServerFileName(remote_url, filetype)
+		or browser:getServerFileName(remote_url, filetype) .. "TESTING"
 	filename = util.getSafeFilename(filename, download_dir)
 	filename = (download_dir ~= "/" and download_dir or "") .. '/' .. filename
 	return util.fixUtf8(filename, "_")
