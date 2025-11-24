@@ -38,6 +38,9 @@ local FeedFetcher = require("feed_fetcher")
 -- Import the catalog manager
 local CatalogManager = require("catalog_manager")
 
+-- Import the navigation handler
+local NavigationHandler = require("navigation_handler")
+
 -- Changed from Menu:extend to OPDSCoverMenu:extend to support cover images
 local OPDSBrowser = OPDSCoverMenu:extend {
     catalog_type             = OPDSConstants.CATALOG_TYPE,
@@ -200,217 +203,37 @@ function OPDSBrowser:genItemTableFromURL(item_url)
 end
 
 function OPDSBrowser:genItemTableFromCatalog(catalog, item_url)
-    local item_table = {}
-    self.facet_groups = nil
-    self.search_url = nil
+    local context = {
+        catalog_type = self.catalog_type,
+        search_type = self.search_type,
+        search_template_type = self.search_template_type,
+        acquisition_rel = self.acquisition_rel,
+        borrow_rel = self.borrow_rel,
+        stream_rel = self.stream_rel,
+        facet_rel = self.facet_rel,
+        thumbnail_rel = self.thumbnail_rel,
+        image_rel = self.image_rel,
+        sync = self.sync,
+        username = self.root_catalog_username,
+        password = self.root_catalog_password,
+    }
 
-    if not catalog then
-        return item_table
-    end
+    local item_table, facet_groups, search_url = NavigationHandler.genItemTableFromCatalog(
+        catalog, item_url, context,
+        function(...) self:_debugLog(...) end)
 
-    local feed = catalog.feed or catalog
-    self.facet_groups = {}
-
-    local function build_href(href)
-        return OPDSUtils.buildAbsoluteUrl(item_url, href)
-    end
-
-    local has_opensearch = false
-    local hrefs = {}
-    if feed.link then
-        for __, link in ipairs(feed.link) do
-            if link.type ~= nil then
-                if link.type:find(self.catalog_type) then
-                    if link.rel and link.href then
-                        hrefs[link.rel] = build_href(link.href)
-                    end
-                end
-                if not self.sync then
-                    if link.type:find(self.search_type) then
-                        if link.href then
-                            self.search_url = build_href(self:getSearchTemplate(build_href(link.href)))
-                            has_opensearch = true
-                        end
-                    end
-                    if link.type:find(self.search_template_type) and link.rel and link.rel:find("search") then
-                        if link.href and not has_opensearch then
-                            self.search_url = build_href(link.href:gsub("{searchTerms}", "%%s"))
-                        end
-                    end
-                    if link.rel == self.facet_rel then
-                        local group_name = link["opds:facetGroup"] or _("Filters")
-                        if not self.facet_groups[group_name] then
-                            self.facet_groups[group_name] = {}
-                        end
-                        table.insert(self.facet_groups[group_name], link)
-                    end
-                end
-            end
-        end
-    end
-    item_table.hrefs = hrefs
-
-    for __, entry in ipairs(feed.entry or {}) do
-        local item = {}
-        item.acquisitions = {}
-        if entry.link then
-            for ___, link in ipairs(entry.link) do
-                local link_href = build_href(link.href)
-                if OPDSUtils.isCatalogNavigationLink(link, self.catalog_type) then
-                    item.url = link_href
-                end
-                if link.rel or link.title then
-                    if link.rel == self.borrow_rel then
-                        table.insert(item.acquisitions, {
-                            type = "borrow",
-                        })
-                    elseif OPDSUtils.isAcquisitionLink(link, self.acquisition_rel) then
-                        table.insert(item.acquisitions, {
-                            type  = link.type,
-                            href  = link_href,
-                            title = link.title,
-                        })
-                    elseif link.rel == self.stream_rel then
-                        local count, last_read = OPDSUtils.extractPSEStreamInfo(link)
-                        if count then
-                            table.insert(item.acquisitions, {
-                                type      = link.type,
-                                href      = link_href,
-                                title     = link.title,
-                                count     = count,
-                                last_read = last_read and last_read > 0 and last_read or nil
-                            })
-                        end
-                    elseif self.thumbnail_rel[link.rel] then
-                        item.thumbnail = link_href
-                    elseif self.image_rel[link.rel] then
-                        item.image = link_href
-                    elseif link.rel ~= "alternate" and DocumentRegistry:hasProvider(nil, link.type) then
-                        table.insert(item.acquisitions, {
-                            type  = link.type,
-                            href  = link_href,
-                            title = link.title,
-                        })
-                    end
-                    if link.title == "pdf" or link.type == "application/pdf"
-                        and link.rel ~= "subsection" then
-                        local original_href = link.href
-                        local parsed = url.parse(original_href)
-                        if not parsed then parsed = { path = original_href } end
-                        local path = parsed.path or ""
-                        if not util.stringEndsWith(path, "/pdf/") then
-                            local appended = false
-                            if util.getFileNameSuffix(path) ~= "pdf" then
-                                if path == "" then
-                                    path = ".pdf"
-                                else
-                                    path = path .. ".pdf"
-                                end
-                                appended = true
-                            end
-                            if appended then
-                                parsed.path = path
-                                local new_href = url.build(parsed)
-                                table.insert(item.acquisitions, {
-                                    type = link.title,
-                                    href = build_href(new_href),
-                                })
-                            end
-                        end
-                    end
-                end
-            end
-        end
-        local title = OPDSUtils.parseEntryTitle(entry.title, _(OPDSConstants.DEFAULT_TITLE))
-        item.text = title
-        local author = OPDSUtils.parseEntryAuthor(entry.author, _(OPDSConstants.DEFAULT_AUTHOR))
-        if author then
-            item.text = title .. " - " .. author
-        end
-
-
-        -- Add cover information for display
-        if (item.thumbnail or item.image) and item.acquisitions and #item.acquisitions > 0 then
-            self:_debugLog("Book entry with cover:", title)
-
-            -- Prefer thumbnail over full image for performance
-            if item.thumbnail then
-                item.cover_url = item.thumbnail
-                item.lazy_load_cover = true
-            elseif item.image then
-                item.cover_url = item.image
-                item.lazy_load_cover = true
-            end
-        end
-
-        item.title = title
-        item.author = author
-        item.content = entry.content or entry.summary
-        table.insert(item_table, item)
-    end
-
-    if next(self.facet_groups) == nil then self.facet_groups = nil end
+    self.facet_groups = facet_groups
+    self.search_url = search_url
 
     return item_table
 end
 
 function OPDSBrowser:updateCatalog(item_url, paths_updated)
-    self:_debugLog("updateCatalog called for:", item_url)
-
-    local menu_table = self:genItemTableFromURL(item_url)
-
-    -- Count how many have covers
-    local cover_count = 0
-    for _, item in ipairs(menu_table) do
-        if item.cover_url then
-            cover_count = cover_count + 1
-        end
-    end
-
-    if #menu_table > 0 or self.facet_groups or self.search_url then
-        if not paths_updated then
-            table.insert(self.paths, {
-                url   = item_url,
-                title = self.catalog_title,
-            })
-        end
-        self:switchItemTable(self.catalog_title, menu_table)
-
-        -- Set appropriate title bar icon based on content
-        if self.facet_groups or self.search_url then
-            -- Has facets/search - use facet menu
-            self.title_bar_left_icon = OPDSConstants.ICONS.MENU
-            self.onLeftButtonTap = function()
-                self:showFacetMenu()
-            end
-        else
-            -- No facets - use catalog menu for view toggle + add catalog
-            self.title_bar_left_icon = cover_count > 0 and OPDSConstants.ICONS.MENU or OPDSConstants.ICONS.PLUS
-            self.onLeftButtonTap = function()
-                if cover_count > 0 then
-                    self:showCatalogMenu()
-                else
-                    self:addSubCatalog(item_url)
-                end
-            end
-        end
-
-        if self.page_num <= 1 then
-            self:onNextPage(true)
-        end
-    end
+    return NavigationHandler.updateCatalog(item_url, self, paths_updated)
 end
 
 function OPDSBrowser:appendCatalog(item_url)
-    local menu_table = self:genItemTableFromURL(item_url)
-    if #menu_table > 0 then
-        for __, item in ipairs(menu_table) do
-            table.insert(self.item_table, item)
-        end
-        self.item_table.hrefs = menu_table.hrefs
-        self:switchItemTable(self.catalog_title, self.item_table, -1)
-        return true
-    end
+    return NavigationHandler.appendCatalog(item_url, self)
 end
 
 function OPDSBrowser:searchCatalog(item_url)
