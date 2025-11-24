@@ -15,78 +15,15 @@ local util = require("util")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
+-- Import constants
+local Constants = require("models.constants")
+
 local OPDS = WidgetContainer:extend {
     name = "opdsplus",
     opds_settings_file = DataStorage:getSettingsDir() .. "/opdsplus.lua",
     settings = nil,
     servers = nil,
     downloads = nil,
-    default_servers = {
-        {
-            title = "Project Gutenberg",
-            url = "https://m.gutenberg.org/ebooks.opds/?format=opds",
-        },
-        {
-            title = "Standard Ebooks",
-            url = "https://standardebooks.org/feeds/opds",
-        },
-        {
-            title = "ManyBooks",
-            url = "http://manybooks.net/opds/index.php",
-        },
-        {
-            title = "Internet Archive",
-            url = "https://bookserver.archive.org/",
-        },
-        {
-            title = "textos.info (Spanish)",
-            url = "https://www.textos.info/catalogo.atom",
-        },
-        {
-            title = "Gallica (French)",
-            url = "https://gallica.bnf.fr/opds",
-        },
-    },
-    -- Cover size presets
-    cover_size_presets = {
-        {
-            name = "Compact",
-            description = "8 books per page",
-            ratio = 0.08, -- Kept for backward compatibility with custom
-        },
-        {
-            name = "Regular",
-            description = "6 books per page (default)",
-            ratio = 0.10,
-        },
-        {
-            name = "Large",
-            description = "4 books per page",
-            ratio = 0.15,
-        },
-        {
-            name = "Extra Large",
-            description = "3 books per page",
-            ratio = 0.20,
-        },
-    },
-    -- Default font settings
-    default_font_settings = {
-        title_font = "smallinfofont",
-        title_size = 16,
-        title_bold = true,
-        info_font = "smallinfofont",
-        info_size = 14,
-        info_bold = false,
-        info_color = "dark_gray", -- dark_gray or black
-        use_same_font = true,     -- Use same font for title and info
-    },
-    -- Default grid border settings
-    default_grid_border_settings = {
-        border_style = "none",      -- "none", "hash", or "individual"
-        border_size = 2,            -- Border thickness in pixels (1-5)
-        border_color = "dark_gray", -- "dark_gray", "light_gray", or "black"
-    },
 }
 
 function OPDS:init()
@@ -94,7 +31,7 @@ function OPDS:init()
     if next(self.opds_settings.data) == nil then
         self.updated = true -- first run, force flush
     end
-    self.servers = self.opds_settings:readSetting("servers", self.default_servers)
+    self.servers = self.opds_settings:readSetting("servers", Constants.DEFAULT_SERVERS)
     self.downloads = self.opds_settings:readSetting("downloads", {})
     self.settings = self.opds_settings:readSetting("settings", {})
     self.pending_syncs = self.opds_settings:readSetting("pending_syncs", {})
@@ -108,7 +45,7 @@ function OPDS:init()
     end
 
     -- Initialize font settings with defaults
-    for key, default_value in pairs(self.default_font_settings) do
+    for key, default_value in pairs(Constants.DEFAULT_FONT_SETTINGS) do
         if self.settings[key] == nil then
             self.settings[key] = default_value
         end
@@ -173,7 +110,7 @@ function OPDS:getSetting(key)
     if self.settings[key] ~= nil then
         return self.settings[key]
     end
-    return self.default_font_settings[key]
+    return Constants.DEFAULT_FONT_SETTINGS[key]
 end
 
 function OPDS:getAvailableFonts()
@@ -286,8 +223,8 @@ function OPDS:showCoverSizeMenu()
     local buttons = {}
 
     -- Add preset buttons
-    for i = 1, #self.cover_size_presets do
-        local preset = self.cover_size_presets[i]
+    for i = 1, #Constants.COVER_SIZE_PRESETS do
+        local preset = Constants.COVER_SIZE_PRESETS[i]
         local is_current = (current_preset == preset.name)
         local button_text = preset.name
         if is_current then
