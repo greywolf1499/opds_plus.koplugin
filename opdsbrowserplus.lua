@@ -17,7 +17,7 @@ local _ = require("gettext")
 local T = ffiUtil.template
 
 -- Import the custom cover menu for displaying book covers
-local OPDSCoverMenu = require("opdscovermenuplus")
+local OPDSCoverMenu = require("ui.menus.cover_menu")
 
 -- Import constants and utilities
 local Constants = require("models.constants")
