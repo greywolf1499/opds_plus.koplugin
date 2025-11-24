@@ -1,4 +1,3 @@
-local SettingsMenu = require("config.settings_menu")
 local BD = require("ui/bidi")
 local ButtonDialog = require("ui/widget/buttondialog")
 local ConfirmBox = require("ui/widget/confirmbox")
@@ -18,6 +17,10 @@ local T = require("ffi/util").template
 -- Import constants
 local Constants = require("models.constants")
 
+-- Import settings manager
+local Settings = require("config.settings")
+local SettingsMenu = require("config.settings_menu")
+
 local OPDS = WidgetContainer:extend {
     name = "opdsplus",
     opds_settings_file = DataStorage:getSettingsDir() .. "/opdsplus.lua",
@@ -27,59 +30,22 @@ local OPDS = WidgetContainer:extend {
 }
 
 function OPDS:init()
-    self.opds_settings = LuaSettings:open(self.opds_settings_file)
-    if next(self.opds_settings.data) == nil then
+    -- Initialize settings
+    local settings_manager = Settings:new(self.opds_settings_file)
+    self.opds_settings = settings_manager.storage
+    self.settings = settings_manager.data
+
+    -- Initialize defaults
+    settings_manager:initializeDefaults()
+
+    if settings_manager.is_first_run then
         self.updated = true -- first run, force flush
     end
+
+    -- Load servers, downloads, and pending syncs
     self.servers = self.opds_settings:readSetting("servers", Constants.DEFAULT_SERVERS)
     self.downloads = self.opds_settings:readSetting("downloads", {})
-    self.settings = self.opds_settings:readSetting("settings", {})
     self.pending_syncs = self.opds_settings:readSetting("pending_syncs", {})
-
-    -- Initialize cover settings with defaults if not present
-    if not self.settings.cover_height_ratio then
-        self.settings.cover_height_ratio = 0.10 -- Regular (10% default)
-    end
-    if not self.settings.cover_size_preset then
-        self.settings.cover_size_preset = "Regular"
-    end
-
-    -- Initialize font settings with defaults
-    for key, default_value in pairs(Constants.DEFAULT_FONT_SETTINGS) do
-        if self.settings[key] == nil then
-            self.settings[key] = default_value
-        end
-    end
-
-    -- Initialize display mode settings
-    if not self.settings.display_mode then
-        self.settings.display_mode = "list" -- Default to list view
-    end
-    if not self.settings.grid_columns then
-        self.settings.grid_columns = 3 -- Default to 3 columns
-    end
-    if not self.settings.grid_cover_height_ratio then
-        self.settings.grid_cover_height_ratio = 0.20 -- 20% for grid view
-    end
-    if not self.settings.grid_size_preset then
-        self.settings.grid_size_preset = "Balanced" -- Default preset
-    end
-
-    -- Initialize grid border settings with defaults
-    if not self.settings.grid_border_style then
-        self.settings.grid_border_style = "none"
-    end
-    if not self.settings.grid_border_size then
-        self.settings.grid_border_size = 2
-    end
-    if not self.settings.grid_border_color then
-        self.settings.grid_border_color = "dark_gray"
-    end
-
-    -- Initialize debug mode (default: false for production)
-    if self.settings.debug_mode == nil then
-        self.settings.debug_mode = false
-    end
 
     self:onDispatcherRegisterActions()
     self.ui.menu:registerToMainMenu(self)

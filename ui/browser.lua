@@ -23,11 +23,11 @@ local OPDSCoverMenu = require("ui.menus.cover_menu")
 local Constants = require("models.constants")
 
 -- Import the OPDS menu builder
-local OPDSMenuBuilder = require("ui/opds_menu_builder")
+local OPDSMenuBuilder = require("ui.dialogs.menu_builder")
 
 -- Import the download manager
 local DownloadManager = require("core.download_manager")
-local DownloadDialogBuilder = require("ui/download_dialog_builder")
+local DownloadDialogBuilder = require("ui.dialogs.download_builder")
 
 -- Import the feed fetcher
 local FeedFetcher = require("core.feed_fetcher")
