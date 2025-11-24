@@ -152,6 +152,7 @@ function OPDSBrowser:addSubCatalog(item_url)
 end
 
 function OPDSBrowser:editCatalogFromInput(fields, item, no_refresh)
+    -- luacheck: ignore new_idx
     local new_idx, itemnumber, should_refresh = CatalogManager.editCatalogFromInput(
         self.servers, self.item_table, fields, item, no_refresh)
 

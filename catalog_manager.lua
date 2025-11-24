@@ -1,9 +1,6 @@
 -- Catalog Manager for OPDS Browser
 -- Handles catalog configuration, CRUD operations, and sync settings
 
-local logger = require("logger")
-local util = require("util")
-
 local OPDSUtils = require("opds_utils")
 
 local CatalogManager = {}
