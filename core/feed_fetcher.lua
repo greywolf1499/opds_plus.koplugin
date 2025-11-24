@@ -4,7 +4,6 @@
 local BD = require("ui/bidi")
 local Cache = require("cache")
 local InfoMessage = require("ui/widget/infomessage")
-local OPDSParser = require("opdsparser")
 local UIManager = require("ui/uimanager")
 local http = require("socket.http")
 local logger = require("logger")
@@ -14,14 +13,15 @@ local socketutil = require("socketutil")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
-local OPDSConstants = require("opds_constants")
+local OPDSParser = require("core.parser")
+local Constants = require("models.constants")
 local OPDSUtils = require("opds_utils")
 
 local FeedFetcher = {}
 
 -- Create the catalog cache
 local CatalogCache = Cache:new {
-	slots = OPDSConstants.CACHE_SLOTS,
+	slots = Constants.CACHE_SLOTS,
 }
 
 -- Fetch raw XML feed from URL

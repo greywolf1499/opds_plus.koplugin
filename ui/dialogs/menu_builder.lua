@@ -12,7 +12,7 @@ local url = require("socket.url")
 local _ = require("gettext")
 local T = ffiUtil.template
 
-local OPDSConstants = require("opds_constants")
+local Constants = require("models.constants")
 
 local OPDSMenuBuilder = {}
 
@@ -98,9 +98,9 @@ function OPDSMenuBuilder.buildFacetMenu(browser, catalog_url, has_covers)
 		local current_mode = browser._manager.settings.display_mode or "list"
 		local toggle_text
 		if current_mode == "list" then
-			toggle_text = OPDSConstants.ICONS.GRID_VIEW .. " " .. _("Switch to Grid View")
+			toggle_text = Constants.ICONS.GRID_VIEW .. " " .. _("Switch to Grid View")
 		else
-			toggle_text = OPDSConstants.ICONS.LIST_VIEW .. " " .. _("Switch to List View")
+			toggle_text = Constants.ICONS.LIST_VIEW .. " " .. _("Switch to List View")
 		end
 
 		table.insert(buttons, { {
@@ -116,7 +116,7 @@ function OPDSMenuBuilder.buildFacetMenu(browser, catalog_url, has_covers)
 
 	-- Add sub-catalog to bookmarks option
 	table.insert(buttons, { {
-		text = OPDSConstants.ICONS.ADD_CATALOG .. " " .. _("Add catalog"),
+		text = Constants.ICONS.ADD_CATALOG .. " " .. _("Add catalog"),
 		callback = function()
 			UIManager:close(dialog)
 			browser:addSubCatalog(catalog_url)
@@ -128,7 +128,7 @@ function OPDSMenuBuilder.buildFacetMenu(browser, catalog_url, has_covers)
 	-- Add search option if available
 	if browser.search_url then
 		table.insert(buttons, { {
-			text = OPDSConstants.ICONS.SEARCH .. " " .. _("Search"),
+			text = Constants.ICONS.SEARCH .. " " .. _("Search"),
 			callback = function()
 				UIManager:close(dialog)
 				browser:searchCatalog(browser.search_url)
@@ -142,7 +142,7 @@ function OPDSMenuBuilder.buildFacetMenu(browser, catalog_url, has_covers)
 	if browser.facet_groups then
 		for group_name, facets in ffiUtil.orderedPairs(browser.facet_groups) do
 			table.insert(buttons, {
-				{ text = OPDSConstants.ICONS.FILTER .. " " .. group_name, enabled = false, align = "left" }
+				{ text = Constants.ICONS.FILTER .. " " .. group_name, enabled = false, align = "left" }
 			})
 
 			for __, link in ipairs(facets) do
@@ -191,9 +191,9 @@ function OPDSMenuBuilder.buildCatalogMenu(browser, catalog_url, has_covers)
 		local current_mode = browser._manager.settings.display_mode or "list"
 		local toggle_text
 		if current_mode == "list" then
-			toggle_text = OPDSConstants.ICONS.GRID_VIEW .. " " .. _("Switch to Grid View")
+			toggle_text = Constants.ICONS.GRID_VIEW .. " " .. _("Switch to Grid View")
 		else
-			toggle_text = OPDSConstants.ICONS.LIST_VIEW .. " " .. _("Switch to List View")
+			toggle_text = Constants.ICONS.LIST_VIEW .. " " .. _("Switch to List View")
 		end
 
 		table.insert(buttons, { {
@@ -209,7 +209,7 @@ function OPDSMenuBuilder.buildCatalogMenu(browser, catalog_url, has_covers)
 
 	-- Add sub-catalog option
 	table.insert(buttons, { {
-		text = OPDSConstants.ICONS.ADD_CATALOG .. " " .. _("Add catalog"),
+		text = Constants.ICONS.ADD_CATALOG .. " " .. _("Add catalog"),
 		callback = function()
 			UIManager:close(dialog)
 			browser:addSubCatalog(catalog_url)
@@ -233,7 +233,7 @@ end
 -- @param item table|nil Catalog item to edit (nil for new catalog)
 -- @return table MultiInputDialog widget
 function OPDSMenuBuilder.buildCatalogEditDialog(browser, item)
-	local CatalogManager = require("catalog_manager")
+	local CatalogManager = require("core.catalog_manager")
 	local InfoMessage = require("ui/widget/infomessage")
 
 	local fields = {

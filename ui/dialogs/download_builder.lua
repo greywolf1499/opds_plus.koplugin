@@ -13,8 +13,8 @@ local url = require("socket.url")
 local util = require("util")
 local _ = require("gettext")
 
-local OPDSConstants = require("opds_constants")
-local OPDSPSE = require("opdspse")
+local Constants = require("models.constants")
+local OPDSPSE = require("services.kavita")
 
 local DownloadDialogBuilder = {}
 
@@ -29,7 +29,7 @@ function DownloadDialogBuilder.buildDownloadDialog(browser, item, filename, crea
 	local buttons = {}
 	local stream_buttons
 	local download_buttons = {}
-	local DownloadManager = require("download_manager")
+	local DownloadManager = require("core.download_manager")
 
 	-- Track the original filename for reset
 	local filename_orig = filename
@@ -40,7 +40,7 @@ function DownloadDialogBuilder.buildDownloadDialog(browser, item, filename, crea
 			stream_buttons = {
 				{
 					{
-						text = OPDSConstants.ICONS.STREAM_START .. " " .. _("Page stream"),
+						text = Constants.ICONS.STREAM_START .. " " .. _("Page stream"),
 						callback = function()
 							OPDSPSE:streamPages(acquisition.href, acquisition.count, false,
 								browser.root_catalog_username, browser.root_catalog_password)
@@ -48,7 +48,7 @@ function DownloadDialogBuilder.buildDownloadDialog(browser, item, filename, crea
 						end,
 					},
 					{
-						text = _("Stream from page") .. " " .. OPDSConstants.ICONS.STREAM_NEXT,
+						text = _("Stream from page") .. " " .. Constants.ICONS.STREAM_NEXT,
 						callback = function()
 							OPDSPSE:streamPages(acquisition.href, acquisition.count, true,
 								browser.root_catalog_username, browser.root_catalog_password)
@@ -61,7 +61,7 @@ function DownloadDialogBuilder.buildDownloadDialog(browser, item, filename, crea
 			if acquisition.last_read then
 				table.insert(stream_buttons, {
 					{
-						text = OPDSConstants.ICONS.STREAM_RESUME .. " " ..
+						text = Constants.ICONS.STREAM_RESUME .. " " ..
 							_("Resume stream from page") .. " " .. acquisition.last_read,
 						callback = function()
 							OPDSPSE:streamPages(acquisition.href, acquisition.count, false,
@@ -82,7 +82,7 @@ function DownloadDialogBuilder.buildDownloadDialog(browser, item, filename, crea
 			if filetype then
 				local text = url.unescape(acquisition.title or string.upper(filetype))
 				table.insert(download_buttons, {
-					text = text .. OPDSConstants.ICONS.DOWNLOAD,
+					text = text .. Constants.ICONS.DOWNLOAD,
 					callback = function()
 						UIManager:close(browser.download_dialog)
 						local local_path = DownloadManager.getLocalDownloadPath(
@@ -252,7 +252,7 @@ end
 function DownloadDialogBuilder.buildDownloadListItemDialog(download_list_browser, item)
 	local dl_item = download_list_browser._manager.downloads[item.idx]
 	local textviewer
-	local DownloadManager = require("download_manager")
+	local DownloadManager = require("core.download_manager")
 
 	local function remove_item()
 		textviewer:onClose()
@@ -335,7 +335,7 @@ function DownloadDialogBuilder.buildDownloadAllConfirmation(browser)
 		ok_callback = function()
 			NetworkMgr:runWhenConnected(function()
 				Trapper:wrap(function()
-					local DownloadManager = require("download_manager")
+					local DownloadManager = require("core.download_manager")
 					DownloadManager.downloadDownloadList(browser)
 				end)
 			end)
@@ -351,7 +351,7 @@ function DownloadDialogBuilder.buildClearQueueConfirmation(browser)
 		text = _("Remove all downloads?"),
 		ok_text = _("Remove"),
 		ok_callback = function()
-			local DownloadManager = require("download_manager")
+			local DownloadManager = require("core.download_manager")
 			DownloadManager.clearDownloadQueue(browser)
 			browser.download_list:close_callback()
 		end,

@@ -2,11 +2,11 @@
 -- Handles catalog navigation, browsing history, and feed parsing
 
 local DocumentRegistry = require("document/documentregistry")
-local url = require("socket.url")
+local socket_url = require("socket.url")
 local util = require("util")
 local _ = require("gettext")
 
-local OPDSConstants = require("opds_constants")
+local Constants = require("models.constants")
 local OPDSUtils = require("opds_utils")
 
 local NavigationHandler = {}
@@ -50,7 +50,7 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 					-- Search support
 					if link.type:find(browser_context.search_type) then
 						if link.href then
-							local FeedFetcher = require("feed_fetcher")
+							local FeedFetcher = require("core.feed_fetcher")
 							search_url = build_href(FeedFetcher.getSearchTemplate(
 								build_href(link.href),
 								browser_context.search_template_type,
@@ -139,7 +139,7 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 					if link.title == "pdf" or link.type == "application/pdf"
 						and link.rel ~= "subsection" then
 						local original_href = link.href
-						local parsed = url.parse(original_href)
+						local parsed = socket_url.parse(original_href)
 						if not parsed then parsed = { path = original_href } end
 						local path = parsed.path or ""
 
@@ -155,7 +155,7 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 							end
 							if appended then
 								parsed.path = path
-								local new_href = url.build(parsed)
+								local new_href = socket_url.build(parsed)
 								table.insert(item.acquisitions, {
 									type = link.title,
 									href = build_href(new_href),
@@ -168,9 +168,9 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 		end
 
 		-- Parse title and author
-		local title = OPDSUtils.parseEntryTitle(entry.title, _(OPDSConstants.DEFAULT_TITLE))
+		local title = OPDSUtils.parseEntryTitle(entry.title, _(Constants.DEFAULT_TITLE))
 		item.text = title
-		local author = OPDSUtils.parseEntryAuthor(entry.author, _(OPDSConstants.DEFAULT_AUTHOR))
+		local author = OPDSUtils.parseEntryAuthor(entry.author, _(Constants.DEFAULT_AUTHOR))
 		if author then
 			item.text = title .. " - " .. author
 		end
@@ -208,7 +208,7 @@ end
 -- @param paths_updated boolean Whether paths have already been updated
 -- @return boolean True if successful
 function NavigationHandler.updateCatalog(item_url, browser, paths_updated)
-	local FeedFetcher = require("feed_fetcher")
+	local FeedFetcher = require("core.feed_fetcher")
 
 	if browser._debugLog then
 		browser:_debugLog("updateCatalog called for:", item_url)
@@ -263,13 +263,13 @@ function NavigationHandler.updateCatalog(item_url, browser, paths_updated)
 		-- Set appropriate title bar icon based on content
 		if browser.facet_groups or browser.search_url then
 			-- Has facets/search - use facet menu
-			browser.title_bar_left_icon = OPDSConstants.ICONS.MENU
+			browser.title_bar_left_icon = Constants.ICONS.MENU
 			browser.onLeftButtonTap = function()
 				browser:showFacetMenu()
 			end
 		else
 			-- No facets - use catalog menu for view toggle + add catalog
-			browser.title_bar_left_icon = cover_count > 0 and OPDSConstants.ICONS.MENU or OPDSConstants.ICONS.PLUS
+			browser.title_bar_left_icon = cover_count > 0 and Constants.ICONS.MENU or Constants.ICONS.PLUS
 			browser.onLeftButtonTap = function()
 				if cover_count > 0 then
 					browser:showCatalogMenu()
@@ -294,7 +294,7 @@ end
 -- @param browser table Browser instance
 -- @return boolean True if items were appended
 function NavigationHandler.appendCatalog(item_url, browser)
-	local FeedFetcher = require("feed_fetcher")
+	local FeedFetcher = require("core.feed_fetcher")
 
 	local menu_table = FeedFetcher.genItemTableFromURL(
 		item_url,

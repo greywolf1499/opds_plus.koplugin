@@ -1,5 +1,5 @@
 local logger = require("logger")
-local getUrlContent = require("url_content")
+local getUrlContent = require("services.http_client")
 local UIManager = require("ui/uimanager")
 local Trapper = require("ui/trapper")
 
@@ -73,7 +73,7 @@ function Batch:loadImages(urls)
 end
 
 function ImageLoader:loadImages(urls, callback, username, password, debug_mode)
-    local batch = Batch:new{
+    local batch = Batch:new {
         username = username,
         password = password,
         debug_mode = debug_mode,

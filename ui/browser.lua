@@ -17,38 +17,41 @@ local _ = require("gettext")
 local T = ffiUtil.template
 
 -- Import the custom cover menu for displaying book covers
-local OPDSCoverMenu = require("opdscovermenuplus")
+local OPDSCoverMenu = require("ui.menus.cover_menu")
 
 -- Import constants and utilities
-local OPDSConstants = require("opds_constants")
+local Constants = require("models.constants")
 
 -- Import the OPDS menu builder
-local OPDSMenuBuilder = require("ui/opds_menu_builder")
+local OPDSMenuBuilder = require("ui.dialogs.menu_builder")
 
 -- Import the download manager
-local DownloadManager = require("download_manager")
-local DownloadDialogBuilder = require("ui/download_dialog_builder")
+local DownloadManager = require("core.download_manager")
+local DownloadDialogBuilder = require("ui.dialogs.download_builder")
 
 -- Import the feed fetcher
-local FeedFetcher = require("feed_fetcher")
+local FeedFetcher = require("core.feed_fetcher")
 
 -- Import the catalog manager
-local CatalogManager = require("catalog_manager")
+local CatalogManager = require("core.catalog_manager")
 
 -- Import the navigation handler
-local NavigationHandler = require("navigation_handler")
+local NavigationHandler = require("core.navigation_handler")
+
+-- Import the debug utility
+local Debug = require("utils.debug")
 
 -- Changed from Menu:extend to OPDSCoverMenu:extend to support cover images
 local OPDSBrowser = OPDSCoverMenu:extend {
-    catalog_type             = OPDSConstants.CATALOG_TYPE,
-    search_type              = OPDSConstants.SEARCH_TYPE,
-    search_template_type     = OPDSConstants.SEARCH_TEMPLATE_TYPE,
-    acquisition_rel          = OPDSConstants.ACQUISITION_REL,
-    borrow_rel               = OPDSConstants.BORROW_REL,
-    stream_rel               = OPDSConstants.STREAM_REL,
-    facet_rel                = OPDSConstants.FACET_REL,
-    image_rel                = OPDSConstants.IMAGE_REL,
-    thumbnail_rel            = OPDSConstants.THUMBNAIL_REL,
+    catalog_type             = Constants.CATALOG_TYPE,
+    search_type              = Constants.SEARCH_TYPE,
+    search_template_type     = Constants.SEARCH_TEMPLATE_TYPE,
+    acquisition_rel          = Constants.ACQUISITION_REL,
+    borrow_rel               = Constants.BORROW_REL,
+    stream_rel               = Constants.STREAM_REL,
+    facet_rel                = Constants.FACET_REL,
+    image_rel                = Constants.IMAGE_REL,
+    thumbnail_rel            = Constants.THUMBNAIL_REL,
 
     root_catalog_title       = nil,
     root_catalog_username    = nil,
@@ -61,7 +64,7 @@ local OPDSBrowser = OPDSCoverMenu:extend {
 function OPDSBrowser:init()
     self.item_table = self:genItemTableFromRoot()
     self.catalog_title = nil
-    self.title_bar_left_icon = OPDSConstants.ICONS.MENU
+    self.title_bar_left_icon = Constants.ICONS.MENU
     self.onLeftButtonTap = function()
         self:showOPDSMenu()
     end
@@ -72,9 +75,7 @@ function OPDSBrowser:init()
 end
 
 function OPDSBrowser:_debugLog(...)
-    if self._manager and self._manager.settings and self._manager.settings.debug_mode then
-        logger.dbg("OPDS+ Browser:", ...)
-    end
+    Debug.log(self._manager, "Browser:", ...)
 end
 
 function OPDSBrowser:toggleViewMode()
@@ -246,7 +247,7 @@ function OPDSBrowser:showDownloads(item)
 
     local function createTitle(path, file)
         return T(_("Download folder:\n%1\n\nDownload filename:\n%2\n\nDownload file type:"),
-            BD.dirpath(path), file or _(OPDSConstants.DEFAULT_FILENAME))
+            BD.dirpath(path), file or _(Constants.DEFAULT_FILENAME))
     end
 
     self.download_dialog = DownloadDialogBuilder.buildDownloadDialog(self, item, filename, createTitle)

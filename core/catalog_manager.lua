@@ -1,7 +1,7 @@
 -- Catalog Manager for OPDS Browser
 -- Handles catalog configuration, CRUD operations, and sync settings
 
-local OPDSUtils = require("opds_utils")
+local CatalogUtils = require("utils.catalog_utils")
 
 local CatalogManager = {}
 
@@ -18,7 +18,7 @@ function CatalogManager.genItemTableFromRoot(servers, downloads, _)
 		},
 	}
 	for _, server in ipairs(servers) do
-		table.insert(item_table, OPDSUtils.buildRootEntry(server))
+		table.insert(item_table, CatalogUtils.buildRootEntry(server))
 	end
 	return item_table
 end
@@ -40,7 +40,7 @@ function CatalogManager.editCatalogFromInput(servers, item_table, fields, item, 
 		sync      = fields[6],
 	}
 
-	local new_item = OPDSUtils.buildRootEntry(new_server)
+	local new_item = CatalogUtils.buildRootEntry(new_server)
 	local new_idx, itemnumber
 
 	if item then

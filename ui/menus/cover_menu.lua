@@ -1,8 +1,8 @@
 local Menu = require("ui/widget/menu")
-local OPDSListMenu = require("opdslistmenuplus")
-local OPDSGridMenu = require("opdsgridmenuplus")
+local OPDSListMenu = require("ui.menus.list_menu")
+local OPDSGridMenu = require("ui.menus.grid_menu")
 local UIManager = require("ui/uimanager")
-local logger = require("logger")
+local Debug = require("utils.debug")
 
 local OPDSCoverMenu = Menu:extend {
     title_shrink_font_to_fit = true,
@@ -15,9 +15,7 @@ function OPDSCoverMenu:init()
 end
 
 function OPDSCoverMenu:_debugLog(...)
-    if self._manager and self._manager.settings and self._manager.settings.debug_mode then
-        logger.dbg("OPDS+:", ...)
-    end
+    Debug.log(self._manager, "CoverMenu:", ...)
 end
 
 function OPDSCoverMenu:updateItems(select_number)

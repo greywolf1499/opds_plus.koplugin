@@ -1,12 +1,10 @@
-local SettingsMenu = require("config.settings_menu")
 local BD = require("ui/bidi")
 local ButtonDialog = require("ui/widget/buttondialog")
 local ConfirmBox = require("ui/widget/confirmbox")
 local DataStorage = require("datastorage")
 local Dispatcher = require("dispatcher")
 local InfoMessage = require("ui/widget/infomessage")
-local LuaSettings = require("luasettings")
-local OPDSBrowser = require("opdsbrowserplus")
+local OPDSBrowser = require("ui.browser")
 local SpinWidget = require("ui/widget/spinwidget")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
@@ -15,134 +13,38 @@ local util = require("util")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
+-- Import constants
+local Constants = require("models.constants")
+
+-- Import settings manager
+local Settings = require("config.settings")
+local SettingsMenu = require("config.settings_menu")
+
 local OPDS = WidgetContainer:extend {
     name = "opdsplus",
     opds_settings_file = DataStorage:getSettingsDir() .. "/opdsplus.lua",
     settings = nil,
     servers = nil,
     downloads = nil,
-    default_servers = {
-        {
-            title = "Project Gutenberg",
-            url = "https://m.gutenberg.org/ebooks.opds/?format=opds",
-        },
-        {
-            title = "Standard Ebooks",
-            url = "https://standardebooks.org/feeds/opds",
-        },
-        {
-            title = "ManyBooks",
-            url = "http://manybooks.net/opds/index.php",
-        },
-        {
-            title = "Internet Archive",
-            url = "https://bookserver.archive.org/",
-        },
-        {
-            title = "textos.info (Spanish)",
-            url = "https://www.textos.info/catalogo.atom",
-        },
-        {
-            title = "Gallica (French)",
-            url = "https://gallica.bnf.fr/opds",
-        },
-    },
-    -- Cover size presets
-    cover_size_presets = {
-        {
-            name = "Compact",
-            description = "8 books per page",
-            ratio = 0.08, -- Kept for backward compatibility with custom
-        },
-        {
-            name = "Regular",
-            description = "6 books per page (default)",
-            ratio = 0.10,
-        },
-        {
-            name = "Large",
-            description = "4 books per page",
-            ratio = 0.15,
-        },
-        {
-            name = "Extra Large",
-            description = "3 books per page",
-            ratio = 0.20,
-        },
-    },
-    -- Default font settings
-    default_font_settings = {
-        title_font = "smallinfofont",
-        title_size = 16,
-        title_bold = true,
-        info_font = "smallinfofont",
-        info_size = 14,
-        info_bold = false,
-        info_color = "dark_gray", -- dark_gray or black
-        use_same_font = true,     -- Use same font for title and info
-    },
-    -- Default grid border settings
-    default_grid_border_settings = {
-        border_style = "none",      -- "none", "hash", or "individual"
-        border_size = 2,            -- Border thickness in pixels (1-5)
-        border_color = "dark_gray", -- "dark_gray", "light_gray", or "black"
-    },
 }
 
 function OPDS:init()
-    self.opds_settings = LuaSettings:open(self.opds_settings_file)
-    if next(self.opds_settings.data) == nil then
+    -- Initialize settings
+    local settings_manager = Settings:new(self.opds_settings_file)
+    self.opds_settings = settings_manager.storage
+    self.settings = settings_manager.data
+
+    -- Initialize defaults
+    settings_manager:initializeDefaults()
+
+    if settings_manager.is_first_run then
         self.updated = true -- first run, force flush
     end
-    self.servers = self.opds_settings:readSetting("servers", self.default_servers)
+
+    -- Load servers, downloads, and pending syncs
+    self.servers = self.opds_settings:readSetting("servers", Constants.DEFAULT_SERVERS)
     self.downloads = self.opds_settings:readSetting("downloads", {})
-    self.settings = self.opds_settings:readSetting("settings", {})
     self.pending_syncs = self.opds_settings:readSetting("pending_syncs", {})
-
-    -- Initialize cover settings with defaults if not present
-    if not self.settings.cover_height_ratio then
-        self.settings.cover_height_ratio = 0.10 -- Regular (10% default)
-    end
-    if not self.settings.cover_size_preset then
-        self.settings.cover_size_preset = "Regular"
-    end
-
-    -- Initialize font settings with defaults
-    for key, default_value in pairs(self.default_font_settings) do
-        if self.settings[key] == nil then
-            self.settings[key] = default_value
-        end
-    end
-
-    -- Initialize display mode settings
-    if not self.settings.display_mode then
-        self.settings.display_mode = "list" -- Default to list view
-    end
-    if not self.settings.grid_columns then
-        self.settings.grid_columns = 3 -- Default to 3 columns
-    end
-    if not self.settings.grid_cover_height_ratio then
-        self.settings.grid_cover_height_ratio = 0.20 -- 20% for grid view
-    end
-    if not self.settings.grid_size_preset then
-        self.settings.grid_size_preset = "Balanced" -- Default preset
-    end
-
-    -- Initialize grid border settings with defaults
-    if not self.settings.grid_border_style then
-        self.settings.grid_border_style = "none"
-    end
-    if not self.settings.grid_border_size then
-        self.settings.grid_border_size = 2
-    end
-    if not self.settings.grid_border_color then
-        self.settings.grid_border_color = "dark_gray"
-    end
-
-    -- Initialize debug mode (default: false for production)
-    if self.settings.debug_mode == nil then
-        self.settings.debug_mode = false
-    end
 
     self:onDispatcherRegisterActions()
     self.ui.menu:registerToMainMenu(self)
@@ -173,7 +75,7 @@ function OPDS:getSetting(key)
     if self.settings[key] ~= nil then
         return self.settings[key]
     end
-    return self.default_font_settings[key]
+    return Constants.DEFAULT_FONT_SETTINGS[key]
 end
 
 function OPDS:getAvailableFonts()
@@ -286,8 +188,8 @@ function OPDS:showCoverSizeMenu()
     local buttons = {}
 
     -- Add preset buttons
-    for i = 1, #self.cover_size_presets do
-        local preset = self.cover_size_presets[i]
+    for i = 1, #Constants.COVER_SIZE_PRESETS do
+        local preset = Constants.COVER_SIZE_PRESETS[i]
         local is_current = (current_preset == preset.name)
         local button_text = preset.name
         if is_current then
