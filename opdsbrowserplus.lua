@@ -545,7 +545,8 @@ end
 
 -- Shows dialog to download / stream a book
 function OPDSBrowser:showDownloads(item)
-    local filename, __filename_orig = self:getFileName(item)
+    -- luacheck: ignore filename_orig
+    local filename, filename_orig = self:getFileName(item)
 
     local function createTitle(path, file)
         return T(_("Download folder:\n%1\n\nDownload filename:\n%2\n\nDownload file type:"),
