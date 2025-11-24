@@ -8,16 +8,13 @@ local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
 local Menu = require("ui/widget/menu")
 local NetworkMgr = require("ui/network/manager")
-local Notification = require("ui/widget/notification")
 local OPDSParser = require("opdsparser")
-local OPDSPSE = require("opdspse")
 local SpinWidget = require("ui/widget/spinwidget")
 local TextViewer = require("ui/widget/textviewer")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
 local http = require("socket.http")
 local ffiUtil = require("ffi/util")
-local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
 local ltn12 = require("ltn12")
 local socket = require("socket")
@@ -25,7 +22,6 @@ local socketutil = require("socketutil")
 local url = require("socket.url")
 local util = require("util")
 local _ = require("gettext")
-local N_ = _.ngettext
 local T = ffiUtil.template
 
 -- Import the custom cover menu for displaying book covers
@@ -549,7 +545,7 @@ end
 
 -- Shows dialog to download / stream a book
 function OPDSBrowser:showDownloads(item)
-    local filename, filename_orig = self:getFileName(item)
+    local filename, __filename_orig = self:getFileName(item)
 
     local function createTitle(path, file)
         return T(_("Download folder:\n%1\n\nDownload filename:\n%2\n\nDownload file type:"),

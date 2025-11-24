@@ -54,7 +54,6 @@ end
 -- @return string Local file path
 function DownloadManager.getLocalDownloadPath(browser, filename, filetype, remote_url)
 	local download_dir = DownloadManager.getCurrentDownloadDir(browser)
-	local OPDSUtils = require("opds_utils")
 
 	filename = filename and filename .. "." .. filetype:lower()
 		or browser:getServerFileName(remote_url, filetype)

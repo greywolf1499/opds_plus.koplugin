@@ -1,7 +1,6 @@
 -- Download Dialog Builder for OPDS Browser
 -- Handles construction of download-related dialogs
 
-local BD = require("ui/bidi")
 local ButtonDialog = require("ui/widget/buttondialog")
 local ConfirmBox = require("ui/widget/confirmbox")
 local InputDialog = require("ui/widget/inputdialog")
@@ -13,7 +12,6 @@ local logger = require("logger")
 local url = require("socket.url")
 local util = require("util")
 local _ = require("gettext")
-local T = require("ffi/util").template
 
 local OPDSConstants = require("opds_constants")
 local OPDSPSE = require("opdspse")
