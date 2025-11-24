@@ -4,10 +4,12 @@
 local BD = require("ui/bidi")
 local ButtonDialog = require("ui/widget/buttondialog")
 local ConfirmBox = require("ui/widget/confirmbox")
+local InputDialog = require("ui/widget/inputdialog")
 local NetworkMgr = require("ui/network/manager")
 local TextViewer = require("ui/widget/textviewer")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
+local logger = require("logger")
 local url = require("socket.url")
 local util = require("util")
 local _ = require("gettext")
@@ -30,6 +32,9 @@ function DownloadDialogBuilder.buildDownloadDialog(browser, item, filename, crea
 	local stream_buttons
 	local download_buttons = {}
 	local DownloadManager = require("download_manager")
+
+	-- Track the original filename for reset
+	local filename_orig = filename
 
 	for i, acquisition in ipairs(acquisitions) do
 		if acquisition.count then
@@ -119,6 +124,87 @@ function DownloadDialogBuilder.buildDownloadDialog(browser, item, filename, crea
 		table.insert(buttons, { button })
 	end
 
+	-- Add static options (Choose Folder, Change Filename, Book Cover, Book Information)
+	table.insert(buttons, {})
+	table.insert(buttons, {
+		{
+			text = _("Choose folder"),
+			callback = function()
+				require("ui/downloadmgr"):new {
+					onConfirm = function(path)
+						logger.dbg("Download folder set to", path)
+						G_reader_settings:saveSetting("download_dir", path)
+						browser.download_dialog:setTitle(createTitle(path, filename))
+					end,
+				}:chooseDir(DownloadManager.getCurrentDownloadDir(browser))
+			end,
+		},
+		{
+			text = _("Change filename"),
+			callback = function()
+				local dialog
+				dialog = InputDialog:new {
+					title = _("Enter filename"),
+					input = filename or filename_orig,
+					input_hint = filename_orig,
+					buttons = {
+						{
+							{
+								text = _("Cancel"),
+								id = "close",
+								callback = function()
+									UIManager:close(dialog)
+								end,
+							},
+							{
+								text = _("Set filename"),
+								is_enter_default = true,
+								callback = function()
+									filename = dialog:getInputValue()
+									if filename == "" then
+										filename = filename_orig
+									end
+									UIManager:close(dialog)
+									browser.download_dialog:setTitle(createTitle(
+										DownloadManager.getCurrentDownloadDir(browser), filename))
+								end,
+							},
+						}
+					},
+				}
+				UIManager:show(dialog)
+				dialog:onShowKeyboard()
+			end,
+		},
+	})
+
+	-- Get cover link (prefer full image over thumbnail for viewing)
+	local cover_link = item.image or item.thumbnail
+
+	table.insert(buttons, {
+		{
+			text = _("Book cover"),
+			enabled = cover_link and true or false,
+			callback = function()
+				-- Use PSE streaming to view the cover as a single page
+				OPDSPSE:streamPages(cover_link, 1, false,
+					browser.root_catalog_username, browser.root_catalog_password)
+			end,
+		},
+		{
+			text = _("Book information"),
+			enabled = type(item.content) == "string",
+			callback = function()
+				UIManager:show(TextViewer:new {
+					title = item.text,
+					title_multilines = true,
+					text = util.htmlToPlainTextIfHtml(item.content),
+					text_type = "book_info",
+				})
+			end,
+		},
+	})
+
 	return ButtonDialog:new {
 		title = createTitle(DownloadManager.getCurrentDownloadDir(browser), filename),
 		buttons = buttons,
@@ -126,9 +212,9 @@ function DownloadDialogBuilder.buildDownloadDialog(browser, item, filename, crea
 end
 
 -- Build the download list menu dialog
--- @param browser table OPDSBrowser instance
+-- @param download_list_browser table Download list browser instance (not main browser)
 -- @return table ButtonDialog widget
-function DownloadDialogBuilder.buildDownloadListMenu(browser)
+function DownloadDialogBuilder.buildDownloadListMenu(download_list_browser)
 	local dialog
 	dialog = ButtonDialog:new {
 		buttons = {
@@ -137,7 +223,8 @@ function DownloadDialogBuilder.buildDownloadListMenu(browser)
 					text = _("Download all"),
 					callback = function()
 						UIManager:close(dialog)
-						browser:confirmDownloadDownloadList()
+						-- Call on the parent manager, not the download list browser
+						download_list_browser._manager:confirmDownloadDownloadList()
 					end,
 				},
 			},
@@ -146,35 +233,36 @@ function DownloadDialogBuilder.buildDownloadListMenu(browser)
 					text = _("Remove all"),
 					callback = function()
 						UIManager:close(dialog)
-						browser:confirmClearDownloadList()
+						-- Call on the parent manager, not the download list browser
+						download_list_browser._manager:confirmClearDownloadList()
 					end,
 				},
 			},
 		},
 		shrink_unneeded_width = true,
 		anchor = function()
-			return browser.title_bar.left_button.image.dimen
+			return download_list_browser.title_bar.left_button.image.dimen
 		end,
 	}
 	return dialog
 end
 
 -- Build dialog for individual download list item
--- @param browser table OPDSBrowser instance
+-- @param download_list_browser table Download list browser instance
 -- @param item table Download item
 -- @return boolean True if dialog was shown
-function DownloadDialogBuilder.buildDownloadListItemDialog(browser, item)
-	local dl_item = browser._manager.downloads[item.idx]
+function DownloadDialogBuilder.buildDownloadListItemDialog(download_list_browser, item)
+	local dl_item = download_list_browser._manager.downloads[item.idx]
 	local textviewer
 	local DownloadManager = require("download_manager")
 
 	local function remove_item()
 		textviewer:onClose()
-		table.remove(browser._manager.downloads, item.idx)
-		table.remove(browser.item_table, item.idx)
-		browser._manager:updateDownloadListItemTable(browser.item_table)
-		browser._manager.download_list_updated = true
-		browser._manager._manager.updated = true
+		table.remove(download_list_browser._manager.downloads, item.idx)
+		table.remove(download_list_browser.item_table, item.idx)
+		download_list_browser._manager:updateDownloadListItemTable(download_list_browser.item_table)
+		download_list_browser._manager.download_list_updated = true
+		download_list_browser._manager._manager.updated = true
 	end
 
 	local buttons_table = {
@@ -190,10 +278,10 @@ function DownloadDialogBuilder.buildDownloadListItemDialog(browser, item)
 				callback = function()
 					local function file_downloaded_callback(local_path)
 						remove_item()
-						browser._manager.file_downloaded_callback(local_path)
+						download_list_browser._manager.file_downloaded_callback(local_path)
 					end
 					NetworkMgr:runWhenConnected(function()
-						DownloadManager.checkDownloadFile(browser._manager, dl_item.file, dl_item.url,
+						DownloadManager.checkDownloadFile(download_list_browser._manager, dl_item.file, dl_item.url,
 							dl_item.username, dl_item.password, file_downloaded_callback)
 					end)
 				end,
@@ -205,14 +293,14 @@ function DownloadDialogBuilder.buildDownloadListItemDialog(browser, item)
 				text = _("Remove all"),
 				callback = function()
 					textviewer:onClose()
-					browser._manager:confirmClearDownloadList()
+					download_list_browser._manager:confirmClearDownloadList()
 				end,
 			},
 			{
 				text = _("Download all"),
 				callback = function()
 					textviewer:onClose()
-					browser._manager:confirmDownloadDownloadList()
+					download_list_browser._manager:confirmDownloadDownloadList()
 				end,
 			},
 		},
