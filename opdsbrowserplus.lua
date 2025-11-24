@@ -8,16 +8,13 @@ local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
 local Menu = require("ui/widget/menu")
 local NetworkMgr = require("ui/network/manager")
-local Notification = require("ui/widget/notification")
 local OPDSParser = require("opdsparser")
-local OPDSPSE = require("opdspse")
 local SpinWidget = require("ui/widget/spinwidget")
 local TextViewer = require("ui/widget/textviewer")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
 local http = require("socket.http")
 local ffiUtil = require("ffi/util")
-local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
 local ltn12 = require("ltn12")
 local socket = require("socket")
@@ -25,7 +22,6 @@ local socketutil = require("socketutil")
 local url = require("socket.url")
 local util = require("util")
 local _ = require("gettext")
-local N_ = _.ngettext
 local T = ffiUtil.template
 
 -- Import the custom cover menu for displaying book covers
@@ -37,6 +33,10 @@ local OPDSUtils = require("opds_utils")
 
 -- Import the OPDS menu builder
 local OPDSMenuBuilder = require("ui/opds_menu_builder")
+
+-- Import the download manager
+local DownloadManager = require("download_manager")
+local DownloadDialogBuilder = require("ui/download_dialog_builder")
 
 -- cache catalog parsed from feed xml
 local CatalogCache = Cache:new {
@@ -545,287 +545,25 @@ end
 
 -- Shows dialog to download / stream a book
 function OPDSBrowser:showDownloads(item)
-    local acquisitions = item.acquisitions
+    -- luacheck: ignore filename_orig
     local filename, filename_orig = self:getFileName(item)
 
-    local function createTitle(path, file) -- title for ButtonDialog
+    local function createTitle(path, file)
         return T(_("Download folder:\n%1\n\nDownload filename:\n%2\n\nDownload file type:"),
             BD.dirpath(path), file or _(OPDSConstants.DEFAULT_FILENAME))
     end
 
-    local buttons = {}                            -- buttons for ButtonDialog
-    local stream_buttons                          -- page stream buttons
-    local download_buttons = {}                   -- file type download buttons
-    for i, acquisition in ipairs(acquisitions) do -- filter out unsupported file types
-        if acquisition.count then
-            stream_buttons = {
-                {
-                    {
-                        -- @translators "Stream" here refers to being able to read documents from an OPDS server without downloading them completely, on a page by page basis.
-                        text = OPDSConstants.ICONS.STREAM_START .. " " .. _("Page stream"), -- prepend BLACK LEFT-POINTING DOUBLE TRIANGLE WITH BAR
-                        callback = function()
-                            OPDSPSE:streamPages(acquisition.href, acquisition.count, false, self.root_catalog_username,
-                                self.root_catalog_password)
-                            UIManager:close(self.download_dialog)
-                        end,
-                    },
-                    {
-                        -- @translators "Stream" here refers to being able to read documents from an OPDS server without downloading them completely, on a page by page basis.
-                        text = _("Stream from page") .. " " .. OPDSConstants.ICONS.STREAM_NEXT, -- append BLACK RIGHT-POINTING DOUBLE TRIANGLE
-                        callback = function()
-                            OPDSPSE:streamPages(acquisition.href, acquisition.count, true, self.root_catalog_username,
-                                self.root_catalog_password)
-                            UIManager:close(self.download_dialog)
-                        end,
-                    },
-                },
-            }
-
-            if acquisition.last_read then
-                table.insert(stream_buttons, {
-                    {
-                        -- @translators "Stream" here refers to being able to read documents from an OPDS server without downloading them completely, on a page by page basis.
-                        text = OPDSConstants.ICONS.STREAM_RESUME ..
-                            " " .. _("Resume stream from page") .. " " .. acquisition.last_read, -- prepend BLACK RIGHT-POINTING TRIANGLE
-                        callback = function()
-                            OPDSPSE:streamPages(acquisition.href, acquisition.count, false, self.root_catalog_username,
-                                self.root_catalog_password, acquisition.last_read)
-                            UIManager:close(self.download_dialog)
-                        end,
-                    },
-                })
-            end
-        elseif acquisition.type == "borrow" then
-            table.insert(download_buttons, {
-                text = _("Borrow"),
-                enabled = false,
-            })
-        else
-            local filetype = self.getFiletype(acquisition)
-            if filetype then -- supported file type
-                local text = url.unescape(acquisition.title or string.upper(filetype))
-                table.insert(download_buttons, {
-                    text = text .. OPDSConstants.ICONS.DOWNLOAD, -- append DOWNWARDS BLACK ARROW
-                    callback = function()
-                        UIManager:close(self.download_dialog)
-                        local local_path = self:getLocalDownloadPath(filename, filetype, acquisition.href)
-                        self:checkDownloadFile(local_path, acquisition.href, self.root_catalog_username,
-                            self.root_catalog_password, self.file_downloaded_callback)
-                    end,
-                    hold_callback = function()
-                        UIManager:close(self.download_dialog)
-                        table.insert(self.downloads, {
-                            file     = self:getLocalDownloadPath(filename, filetype, acquisition.href),
-                            url      = acquisition.href,
-                            info     = type(item.content) == "string" and util.htmlToPlainTextIfHtml(item.content) or "",
-                            catalog  = self.root_catalog_title,
-                            username = self.root_catalog_username,
-                            password = self.root_catalog_password,
-                        })
-                        self._manager.updated = true
-                        Notification:notify(_("Book added to download list"), Notification.SOURCE_OTHER)
-                    end,
-                })
-            end
-        end
-    end
-
-    local buttons_nb = #download_buttons
-    if buttons_nb > 0 then
-        if buttons_nb == 1 then -- one wide button
-            table.insert(buttons, download_buttons)
-        else
-            if buttons_nb % 2 == 1 then -- we need even number of buttons
-                table.insert(download_buttons, { text = "" })
-            end
-            for i = 1, buttons_nb, 2 do -- two buttons in a row
-                table.insert(buttons, { download_buttons[i], download_buttons[i + 1] })
-            end
-        end
-        table.insert(buttons, {}) -- separator
-    end
-    if stream_buttons then
-        for _, button_list in ipairs(stream_buttons) do
-            table.insert(buttons, button_list)
-        end
-        table.insert(buttons, {}) -- separator
-    end
-    table.insert(buttons, {       -- action buttons
-        {
-            text = _("Choose folder"),
-            callback = function()
-                require("ui/downloadmgr"):new {
-                    onConfirm = function(path)
-                        logger.dbg("Download folder set to", path)
-                        G_reader_settings:saveSetting("download_dir", path)
-                        self.download_dialog:setTitle(createTitle(path, filename))
-                    end,
-                }:chooseDir(self:getCurrentDownloadDir())
-            end,
-        },
-        {
-            text = _("Change filename"),
-            callback = function()
-                local dialog
-                dialog = InputDialog:new {
-                    title = _("Enter filename"),
-                    input = filename or filename_orig,
-                    input_hint = filename_orig,
-                    buttons = {
-                        {
-                            {
-                                text = _("Cancel"),
-                                id = "close",
-                                callback = function()
-                                    UIManager:close(dialog)
-                                end,
-                            },
-                            {
-                                text = _("Set filename"),
-                                is_enter_default = true,
-                                callback = function()
-                                    filename = dialog:getInputValue()
-                                    if filename == "" then
-                                        filename = filename_orig
-                                    end
-                                    UIManager:close(dialog)
-                                    self.download_dialog:setTitle(createTitle(self:getCurrentDownloadDir(), filename))
-                                end,
-                            },
-                        }
-                    },
-                }
-                UIManager:show(dialog)
-                dialog:onShowKeyboard()
-            end,
-        },
-    })
-    local cover_link = item.image or item.thumbnail
-    table.insert(buttons, {
-        {
-            text = _("Book cover"),
-            enabled = cover_link and true or false,
-            callback = function()
-                OPDSPSE:streamPages(cover_link, 1, false, self.root_catalog_username, self.root_catalog_password)
-            end,
-        },
-        {
-            text = _("Book information"),
-            enabled = type(item.content) == "string",
-            callback = function()
-                UIManager:show(TextViewer:new {
-                    title = item.text,
-                    title_multilines = true,
-                    text = util.htmlToPlainTextIfHtml(item.content),
-                    text_type = "book_info",
-                })
-            end,
-        },
-    })
-
-    self.download_dialog = ButtonDialog:new {
-        title = createTitle(self:getCurrentDownloadDir(), filename),
-        buttons = buttons,
-    }
+    self.download_dialog = DownloadDialogBuilder.buildDownloadDialog(self, item, filename, createTitle)
     UIManager:show(self.download_dialog)
-end
-
--- Helper function to get the filetype from an acquisitions table
-function OPDSBrowser.getFiletype(link)
-    local filetype = util.getFileNameSuffix(link.href)
-    if not DocumentRegistry:hasProvider("dummy." .. filetype) then
-        filetype = nil
-    end
-    if not filetype and DocumentRegistry:hasProvider(nil, link.type) then
-        filetype = DocumentRegistry:mimeToExt(link.type)
-    end
-    return filetype
 end
 
 -- Returns user selected or last opened folder
 function OPDSBrowser:getCurrentDownloadDir()
-    if self.sync then
-        return self.settings.sync_dir
-    else
-        return G_reader_settings:readSetting("download_dir") or G_reader_settings:readSetting("lastdir")
-    end
+    return DownloadManager.getCurrentDownloadDir(self)
 end
 
 function OPDSBrowser:getLocalDownloadPath(filename, filetype, remote_url)
-    local download_dir = self:getCurrentDownloadDir()
-    filename = filename and filename .. "." .. filetype:lower() or self:getServerFileName(remote_url, filetype)
-    filename = util.getSafeFilename(filename, download_dir)
-    filename = (download_dir ~= "/" and download_dir or "") .. '/' .. filename
-    return util.fixUtf8(filename, "_")
-end
-
--- Downloads a book (with "File already exists" dialog)
-function OPDSBrowser:checkDownloadFile(local_path, remote_url, username, password, caller_callback)
-    local function download()
-        UIManager:scheduleIn(1, function()
-            self:downloadFile(local_path, remote_url, username, password, caller_callback)
-        end)
-        UIManager:show(InfoMessage:new {
-            text = _("Downloading…"),
-            timeout = 1,
-        })
-    end
-    if lfs.attributes(local_path) then
-        UIManager:show(ConfirmBox:new {
-            text = T(_("The file %1 already exists. Do you want to overwrite it?"), BD.filepath(local_path)),
-            ok_text = _("Overwrite"),
-            ok_callback = function()
-                download()
-            end,
-        })
-    else
-        download()
-    end
-end
-
-function OPDSBrowser:downloadFile(local_path, remote_url, username, password, caller_callback)
-    logger.dbg("Downloading file", local_path, "from", remote_url)
-    local code, headers, status
-    local parsed = url.parse(remote_url)
-    if parsed.scheme == "http" or parsed.scheme == "https" then
-        socketutil:set_timeout(socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT)
-        code, headers, status = socket.skip(1, http.request {
-            url      = remote_url,
-            headers  = {
-                ["Accept-Encoding"] = "identity",
-            },
-            sink     = ltn12.sink.file(io.open(local_path, "w")),
-            user     = username,
-            password = password,
-        })
-        socketutil:reset_timeout()
-    else
-        UIManager:show(InfoMessage:new {
-            text = T(_("Invalid protocol:\n%1"), parsed.scheme),
-        })
-    end
-    if code == 200 then
-        logger.dbg("File downloaded to", local_path)
-        if caller_callback then
-            caller_callback(local_path)
-        end
-        return true
-    elseif code == 302 and remote_url:match("^https") and headers.location:match("^http[^s]") then
-        util.removeFile(local_path)
-        UIManager:show(InfoMessage:new {
-            text = T(_("Insecure HTTPS → HTTP downgrade attempted by redirect from:\n\n'%1'\n\nto\n\n'%2'.\n\nPlease inform the server administrator that many clients disallow this because it could be a downgrade attack."), BD.url(remote_url), BD.url(headers.location)),
-            icon = "notice-warning",
-        })
-    else
-        util.removeFile(local_path)
-        logger.dbg("OPDSBrowser:downloadFile: Request failed:", status or code)
-        logger.dbg("OPDSBrowser:downloadFile: Response headers:", headers)
-        UIManager:show(InfoMessage:new {
-            text = T(_("Could not save file to:\n%1\n%2"),
-                BD.filepath(local_path),
-                status or code or "network unreachable"),
-        })
-    end
+    return DownloadManager.getLocalDownloadPath(self, filename, filetype, remote_url)
 end
 
 -- Menu action on item tap (Download a book / Show subcatalog / Search in catalog)
@@ -989,31 +727,7 @@ function OPDSBrowser:showDownloadList()
 end
 
 function OPDSBrowser:showDownloadListMenu()
-    local dialog
-    dialog = ButtonDialog:new {
-        buttons = {
-            { {
-                text = _("Download all"),
-                callback = function()
-                    UIManager:close(dialog)
-                    self._manager:confirmDownloadDownloadList()
-                end,
-                align = "left",
-            } },
-            { {
-                text = _("Remove all"),
-                callback = function()
-                    UIManager:close(dialog)
-                    self._manager:confirmClearDownloadList()
-                end,
-                align = "left",
-            } },
-        },
-        shrink_unneeded_width = true,
-        anchor = function()
-            return self.title_bar.left_button.image.dimen
-        end,
-    }
+    local dialog = DownloadDialogBuilder.buildDownloadListMenu(self)
     UIManager:show(dialog)
 end
 
@@ -1032,145 +746,22 @@ function OPDSBrowser:updateDownloadListItemTable(item_table)
 end
 
 function OPDSBrowser:confirmDownloadDownloadList()
-    UIManager:show(ConfirmBox:new {
-        text = _("Download all books?\nExisting files will be overwritten."),
-        ok_text = _("Download"),
-        ok_callback = function()
-            NetworkMgr:runWhenConnected(function()
-                Trapper:wrap(function()
-                    self:downloadDownloadList()
-                end)
-            end)
-        end,
-    })
+    local dialog = DownloadDialogBuilder.buildDownloadAllConfirmation(self)
+    UIManager:show(dialog)
 end
 
 function OPDSBrowser:confirmClearDownloadList()
-    UIManager:show(ConfirmBox:new {
-        text = _("Remove all downloads?"),
-        ok_text = _("Remove"),
-        ok_callback = function()
-            for i in ipairs(self.downloads) do
-                self.downloads[i] = nil
-            end
-            self.download_list_updated = true
-            self._manager.updated = true
-            self.download_list:close_callback()
-        end,
-    })
+    local dialog = DownloadDialogBuilder.buildClearQueueConfirmation(self)
+    UIManager:show(dialog)
 end
 
 function OPDSBrowser:showDownloadListItemDialog(item)
-    local dl_item = self._manager.downloads[item.idx]
-    local textviewer
-    local function remove_item()
-        textviewer:onClose()
-        table.remove(self._manager.downloads, item.idx)
-        table.remove(self.item_table, item.idx)
-        self._manager:updateDownloadListItemTable(self.item_table)
-        self._manager.download_list_updated = true
-        self._manager._manager.updated = true
-    end
-    local buttons_table = {
-        {
-            {
-                text = _("Remove"),
-                callback = function()
-                    remove_item()
-                end,
-            },
-            {
-                text = _("Download"),
-                callback = function()
-                    local function file_downloaded_callback(local_path)
-                        remove_item()
-                        self._manager.file_downloaded_callback(local_path)
-                    end
-                    NetworkMgr:runWhenConnected(function()
-                        self._manager:checkDownloadFile(dl_item.file, dl_item.url, dl_item.username, dl_item.password,
-                            file_downloaded_callback)
-                    end)
-                end,
-            },
-        },
-        {}, -- separator
-        {
-            {
-                text = _("Remove all"),
-                callback = function()
-                    textviewer:onClose()
-                    self._manager:confirmClearDownloadList()
-                end,
-            },
-            {
-                text = _("Download all"),
-                callback = function()
-                    textviewer:onClose()
-                    self._manager:confirmDownloadDownloadList()
-                end,
-            },
-        },
-    }
-    local TextBoxWidget = require("ui/widget/textboxwidget")
-    local text = table.concat({
-        TextBoxWidget.PTF_HEADER,
-        TextBoxWidget.PTF_BOLD_START, _("Folder"), TextBoxWidget.PTF_BOLD_END, "\n",
-        util.splitFilePathName(dl_item.file), "\n", "\n",
-        TextBoxWidget.PTF_BOLD_START, _("File"), TextBoxWidget.PTF_BOLD_END, "\n",
-        item.text, "\n", "\n",
-        TextBoxWidget.PTF_BOLD_START, _("Description"), TextBoxWidget.PTF_BOLD_END, "\n",
-        dl_item.info,
-    })
-    textviewer = TextViewer:new {
-        title = dl_item.catalog,
-        text = text,
-        text_type = "book_info",
-        buttons_table = buttons_table,
-    }
-    UIManager:show(textviewer)
-    return true
+    return DownloadDialogBuilder.buildDownloadListItemDialog(self, item)
 end
 
 -- Download whole download list
 function OPDSBrowser:downloadDownloadList()
-    local info = InfoMessage:new { text = _("Downloading… (tap to cancel)") }
-    UIManager:show(info)
-    UIManager:forceRePaint()
-    local completed, downloaded = Trapper:dismissableRunInSubprocess(function()
-        local dl = {}
-        for _, item in ipairs(self.downloads) do
-            if self:downloadFile(item.file, item.url, item.username, item.password) then
-                dl[item.file] = true
-            end
-        end
-        return dl
-    end, info)
-    if completed then
-        UIManager:close(info)
-    end
-    local dl_count = #self.downloads
-    for i = dl_count, 1, -1 do
-        local item = self.downloads[i]
-        if downloaded and downloaded[item.file] then
-            table.remove(self.downloads, i)
-        else -- if subprocess has been interrupted, check for the downloaded file
-            local attr = lfs.attributes(item.file)
-            if attr then
-                if attr.size > 0 then
-                    table.remove(self.downloads, i)
-                else -- incomplete download
-                    os.remove(item.file)
-                end
-            end
-        end
-    end
-    dl_count = dl_count - #self.downloads
-    if dl_count > 0 then
-        self:updateDownloadListItemTable()
-        self.download_list_updated = true
-        self._manager.updated = true
-        UIManager:show(InfoMessage:new { text = T(N_("1 book downloaded", "%1 books downloaded", dl_count), dl_count) })
-    end
+    return DownloadManager.downloadDownloadList(self)
 end
 
 function OPDSBrowser:setMaxSyncDownload()
@@ -1337,7 +928,7 @@ function OPDSBrowser:fillPendingSyncs(server)
                 if i == 1 and j == 1 then
                     new_last_download = link.href
                 end
-                local filetype = self.getFiletype(link)
+                local filetype = DownloadManager.getFiletype(link)
                 if filetype then
                     if not file_str or file_list and file_list[filetype] then
                         local filename = self:getFileName(entry)
@@ -1432,66 +1023,7 @@ end
 -- Download pending syncs list
 function OPDSBrowser:downloadPendingSyncs()
     local dl_list = self.pending_syncs
-    local function dismissable_download()
-        local info = InfoMessage:new { text = _("Downloading… (tap to cancel)") }
-        UIManager:show(info)
-        UIManager:forceRePaint()
-        local completed, downloaded, duplicate_list = Trapper:dismissableRunInSubprocess(function()
-            local dl = {}
-            local dupe_list = {}
-            for _, item in ipairs(dl_list) do
-                if self.sync_server_list[item.catalog] then
-                    if lfs.attributes(item.file) and not self.sync_force then
-                        table.insert(dupe_list, item)
-                    else
-                        if self:downloadFile(item.file, item.url, item.username, item.password) then
-                            dl[item.file] = true
-                        end
-                    end
-                end
-            end
-            return dl, dupe_list
-        end, info)
-
-        if completed then
-            UIManager:close(info)
-        end
-        local dl_count = 0
-        local dl_size = #dl_list
-        for i = dl_size, 1, -1 do
-            local item = dl_list[i]
-            if downloaded and downloaded[item.file] then
-                dl_count = dl_count + 1
-                table.remove(dl_list, i)
-            else -- if subprocess has been interrupted, check for the downloaded file
-                local attr = lfs.attributes(item.file)
-                if attr then
-                    if attr.size > 0 then
-                        table.remove(dl_list, i)
-                        if attr.modification > os.time() - 300 then -- Only count files touched in the last 5 mins
-                            dl_count = dl_count + 1
-                        end
-                    else -- incomplete download
-                        os.remove(item.file)
-                    end
-                end
-            end
-        end
-        local duplicate_count = duplicate_list and #duplicate_list or 0
-        dl_count = dl_count - duplicate_count
-        -- Make downloaded count timeout if there's a duplicate file prompt
-        local timeout = nil
-        if duplicate_count > 0 then
-            timeout = 3
-        end
-        if dl_count > 0 then
-            UIManager:show(InfoMessage:new { text = T(N_("1 book downloaded", "%1 books downloaded", dl_count), dl_count), timeout = timeout, })
-        end
-        self._manager.updated = true
-        return duplicate_list
-    end
-
-    local duplicate_list = dismissable_download()
+    local duplicate_list = DownloadManager.downloadPendingSyncs(self, dl_list)
 
     if duplicate_list and #duplicate_list > 0 then
         local textviewer
@@ -1520,7 +1052,7 @@ function OPDSBrowser:downloadPendingSyncs()
                                 table.insert(dl_list, entry)
                             end
                             Trapper:wrap(function()
-                                dismissable_download()
+                                DownloadManager.downloadPendingSyncs(self, dl_list)
                             end)
                         end
                     },
@@ -1541,7 +1073,7 @@ function OPDSBrowser:downloadPendingSyncs()
                                 table.insert(dl_list, entry)
                             end
                             Trapper:wrap(function()
-                                dismissable_download()
+                                DownloadManager.downloadPendingSyncs(self, dl_list)
                             end)
                         end
                     },
