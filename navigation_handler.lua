@@ -316,7 +316,7 @@ function NavigationHandler.appendCatalog(item_url, browser)
 				username = browser.root_catalog_username,
 				password = browser.root_catalog_password,
 			}
-			-- luacheck: ignore 212
+			-- luacheck: ignore facets search
 			local items, facets, search = NavigationHandler.genItemTableFromCatalog(
 				catalog, url, context,
 				function(...) if browser._debugLog then browser:_debugLog(...) end end)
