@@ -38,6 +38,9 @@ local CatalogManager = require("catalog_manager")
 -- Import the navigation handler
 local NavigationHandler = require("navigation_handler")
 
+-- Import the debug utility
+local Debug = require("utils.debug")
+
 -- Changed from Menu:extend to OPDSCoverMenu:extend to support cover images
 local OPDSBrowser = OPDSCoverMenu:extend {
     catalog_type             = Constants.CATALOG_TYPE,
@@ -72,9 +75,7 @@ function OPDSBrowser:init()
 end
 
 function OPDSBrowser:_debugLog(...)
-    if self._manager and self._manager.settings and self._manager.settings.debug_mode then
-        logger.dbg("OPDS+ Browser:", ...)
-    end
+    Debug.log(self._manager, "Browser:", ...)
 end
 
 function OPDSBrowser:toggleViewMode()
