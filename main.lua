@@ -1,11 +1,8 @@
 local BD = require("ui/bidi")
-local ButtonDialog = require("ui/widget/buttondialog")
 local ConfirmBox = require("ui/widget/confirmbox")
 local DataStorage = require("datastorage")
 local Dispatcher = require("dispatcher")
-local InfoMessage = require("ui/widget/infomessage")
 local OPDSBrowser = require("ui.browser")
-local SpinWidget = require("ui/widget/spinwidget")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local lfs = require("libs/libkoreader-lfs")
@@ -19,6 +16,9 @@ local Constants = require("models.constants")
 -- Import settings manager
 local Settings = require("config.settings")
 local SettingsMenu = require("config.settings_menu")
+
+-- Import settings dialogs
+local SettingsDialogs = require("ui.dialogs.settings_dialogs")
 
 local OPDS = WidgetContainer:extend {
     name = "opdsplus",
@@ -181,479 +181,39 @@ function OPDS:addToMainMenu(menu_items)
 end
 
 function OPDS:showCoverSizeMenu()
-    local current_preset = self:getCurrentPresetName()
-    local current_ratio = self:getCoverHeightRatio()
-
-    -- Build button list with presets
-    local buttons = {}
-
-    -- Add preset buttons
-    for i = 1, #Constants.COVER_SIZE_PRESETS do
-        local preset = Constants.COVER_SIZE_PRESETS[i]
-        local is_current = (current_preset == preset.name)
-        local button_text = preset.name
-        if is_current then
-            button_text = "✓ " .. button_text
-        end
-
-        table.insert(buttons, {
-            {
-                text = button_text,
-                callback = function()
-                    UIManager:close(self.cover_size_dialog)
-                    self:setCoverHeightRatio(preset.ratio, preset.name)
-                    UIManager:show(InfoMessage:new {
-                        text = T(_("Cover size set to %1 (%2%).\n\n%3\n\nChanges will apply when you next browse a catalog."),
-                            preset.name,
-                            math.floor(preset.ratio * 100),
-                            preset.description),
-                        timeout = 3,
-                    })
-                end,
-            },
-        })
-    end
-
-    -- Add separator
-    table.insert(buttons, {})
-
-    -- Add custom option button
-    local custom_button_text = "Custom"
-    if current_preset == "Custom" then
-        custom_button_text = "✓ " .. custom_button_text .. " (" .. math.floor(current_ratio * 100) .. "%)"
-    end
-
-    table.insert(buttons, {
-        {
-            text = custom_button_text,
-            callback = function()
-                UIManager:close(self.cover_size_dialog)
-                self:showCustomSizeDialog()
-            end,
-        },
-    })
-
-    -- Create and show dialog
-    self.cover_size_dialog = ButtonDialog:new {
-        title = _("Cover Size Settings\n\nSelect a preset or choose custom size"),
-        title_align = "center",
-        buttons = buttons,
-    }
-    UIManager:show(self.cover_size_dialog)
+    SettingsDialogs.showCoverSizeMenu(self)
 end
 
 function OPDS:showCustomSizeDialog()
-    local current_ratio = self:getCoverHeightRatio()
-    local current_percent = math.floor(current_ratio * 100)
-    local spin_widget
-    spin_widget = SpinWidget:new {
-        title_text = _("Custom Cover Size"),
-        info_text = _("Adjust the size of book covers as a percentage of screen height.\n\n• Smaller values = more books per page\n• Larger values = bigger covers, fewer books per page\n\nRecommended range: 8-20%"),
-        value = current_percent,
-        value_min = 5,
-        value_max = 25,
-        value_step = 1,
-        value_hold_step = 5,
-        unit = "%",
-        ok_text = _("Apply"),
-        default_value = 10,
-        callback = function(spin)
-            local new_ratio = spin.value / 100
-            self:setCoverHeightRatio(new_ratio, "Custom")
-            UIManager:show(InfoMessage:new {
-                text = T(_("Cover size set to Custom (%1%).\n\nChanges will apply when you next browse a catalog."),
-                    spin.value),
-                timeout = 3,
-            })
-        end,
-        extra_text = _("Back to Presets"),
-        extra_callback = function()
-            UIManager:close(spin_widget)
-            self:showCoverSizeMenu()
-        end,
-    }
-    UIManager:show(spin_widget)
+    SettingsDialogs.showCustomSizeDialog(self)
 end
 
 function OPDS:showFontSelectionMenu(setting_key, title)
-    local current_font = self:getSetting(setting_key)
-    local available_fonts = self:getAvailableFonts()
-
-    -- Build button list with available fonts
-    local buttons = {}
-
-    for i = 1, #available_fonts do
-        local font_info = available_fonts[i]
-        local is_current = (current_font == font_info.value)
-        local button_text = font_info.name
-        if is_current then
-            button_text = "✓ " .. button_text
-        end
-
-        table.insert(buttons, {
-            {
-                text = button_text,
-                callback = function()
-                    UIManager:close(self.font_dialog)
-                    self:saveSetting(setting_key, font_info.value)
-                    UIManager:show(InfoMessage:new {
-                        text = T(_("%1 set to:\n%2\n\nChanges will apply when you next browse a catalog."),
-                            title,
-                            font_info.name),
-                        timeout = 3,
-                    })
-                end,
-            },
-        })
-
-        -- Add separator every 5 items for readability
-        if i % 5 == 0 and i < #available_fonts then
-            table.insert(buttons, {})
-        end
-    end
-
-    -- Create and show dialog
-    self.font_dialog = ButtonDialog:new {
-        title = T(_("%1 Selection\n\nChoose a font"), title),
-        title_align = "center",
-        buttons = buttons,
-    }
-    UIManager:show(self.font_dialog)
+    SettingsDialogs.showFontSelectionMenu(self, setting_key, title)
 end
 
 function OPDS:showSizeSelectionMenu(setting_key, title, min_size, max_size, default_size)
-    local current_size = self:getSetting(setting_key)
-
-    local spin_widget = SpinWidget:new {
-        title_text = title,
-        info_text = _("Adjust the font size.\n\nChanges will apply when you next browse a catalog."),
-        value = current_size,
-        value_min = min_size,
-        value_max = max_size,
-        value_step = 1,
-        value_hold_step = 2,
-        unit = "pt",
-        ok_text = _("Apply"),
-        default_value = default_size,
-        callback = function(spin)
-            self:saveSetting(setting_key, spin.value)
-            UIManager:show(InfoMessage:new {
-                text = T(_("%1 set to %2pt.\n\nChanges will apply when you next browse a catalog."),
-                    title,
-                    spin.value),
-                timeout = 2,
-            })
-        end,
-    }
-    UIManager:show(spin_widget)
+    SettingsDialogs.showSizeSelectionMenu(self, setting_key, title, min_size, max_size, default_size)
 end
 
 function OPDS:showGridLayoutMenu()
-    local current_columns = self.settings.grid_columns or 3
-    local current_preset = self.settings.grid_size_preset or "Balanced"
-
-    local buttons = {}
-
-    -- Preset buttons with column counts
-    local presets = {
-        { name = "Compact",  columns = 4, desc = _("More books per page, smaller covers") },
-        { name = "Balanced", columns = 3, desc = _("Good balance of size and quantity") },
-        { name = "Spacious", columns = 2, desc = _("Fewer books, larger covers") },
-    }
-
-    for i, preset in ipairs(presets) do
-        local is_current = (current_preset == preset.name and current_columns == preset.columns)
-        local button_text = preset.name .. " (" .. preset.columns .. " " .. _("cols") .. ")"
-        if is_current then
-            button_text = "✓ " .. button_text
-        end
-
-        table.insert(buttons, {
-            {
-                text = button_text,
-                callback = function()
-                    UIManager:close(self.grid_layout_dialog)
-                    self.settings.grid_columns = preset.columns
-                    self.settings.grid_size_preset = preset.name
-                    self.opds_settings:saveSetting("settings", self.settings)
-                    self.opds_settings:flush()
-                    UIManager:show(InfoMessage:new {
-                        text = T(_("Grid layout set to %1\n\n%2\n\nChanges will apply when you next browse a catalog in grid view."),
-                            preset.name, preset.desc),
-                        timeout = 2.5,
-                    })
-                end,
-            },
-        })
-    end
-
-    -- Add separator
-    table.insert(buttons, {})
-
-    -- Custom option
-    local custom_text = _("Custom")
-    local is_custom = (current_preset ~= "Compact" and current_preset ~= "Balanced" and current_preset ~= "Spacious")
-    if is_custom then
-        custom_text = "✓ " .. custom_text .. " (" .. current_columns .. " " .. _("cols") .. ")"
-    end
-
-    table.insert(buttons, {
-        {
-            text = custom_text,
-            callback = function()
-                UIManager:close(self.grid_layout_dialog)
-                self:showGridColumnsMenu()
-            end,
-        },
-    })
-
-    self.grid_layout_dialog = ButtonDialog:new {
-        title = _("Grid Layout Presets\n\nChoose how books are displayed in grid view"),
-        title_align = "center",
-        buttons = buttons,
-    }
-    UIManager:show(self.grid_layout_dialog)
+    SettingsDialogs.showGridLayoutMenu(self)
 end
 
 function OPDS:showGridColumnsMenu()
-    local current_columns = self.settings.grid_columns or 3
-
-    local buttons = {}
-
-    for cols = 2, 4 do
-        local is_current = (current_columns == cols)
-        local button_text = tostring(cols)
-        if cols == 2 then
-            button_text = button_text .. " " .. _("columns (wider)")
-        elseif cols == 3 then
-            button_text = button_text .. " " .. _("columns (balanced)")
-        else
-            button_text = button_text .. " " .. _("columns (compact)")
-        end
-
-        if is_current then
-            button_text = "✓ " .. button_text
-        end
-
-        table.insert(buttons, {
-            {
-                text = button_text,
-                callback = function()
-                    UIManager:close(self.grid_columns_dialog)
-                    self.settings.grid_columns = cols
-                    self.settings.grid_size_preset = "Custom"
-                    self.opds_settings:saveSetting("settings", self.settings)
-                    self.opds_settings:flush()
-                    UIManager:show(InfoMessage:new {
-                        text = T(_("Grid columns set to %1 (Custom).\n\nChanges will apply when you next browse a catalog in grid mode."), cols),
-                        timeout = 2,
-                    })
-                end,
-            },
-        })
-    end
-
-    -- Add separator and back button
-    table.insert(buttons, {})
-    table.insert(buttons, {
-        {
-            text = "← " .. _("Back to Presets"),
-            callback = function()
-                UIManager:close(self.grid_columns_dialog)
-                self:showGridLayoutMenu()
-            end,
-        },
-    })
-
-    self.grid_columns_dialog = ButtonDialog:new {
-        title = _("Custom Grid Columns\n\nManually choose column count"),
-        title_align = "center",
-        buttons = buttons,
-    }
-    UIManager:show(self.grid_columns_dialog)
+    SettingsDialogs.showGridColumnsMenu(self)
 end
 
 function OPDS:showGridBorderMenu()
-    local current_style = self.settings.grid_border_style or "none"
-    local current_size = self.settings.grid_border_size or 2
-    local current_color = self.settings.grid_border_color or "dark_gray"
-
-    local buttons = {}
-
-    -- Border Style Section
-    table.insert(buttons, {
-        {
-            text = _("Border Style"),
-            enabled = false,
-        },
-    })
-
-    local styles = {
-        { id = "none",       name = _("No Borders"),       desc = _("Clean, borderless grid") },
-        { id = "hash",       name = _("Hash Grid"),        desc = _("Shared borders like # pattern") },
-        { id = "individual", name = _("Individual Tiles"), desc = _("Each book has its own border") },
-    }
-
-    for i, style in ipairs(styles) do
-        local is_current = (current_style == style.id)
-        local button_text = style.name
-        if is_current then
-            button_text = "✓ " .. button_text
-        end
-
-        table.insert(buttons, {
-            {
-                text = button_text,
-                callback = function()
-                    UIManager:close(self.grid_border_dialog)
-                    self.settings.grid_border_style = style.id
-                    self.opds_settings:saveSetting("settings", self.settings)
-                    self.opds_settings:flush()
-                    UIManager:show(InfoMessage:new {
-                        text = T(_("Border style set to: %1\n\n%2\n\nChanges will apply when you next browse a catalog in grid view."),
-                            style.name, style.desc),
-                        timeout = 2.5,
-                    })
-                end,
-            },
-        })
-    end
-
-    -- Separator
-    table.insert(buttons, {})
-
-    -- Border Customization (only if not "none")
-    if current_style ~= "none" then
-        table.insert(buttons, {
-            {
-                text = _("Customize Borders"),
-                enabled = false,
-            },
-        })
-
-        -- Border Size
-        table.insert(buttons, {
-            {
-                text = T(_("Border Thickness: %1px"), current_size),
-                callback = function()
-                    UIManager:close(self.grid_border_dialog)
-                    self:showGridBorderSizeMenu()
-                end,
-            },
-        })
-
-        -- Border Color
-        local color_display = current_color == "dark_gray" and _("Dark Gray") or
-            current_color == "light_gray" and _("Light Gray") or
-            _("Black")
-        table.insert(buttons, {
-            {
-                text = T(_("Border Color: %1"), color_display),
-                callback = function()
-                    UIManager:close(self.grid_border_dialog)
-                    self:showGridBorderColorMenu()
-                end,
-            },
-        })
-    end
-
-    self.grid_border_dialog = ButtonDialog:new {
-        title = _("Grid Border Settings\n\nCustomize the appearance of grid borders"),
-        title_align = "center",
-        buttons = buttons,
-    }
-    UIManager:show(self.grid_border_dialog)
+    SettingsDialogs.showGridBorderMenu(self)
 end
 
 function OPDS:showGridBorderSizeMenu()
-    local current_size = self.settings.grid_border_size or 2
-    local spin_widget
-    spin_widget = SpinWidget:new {
-        title_text = _("Border Thickness"),
-        info_text = _("Adjust the thickness of grid borders.\n\n• Thinner borders = more subtle\n• Thicker borders = more defined\n\nRecommended: 2-3px"),
-        value = current_size,
-        value_min = 1,
-        value_max = 5,
-        value_step = 1,
-        value_hold_step = 1,
-        unit = "px",
-        ok_text = _("Apply"),
-        default_value = 2,
-        callback = function(spin)
-            self.settings.grid_border_size = spin.value
-            self.opds_settings:saveSetting("settings", self.settings)
-            self.opds_settings:flush()
-            UIManager:show(InfoMessage:new {
-                text = T(_("Border thickness set to %1px.\n\nChanges will apply when you next browse a catalog in grid view."),
-                    spin.value),
-                timeout = 2,
-            })
-        end,
-        extra_text = _("Back to Borders"),
-        extra_callback = function()
-            UIManager:close(spin_widget)
-            self:showGridBorderMenu()
-        end,
-    }
-    UIManager:show(spin_widget)
+    SettingsDialogs.showGridBorderSizeMenu(self)
 end
 
 function OPDS:showGridBorderColorMenu()
-    local current_color = self.settings.grid_border_color or "dark_gray"
-
-    local buttons = {}
-
-    local colors = {
-        { id = "light_gray", name = _("Light Gray"), desc = _("Subtle, minimal contrast") },
-        { id = "dark_gray",  name = _("Dark Gray"),  desc = _("Balanced, clear definition") },
-        { id = "black",      name = _("Black"),      desc = _("High contrast, bold borders") },
-    }
-
-    for i, color in ipairs(colors) do
-        local is_current = (current_color == color.id)
-        local button_text = color.name
-        if is_current then
-            button_text = "✓ " .. button_text
-        end
-
-        table.insert(buttons, {
-            {
-                text = button_text,
-                callback = function()
-                    UIManager:close(self.grid_border_color_dialog)
-                    self.settings.grid_border_color = color.id
-                    self.opds_settings:saveSetting("settings", self.settings)
-                    self.opds_settings:flush()
-                    UIManager:show(InfoMessage:new {
-                        text = T(_("Border color set to: %1\n\n%2\n\nChanges will apply when you next browse a catalog in grid view."),
-                            color.name, color.desc),
-                        timeout = 2.5,
-                    })
-                end,
-            },
-        })
-    end
-
-    -- Separator
-    table.insert(buttons, {})
-
-    -- Back button
-    table.insert(buttons, {
-        {
-            text = "← " .. _("Back to Border Settings"),
-            callback = function()
-                UIManager:close(self.grid_border_color_dialog)
-                self:showGridBorderMenu()
-            end,
-        },
-    })
-
-    self.grid_border_color_dialog = ButtonDialog:new {
-        title = _("Border Color\n\nChoose the color for grid borders"),
-        title_align = "center",
-        buttons = buttons,
-    }
-    UIManager:show(self.grid_border_color_dialog)
+    SettingsDialogs.showGridBorderColorMenu(self)
 end
 
 function OPDS:onShowOPDSCatalog()
