@@ -38,26 +38,45 @@ function OPDSUtils.buildAbsoluteUrl(base_url, href)
 	return url.absolute(base_url, href)
 end
 
--- Extract filename from URL, handling query parameters
+-- Extract filename from URL, handling query parameters and URL decoding
 -- @param item_url string URL to extract filename from
--- @return string Extracted filename
+-- @return string Extracted and decoded filename
 function OPDSUtils.extractFilenameFromUrl(item_url)
-	return item_url:gsub(".*/", ""):gsub("?.*", "")
+	local url = require("socket.url")
+
+	-- Remove query parameters and fragments
+	local filename = item_url:gsub("?.*", ""):gsub("#.*", "")
+
+	-- Extract just the filename part
+	filename = filename:gsub(".*/", "")
+
+	-- URL decode the filename
+	filename = url.unescape(filename)
+
+	return filename
 end
 
 -- Parse filename from Content-Disposition header
 -- @param disposition string Content-Disposition header value
--- @return string|nil Extracted filename or nil
+-- @return string|nil Extracted and decoded filename or nil
 function OPDSUtils.parseContentDisposition(disposition)
 	if not disposition then return nil end
 
+	local url = require("socket.url")
+
 	-- Try quoted filename first: filename="example.epub"
 	local filename = disposition:match('filename="([^"]+)"')
-	if filename then return filename end
+	if filename then
+		return url.unescape(filename)
+	end
 
 	-- Try unquoted filename: filename=example.epub
 	filename = disposition:match('filename=([^;]+)')
-	return filename
+	if filename then
+		return url.unescape(filename)
+	end
+
+	return nil
 end
 
 -- Add file extension if missing

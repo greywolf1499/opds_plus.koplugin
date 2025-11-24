@@ -233,6 +233,9 @@ end
 -- @param item table|nil Catalog item to edit (nil for new catalog)
 -- @return table MultiInputDialog widget
 function OPDSMenuBuilder.buildCatalogEditDialog(browser, item)
+	local CatalogManager = require("catalog_manager")
+	local InfoMessage = require("ui/widget/infomessage")
+
 	local fields = {
 		{
 			hint = _("Catalog name"),
@@ -277,6 +280,30 @@ function OPDSMenuBuilder.buildCatalogEditDialog(browser, item)
 					text = _("Save"),
 					callback = function()
 						local new_fields = dialog:getFields()
+
+						-- Validate URL before saving
+						local is_valid, validated_url_or_error = CatalogManager.validateCatalogUrl(new_fields[2])
+
+						if not is_valid then
+							-- Show error message
+							UIManager:show(InfoMessage:new {
+								text = _("Invalid URL: ") .. validated_url_or_error,
+								timeout = 3,
+							})
+							return -- Don't close dialog, let user fix it
+						end
+
+						-- Validate catalog name
+						if not new_fields[1] or new_fields[1]:match("^%s*$") then
+							UIManager:show(InfoMessage:new {
+								text = _("Catalog name cannot be empty"),
+								timeout = 3,
+							})
+							return
+						end
+
+						-- Use validated URL
+						new_fields[2] = validated_url_or_error
 						new_fields[5] = check_button_raw_names.checked or nil
 						new_fields[6] = check_button_sync_catalog.checked or nil
 						browser:editCatalogFromInput(new_fields, item)
@@ -286,7 +313,6 @@ function OPDSMenuBuilder.buildCatalogEditDialog(browser, item)
 			},
 		},
 	}
-
 	check_button_raw_names = CheckButton:new {
 		text = _("Use server filenames"),
 		checked = item and item.raw_names,
@@ -297,7 +323,6 @@ function OPDSMenuBuilder.buildCatalogEditDialog(browser, item)
 		checked = item and item.sync,
 		parent = dialog,
 	}
-
 	dialog:addWidget(check_button_raw_names)
 	dialog:addWidget(check_button_sync_catalog)
 
