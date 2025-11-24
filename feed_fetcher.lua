@@ -196,6 +196,7 @@ function FeedFetcher.genItemTableFromURL(item_url, username, password, debug_cal
 	end
 
 	-- Call the provided catalog parser function
+	-- Pass catalog and the item_url
 	return catalog_parser(catalog, item_url)
 end
 

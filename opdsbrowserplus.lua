@@ -216,7 +216,9 @@ function OPDSBrowser:genItemTableFromURL(item_url)
     return FeedFetcher.genItemTableFromURL(item_url,
         self.root_catalog_username, self.root_catalog_password,
         function(...) self:_debugLog(...) end,
-        function(catalog, url) return self:genItemTableFromCatalog(catalog, url) end)
+        function(catalog, catalog_url)
+            return self:genItemTableFromCatalog(catalog, catalog_url)
+        end)
 end
 
 function OPDSBrowser:genItemTableFromCatalog(catalog, item_url)
