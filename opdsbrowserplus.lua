@@ -35,6 +35,9 @@ local DownloadDialogBuilder = require("ui/download_dialog_builder")
 -- Import the feed fetcher
 local FeedFetcher = require("feed_fetcher")
 
+-- Import the catalog manager
+local CatalogManager = require("catalog_manager")
+
 -- Changed from Menu:extend to OPDSCoverMenu:extend to support cover images
 local OPDSBrowser = OPDSCoverMenu:extend {
     catalog_type             = OPDSConstants.CATALOG_TYPE,
@@ -133,16 +136,7 @@ function OPDSBrowser:showCatalogMenu()
 end
 
 function OPDSBrowser:genItemTableFromRoot()
-    local item_table = {
-        {
-            text = _("Downloads"),
-            mandatory = #self.downloads,
-        },
-    }
-    for _, server in ipairs(self.servers) do
-        table.insert(item_table, OPDSUtils.buildRootEntry(server))
-    end
-    return item_table
+    return CatalogManager.genItemTableFromRoot(self.servers, self.downloads, _)
 end
 
 function OPDSBrowser:addEditCatalog(item)
@@ -158,34 +152,17 @@ function OPDSBrowser:addSubCatalog(item_url)
 end
 
 function OPDSBrowser:editCatalogFromInput(fields, item, no_refresh)
-    local new_server = {
-        title     = fields[1],
-        url       = fields[2]:match("^%a+://") and fields[2] or "http://" .. fields[2],
-        username  = fields[3] ~= "" and fields[3] or nil,
-        password  = fields[4] ~= "" and fields[4] or nil,
-        raw_names = fields[5],
-        sync      = fields[6],
-    }
-    local new_item = OPDSUtils.buildRootEntry(new_server)
-    local new_idx, itemnumber
-    if item then
-        new_idx = item.idx
-        itemnumber = -1
-    else
-        new_idx = #self.servers + 2
-        itemnumber = new_idx
-    end
-    self.servers[new_idx - 1] = new_server
-    self.item_table[new_idx] = new_item
-    if not no_refresh then
+    local new_idx, itemnumber, should_refresh = CatalogManager.editCatalogFromInput(
+        self.servers, self.item_table, fields, item, no_refresh)
+
+    if should_refresh then
         self:switchItemTable(nil, self.item_table, itemnumber)
     end
     self._manager.updated = true
 end
 
 function OPDSBrowser:deleteCatalog(item)
-    table.remove(self.servers, item.idx - 1)
-    table.remove(self.item_table, item.idx)
+    self.item_table = CatalogManager.deleteCatalog(self.servers, self.item_table, item)
     self:switchItemTable(nil, self.item_table, -1)
     self._manager.updated = true
 end
@@ -747,7 +724,7 @@ function OPDSBrowser:getFileName(item)
 end
 
 function OPDSBrowser:updateFieldInCatalog(item, name, value)
-    item[name] = value
+    CatalogManager.updateCatalogField(item, name, value)
     self._manager.updated = true
 end
 
