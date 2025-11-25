@@ -39,6 +39,9 @@ local BrowserContext = require("core.browser_context")
 -- Import the sync manager
 local SyncManager = require("core.sync_manager")
 
+-- Import the state manager
+local StateManager = require("core.state_manager")
+
 -- Import the debug utility
 local Debug = require("utils.debug")
 
@@ -80,16 +83,15 @@ function OPDSBrowser:_debugLog(...)
 end
 
 function OPDSBrowser:toggleViewMode()
-    -- Get current mode
-    local current_mode = self._manager.settings.display_mode or "list"
+    -- Get current mode using StateManager
+    local state = StateManager.getInstance()
+    local current_mode = state:getDisplayMode()
 
     -- Toggle to opposite mode
     local new_mode = (current_mode == "list") and "grid" or "list"
 
-    -- Save new mode
-    self._manager.settings.display_mode = new_mode
-    self._manager.opds_settings:saveSetting("settings", self._manager.settings)
-    self._manager.opds_settings:flush()
+    -- Save new mode via StateManager (handles persistence)
+    state:setDisplayMode(new_mode)
 
     self:_debugLog("Toggling view mode from", current_mode, "to", new_mode)
 
@@ -161,13 +163,13 @@ function OPDSBrowser:editCatalogFromInput(fields, item, no_refresh)
     if should_refresh then
         self:switchItemTable(nil, self.item_table, itemnumber)
     end
-    self._manager.updated = true
+    StateManager.getInstance():markDirty()
 end
 
 function OPDSBrowser:deleteCatalog(item)
     self.item_table = CatalogManager.deleteCatalog(self.servers, self.item_table, item)
     self:switchItemTable(nil, self.item_table, -1)
-    self._manager.updated = true
+    StateManager.getInstance():markDirty()
 end
 
 function OPDSBrowser:fetchFeed(item_url, headers_only)
@@ -476,7 +478,7 @@ end
 
 function OPDSBrowser:updateFieldInCatalog(item, name, value)
     CatalogManager.updateCatalogField(item, name, value)
-    self._manager.updated = true
+    StateManager.getInstance():markDirty()
 end
 
 function OPDSBrowser:checkSyncDownload(idx)

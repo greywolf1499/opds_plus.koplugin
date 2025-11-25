@@ -20,6 +20,9 @@ local SettingsMenu = require("config.settings_menu")
 -- Import settings dialogs
 local SettingsDialogs = require("ui.dialogs.settings_dialogs")
 
+-- Import state manager
+local StateManager = require("core.state_manager")
+
 local OPDS = WidgetContainer:extend {
     name = "opdsplus",
     opds_settings_file = DataStorage:getSettingsDir() .. "/opdsplus.lua",
@@ -40,6 +43,9 @@ function OPDS:init()
     if settings_manager.is_first_run then
         self.updated = true -- first run, force flush
     end
+
+    -- Initialize state manager singleton
+    StateManager.getInstance(self)
 
     -- Load servers, downloads, and pending syncs
     self.servers = self.opds_settings:readSetting("servers", Constants.DEFAULT_SERVERS)
