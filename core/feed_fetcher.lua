@@ -16,6 +16,7 @@ local T = require("ffi/util").template
 local OPDSParser = require("core.parser")
 local Constants = require("models.constants")
 local OPDSUtils = require("opds_utils")
+local Result = require("utils.result")
 
 local FeedFetcher = {}
 
@@ -126,6 +127,23 @@ function FeedFetcher.parseFeed(item_url, username, password, debug_callback)
 	return nil
 end
 
+-- Parse feed with Result-based error handling
+-- @param item_url string URL to fetch and parse
+-- @param username string|nil Optional HTTP auth username
+-- @param password string|nil Optional HTTP auth password
+-- @param debug_callback function|nil Optional debug logging callback
+-- @return Result Result with parsed feed or error
+function FeedFetcher.parseFeedResult(item_url, username, password, debug_callback)
+	local result = Result.wrapPcall(FeedFetcher.parseFeed)(item_url, username, password, debug_callback)
+
+	-- Convert nil success to error
+	if result:isOk() and result.value == nil then
+		return Result.err("Failed to fetch or parse feed")
+	end
+
+	return result
+end
+
 -- Extract server filename from URL headers
 -- @param item_url string URL to check
 -- @param filetype string|nil Desired file extension
@@ -184,16 +202,15 @@ end
 -- @param catalog_parser function Function to parse catalog into item table
 -- @return table Item table suitable for menu display
 function FeedFetcher.genItemTableFromURL(item_url, username, password, debug_callback, catalog_parser)
-	local ok, catalog = pcall(FeedFetcher.parseFeed, item_url, username, password, debug_callback)
+	local result = FeedFetcher.parseFeedResult(item_url, username, password, debug_callback)
 
-	if not ok then
-		logger.info("Cannot get catalog info from", item_url, catalog)
+	local catalog = result:unwrapOrElse(function(err)
+		logger.info("Cannot get catalog info from", item_url, err)
 		UIManager:show(InfoMessage:new {
 			text = T(_("Cannot get catalog info from %1"), (item_url and BD.url(item_url) or "nil")),
 		})
-		---@diagnostic disable-next-line: cast-local-type
-		catalog = nil
-	end
+		return nil
+	end)
 
 	-- Call the provided catalog parser function
 	-- Pass catalog and the item_url
