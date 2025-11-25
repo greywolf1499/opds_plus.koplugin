@@ -36,7 +36,7 @@ end
 -- @param cover_height number Target cover height
 -- @param debug_log function|nil Optional debug logging function
 -- @return function Callback for ImageLoader
-function CoverLoader.createRenderCallback(items_by_url, cover_width, cover_height, debug_log)
+function CoverLoader.createRenderCallback(items_by_url, cover_width, cover_height)
 	return function(url, content)
 		local items = items_by_url[url]
 		if not items then
@@ -102,8 +102,7 @@ function CoverLoader.loadVisibleCovers(menu, debug_log)
 	local render_callback = CoverLoader.createRenderCallback(
 		items_by_url,
 		menu.cover_width,
-		menu.cover_height,
-		debug_log
+		menu.cover_height
 	)
 
 	-- Load covers asynchronously
