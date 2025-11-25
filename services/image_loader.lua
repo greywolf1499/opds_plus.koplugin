@@ -1,4 +1,3 @@
-local logger = require("logger")
 local HttpClient = require("services.http_client")
 local UIManager = require("ui/uimanager")
 local Trapper = require("ui/trapper")
