@@ -20,6 +20,7 @@ local N_ = _.ngettext
 local T = require("ffi/util").template
 
 local Constants = require("models.constants")
+local StateManager = require("core.state_manager")
 
 local DownloadManager = {}
 
@@ -197,7 +198,7 @@ function DownloadManager.downloadDownloadList(browser)
 	if dl_count > 0 then
 		browser:updateDownloadListItemTable()
 		browser.download_list_updated = true
-		browser._manager.updated = true
+		StateManager.getInstance():markDirty()
 		UIManager:show(InfoMessage:new {
 			text = T(N_("1 book downloaded", "%1 books downloaded", dl_count), dl_count)
 		})
@@ -276,7 +277,7 @@ function DownloadManager.downloadPendingSyncs(browser, dl_list)
 			})
 		end
 
-		browser._manager.updated = true
+		StateManager.getInstance():markDirty()
 		return duplicate_list
 	end
 
@@ -288,7 +289,7 @@ end
 -- @param download_item table Item with file, url, username, password, info, catalog
 function DownloadManager.addToDownloadQueue(browser, download_item)
 	table.insert(browser.downloads, download_item)
-	browser._manager.updated = true
+	StateManager.getInstance():markDirty()
 end
 
 -- Remove item from download queue
@@ -296,7 +297,7 @@ end
 -- @param index number Index of item to remove
 function DownloadManager.removeFromDownloadQueue(browser, index)
 	table.remove(browser.downloads, index)
-	browser._manager.updated = true
+	StateManager.getInstance():markDirty()
 end
 
 -- Clear all items from download queue
@@ -306,7 +307,7 @@ function DownloadManager.clearDownloadQueue(browser)
 		browser.downloads[i] = nil
 	end
 	browser.download_list_updated = true
-	browser._manager.updated = true
+	StateManager.getInstance():markDirty()
 end
 
 return DownloadManager

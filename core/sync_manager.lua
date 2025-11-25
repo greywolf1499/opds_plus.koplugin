@@ -14,6 +14,7 @@ local _ = require("gettext")
 
 local Constants = require("models.constants")
 local DownloadManager = require("core.download_manager")
+local StateManager = require("core.state_manager")
 
 local SyncManager = {}
 
@@ -34,7 +35,7 @@ function SyncManager.showMaxSyncDialog(browser)
 		ok_text = _("Save"),
 		callback = function(spin)
 			browser.settings.sync_max_dl = spin.value
-			browser._manager.updated = true
+			StateManager.getInstance():markDirty()
 		end,
 	}
 	UIManager:show(spin)
@@ -52,7 +53,7 @@ function SyncManager.showSyncDirChooser(browser)
 		onConfirm = function(inbox)
 			logger.info("set opds sync folder", inbox)
 			browser.settings.sync_dir = inbox
-			browser._manager.updated = true
+			StateManager.getInstance():markDirty()
 		end,
 	}:chooseDir(force_chooser_dir)
 end
@@ -82,7 +83,7 @@ function SyncManager.showFiletypesDialog(browser)
 					callback = function()
 						local str = dialog:getInputText()
 						browser.settings.filetypes = str ~= "" and str or nil
-						browser._manager.updated = true
+						StateManager.getInstance():markDirty()
 						UIManager:close(dialog)
 					end,
 				},

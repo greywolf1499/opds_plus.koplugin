@@ -13,6 +13,7 @@ local _ = require("gettext")
 local T = ffiUtil.template
 
 local Constants = require("models.constants")
+local StateManager = require("core.state_manager")
 
 local OPDSMenuBuilder = {}
 
@@ -95,7 +96,7 @@ function OPDSMenuBuilder.buildFacetMenu(browser, catalog_url, has_covers)
 
 	-- Add view toggle option FIRST if we have covers
 	if has_covers then
-		local current_mode = browser._manager.settings.display_mode or "list"
+		local current_mode = StateManager.getInstance():getDisplayMode()
 		local toggle_text
 		if current_mode == "list" then
 			toggle_text = Constants.ICONS.GRID_VIEW .. " " .. _("Switch to Grid View")
@@ -188,7 +189,7 @@ function OPDSMenuBuilder.buildCatalogMenu(browser, catalog_url, has_covers)
 
 	-- Add view toggle if we have covers
 	if has_covers then
-		local current_mode = browser._manager.settings.display_mode or "list"
+		local current_mode = StateManager.getInstance():getDisplayMode()
 		local toggle_text
 		if current_mode == "list" then
 			toggle_text = Constants.ICONS.GRID_VIEW .. " " .. _("Switch to Grid View")
