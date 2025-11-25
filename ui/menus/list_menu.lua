@@ -18,10 +18,10 @@ local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
 local CenterContainer = require("ui/widget/container/centercontainer")
 local Screen = Device.screen
-local logger = require("logger")
 local _ = require("gettext")
 
 local CoverLoader = require("services.cover_loader")
+local Debug = require("utils.debug")
 local StateManager = require("core.state_manager")
 
 -- ============================================
@@ -319,9 +319,7 @@ local OPDSListMenu = Menu:extend {
 }
 
 function OPDSListMenu:_debugLog(...)
-    if StateManager.getInstance():isDebugMode() then
-        logger.dbg("OPDS+ List:", ...)
-    end
+    Debug.log("List:", ...)
 end
 
 -- Calculate and set cover dimensions based on available space
