@@ -16,7 +16,7 @@ function OPDSCoverMenu:init()
 end
 
 function OPDSCoverMenu:_debugLog(...)
-    Debug.log(self._manager, "CoverMenu:", ...)
+    Debug.log("CoverMenu:", ...)
 end
 
 function OPDSCoverMenu:updateItems(select_number)

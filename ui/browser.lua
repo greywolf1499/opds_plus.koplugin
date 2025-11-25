@@ -79,7 +79,7 @@ function OPDSBrowser:init()
 end
 
 function OPDSBrowser:_debugLog(...)
-    Debug.log(self._manager, "Browser:", ...)
+    Debug.log("Browser:", ...)
 end
 
 function OPDSBrowser:toggleViewMode()
