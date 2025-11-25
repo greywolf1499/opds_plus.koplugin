@@ -2,6 +2,8 @@
 -- Centralizes creation of context objects passed to navigation and parsing functions
 -- This eliminates repeated context building code (DRY principle)
 
+local Result = require("utils.result")
+
 local BrowserContext = {}
 
 --- Create a parsing/navigation context from browser state
@@ -70,7 +72,7 @@ end
 
 --- Validate that a context has all required fields
 -- @param context table Context object to validate
--- @return boolean, string|nil True if valid, false + error message if invalid
+-- @return Result Result.ok(context) if valid, Result.err(message) if invalid
 function BrowserContext.validate(context)
 	local required_fields = {
 		"catalog_type",
@@ -86,11 +88,20 @@ function BrowserContext.validate(context)
 
 	for _, field in ipairs(required_fields) do
 		if context[field] == nil then
-			return false, "Missing required field: " .. field
+			return Result.err("Missing required field: " .. field)
 		end
 	end
 
-	return true
+	return Result.ok(context)
+end
+
+--- Validate context with legacy (boolean, error) return pattern
+-- For backward compatibility with existing code
+-- @param context table Context object to validate
+-- @return boolean, string|nil True if valid, false + error message if invalid
+function BrowserContext.validateLegacy(context)
+	local result = BrowserContext.validate(context)
+	return result:unpack()
 end
 
 return BrowserContext
