@@ -67,7 +67,7 @@ end
 function Settings:initializeDefaults()
 	-- Cover settings
 	if not self.data.cover_height_ratio then
-		self.data.cover_height_ratio = 0.10 -- Regular (10% default)
+		self.data.cover_height_ratio = Constants.DEFAULT_COVER_HEIGHT_RATIO
 	end
 	if not self.data.cover_size_preset then
 		self.data.cover_size_preset = "Regular"
@@ -85,24 +85,24 @@ function Settings:initializeDefaults()
 		self.data.display_mode = "list" -- Default to list view
 	end
 	if not self.data.grid_columns then
-		self.data.grid_columns = 3 -- Default to 3 columns
+		self.data.grid_columns = Constants.DEFAULT_GRID_SETTINGS.columns
 	end
 	if not self.data.grid_cover_height_ratio then
-		self.data.grid_cover_height_ratio = 0.20 -- 20% for grid view
+		self.data.grid_cover_height_ratio = Constants.DEFAULT_GRID_SETTINGS.cover_height_ratio
 	end
 	if not self.data.grid_size_preset then
-		self.data.grid_size_preset = "Balanced" -- Default preset
+		self.data.grid_size_preset = Constants.DEFAULT_GRID_SETTINGS.size_preset
 	end
 
 	-- Grid border settings
 	if not self.data.grid_border_style then
-		self.data.grid_border_style = "none"
+		self.data.grid_border_style = Constants.DEFAULT_GRID_BORDER_SETTINGS.border_style
 	end
 	if not self.data.grid_border_size then
-		self.data.grid_border_size = 2
+		self.data.grid_border_size = Constants.DEFAULT_GRID_BORDER_SETTINGS.border_size
 	end
 	if not self.data.grid_border_color then
-		self.data.grid_border_color = "dark_gray"
+		self.data.grid_border_color = Constants.DEFAULT_GRID_BORDER_SETTINGS.border_color
 	end
 
 	-- Debug mode (default: false for production)

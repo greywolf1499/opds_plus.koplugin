@@ -12,26 +12,24 @@ local logger = require("logger")
 local util = require("util")
 local _ = require("gettext")
 
+local Constants = require("models.constants")
 local DownloadManager = require("core.download_manager")
 
 local SyncManager = {}
 
--- Default sync settings
-SyncManager.DEFAULT_MAX_DOWNLOADS = 50
-
 --- Show dialog to set maximum number of files to sync
 -- @param browser table OPDSBrowser instance
 function SyncManager.showMaxSyncDialog(browser)
-	local current_max_dl = browser.settings.sync_max_dl or SyncManager.DEFAULT_MAX_DOWNLOADS
+	local current_max_dl = browser.settings.sync_max_dl or Constants.SYNC.DEFAULT_MAX_DOWNLOADS
 	local spin = SpinWidget:new {
 		title_text = _("Set maximum sync size"),
 		info_text = _("Set the max number of books to download at a time"),
 		value = current_max_dl,
 		value_min = 0,
-		value_max = 1000,
-		value_step = 10,
-		value_hold_step = 50,
-		default_value = SyncManager.DEFAULT_MAX_DOWNLOADS,
+		value_max = Constants.SYNC.MAX_DOWNLOADS_LIMIT,
+		value_step = Constants.SYNC.STEP,
+		value_hold_step = Constants.SYNC.HOLD_STEP,
+		default_value = Constants.SYNC.DEFAULT_MAX_DOWNLOADS,
 		wrap = true,
 		ok_text = _("Save"),
 		callback = function(spin)
@@ -166,7 +164,7 @@ function SyncManager.fillPendingSyncs(browser, server)
 	browser.root_catalog_title     = server.title
 	browser.sync_server            = server
 	browser.sync_server_list       = browser.sync_server_list or {}
-	browser.sync_max_dl            = browser.settings.sync_max_dl or SyncManager.DEFAULT_MAX_DOWNLOADS
+	browser.sync_max_dl            = browser.settings.sync_max_dl or Constants.SYNC.DEFAULT_MAX_DOWNLOADS
 
 	local file_list                = SyncManager.parseFiletypes(browser.settings.filetypes)
 	local new_last_download        = nil
