@@ -28,6 +28,23 @@ function Debug.log(prefix, ...)
 	end
 end
 
+--- Log warning message if debug mode is enabled
+-- @param prefix string Log prefix (e.g., "Browser:", "DownloadMgr:")
+-- @param ... any Values to log
+function Debug.warn(prefix, ...)
+	if isDebugEnabled() then
+		logger.warn("OPDS+", prefix, ...)
+	end
+end
+
+--- Log error message (always logs, regardless of debug mode)
+-- Errors are important enough to always be logged
+-- @param prefix string Log prefix (e.g., "Browser:", "DownloadMgr:")
+-- @param ... any Values to log
+function Debug.error(prefix, ...)
+	logger.warn("OPDS+ ERROR:", prefix, ...)
+end
+
 --- Legacy log function for backward compatibility
 -- Accepts manager as first param but ignores it, uses StateManager instead
 -- @param manager table|nil Plugin manager instance (ignored, kept for compatibility)
@@ -54,16 +71,27 @@ function Debug.createLogger(context)
 end
 
 --- Create a debug logger with method-style calling
--- Returns an object with a log method for OOP-style usage
+-- Returns an object with log, warn, and error methods for OOP-style usage
 -- @param context string Context identifier
--- @return table Object with log method
+-- @return table Object with logging methods
 function Debug.createContextLogger(context)
 	local prefix = "[" .. context .. "]:"
 	return {
+		--- Log debug message (only when debug mode enabled)
 		log = function(self, ...)
 			if isDebugEnabled() then
 				logger.dbg("OPDS+", prefix, ...)
 			end
+		end,
+		--- Log warning message (only when debug mode enabled)
+		warn = function(self, ...)
+			if isDebugEnabled() then
+				logger.warn("OPDS+", prefix, ...)
+			end
+		end,
+		--- Log error message (always logged)
+		error = function(self, ...)
+			logger.warn("OPDS+ ERROR:", prefix, ...)
 		end,
 		--- Check if debug is enabled (useful for expensive debug operations)
 		isEnabled = function()
