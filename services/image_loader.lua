@@ -3,6 +3,7 @@ local HttpClient = require("services.http_client")
 local UIManager = require("ui/uimanager")
 local Trapper = require("ui/trapper")
 local Constants = require("models.constants")
+local Debug = require("utils.debug")
 
 local ImageLoader = {}
 
@@ -12,7 +13,6 @@ local Batch = {
     callback = nil,
     username = nil,
     password = nil,
-    debug_mode = nil,
 }
 Batch.__index = Batch
 
@@ -36,9 +36,7 @@ function Batch:loadImages(urls)
 
             local url = table.remove(url_queue, 1)
 
-            if self.debug_mode then
-                logger.dbg("OPDS+: Fetching cover with auth:", self.username and "yes" or "no")
-            end
+            Debug.log("ImageLoader:", "Fetching cover with auth:", self.username and "yes" or "no")
 
             local completed, success, content = Trapper:dismissableRunInSubprocess(function()
                 return HttpClient.getUrlContent(url,
@@ -51,7 +49,7 @@ function Batch:loadImages(urls)
                 self.callback(url, content)
             elseif completed and not success then
                 -- Always log errors
-                logger.warn("OPDS+: Failed to download cover:", content or "unknown error")
+                Debug.error("ImageLoader:", "Failed to download cover:", content or "unknown error")
             end
 
             if #url_queue > 0 then
@@ -76,11 +74,16 @@ function Batch:loadImages(urls)
     return halt
 end
 
-function ImageLoader:loadImages(urls, callback, username, password, debug_mode)
+--- Load images from URLs asynchronously
+-- @param urls table Array of URLs to load
+-- @param callback function Callback(url, content) called for each loaded image
+-- @param username string|nil HTTP auth username
+-- @param password string|nil HTTP auth password
+-- @return table, function Batch instance and halt function
+function ImageLoader:loadImages(urls, callback, username, password)
     local batch = Batch:new {
         username = username,
         password = password,
-        debug_mode = debug_mode,
     }
     batch.callback = callback
     local halt = batch:loadImages(urls)

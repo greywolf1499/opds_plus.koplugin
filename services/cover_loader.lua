@@ -3,10 +3,9 @@
 -- Shared between list_menu.lua and grid_menu.lua to eliminate duplication
 
 local RenderImage = require("ui/renderimage")
-local logger = require("logger")
 
 local ImageLoader = require("services.image_loader")
-local StateManager = require("core.state_manager")
+local Debug = require("utils.debug")
 
 local CoverLoader = {}
 
@@ -41,7 +40,7 @@ function CoverLoader.createRenderCallback(items_by_url, cover_width, cover_heigh
 	return function(url, content)
 		local items = items_by_url[url]
 		if not items then
-			logger.warn("OPDS+: ERROR - No items for URL:", url)
+			Debug.error("CoverLoader:", "No items for URL:", url)
 			return
 		end
 
@@ -66,11 +65,7 @@ function CoverLoader.createRenderCallback(items_by_url, cover_width, cover_heigh
 				entry.cover_bb = cover_bb
 				entry.cover_failed = false
 			else
-				if debug_log then
-					debug_log("Failed to render cover:", tostring(cover_bb))
-				else
-					logger.warn("OPDS+: Failed to render cover:", tostring(cover_bb))
-				end
+				Debug.error("CoverLoader:", "Failed to render cover:", tostring(cover_bb))
 				entry.cover_failed = true
 			end
 
@@ -97,16 +92,11 @@ function CoverLoader.loadVisibleCovers(menu, debug_log)
 		return nil
 	end
 
-	if debug_log then
-		debug_log("Loading", #urls, "unique cover URLs")
-	end
+	Debug.log("CoverLoader:", "Loading", #urls, "unique cover URLs")
 
 	-- Get credentials from the menu
 	local username = menu.root_catalog_username
 	local password = menu.root_catalog_password
-
-	-- Get debug mode from StateManager
-	local debug_mode = StateManager.getInstance():isDebugMode()
 
 	-- Create render callback
 	local render_callback = CoverLoader.createRenderCallback(
@@ -117,7 +107,7 @@ function CoverLoader.loadVisibleCovers(menu, debug_log)
 	)
 
 	-- Load covers asynchronously
-	local _, halt = ImageLoader:loadImages(urls, render_callback, username, password, debug_mode)
+	local _, halt = ImageLoader:loadImages(urls, render_callback, username, password)
 
 	-- Clear the pending items
 	menu._items_to_update = {}
