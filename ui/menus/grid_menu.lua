@@ -22,6 +22,7 @@ local logger = require("logger")
 local _ = require("gettext")
 
 local CoverLoader = require("services.cover_loader")
+local StateManager = require("core.state_manager")
 
 -- ============================================
 -- GRID CONFIGURATION
@@ -332,31 +333,29 @@ local OPDSGridMenu = Menu:extend {
 }
 
 function OPDSGridMenu:_debugLog(...)
-    if self._manager and self._manager.settings and self._manager.settings.debug_mode then
+    if StateManager.getInstance():isDebugMode() then
         logger.dbg("OPDS+ Grid:", ...)
     end
 end
 
 function OPDSGridMenu:setGridDimensions()
-    -- Get preset or custom column setting
-    local preset_name = "Balanced"
+    -- Get grid layout settings via StateManager
+    local state = StateManager.getInstance()
+    local grid_settings = state:getGridLayoutSettings()
+    local preset_name = grid_settings.preset_name
     local columns = GRID_CONFIG.default_columns
     local target_rows = 2
 
-    if self._manager and self._manager.settings then
-        preset_name = self._manager.settings.grid_size_preset or "Balanced"
-
-        if preset_name ~= "Custom" then
-            local preset = GRID_CONFIG.size_presets[preset_name]
-            if preset then
-                columns = preset.columns
-                target_rows = preset.target_rows
-            end
-        else
-            -- Custom columns
-            columns = self._manager.settings.grid_columns or GRID_CONFIG.default_columns
-            target_rows = 2 -- Default target for custom
+    if preset_name ~= "Custom" then
+        local preset = GRID_CONFIG.size_presets[preset_name]
+        if preset then
+            columns = preset.columns
+            target_rows = preset.target_rows
         end
+    else
+        -- Custom columns
+        columns = grid_settings.columns
+        target_rows = 2 -- Default target for custom
     end
 
     self.columns = columns
@@ -372,13 +371,10 @@ function OPDSGridMenu:setGridDimensions()
     local estimated_ui_overhead = 100
     local available_height = screen_height - estimated_ui_overhead - GRID_CONFIG.top_margin - GRID_CONFIG.bottom_margin
 
-    -- [Get settings for borders]
-    local border_style = "none"
-    local border_size = 2
-    if self._manager and self._manager.settings then
-        border_style = self._manager.settings.grid_border_style or "none"
-        border_size = self._manager.settings.grid_border_size or 2
-    end
+    -- Get border settings via StateManager
+    local border_settings = state:getGridBorderSettings()
+    local border_style = border_settings.style
+    local border_size = border_settings.size
 
     -- Calculate effective border deduction for "individual" style
     local border_deduction = 0
@@ -398,12 +394,9 @@ function OPDSGridMenu:setGridDimensions()
     local cover_height_from_width = math.floor(max_cover_width / GRID_CONFIG.book_aspect_ratio)
 
     -- Get font settings for text height calculation
-    local title_size = 14
-    local info_size = 12
-    if self._manager and self._manager.settings then
-        title_size = self._manager.settings.title_size or 14
-        info_size = self._manager.settings.info_size or 12
-    end
+    local font_settings = state:getFontSettings()
+    local title_size = font_settings.title_size or 14
+    local info_size = font_settings.info_size or 12
 
     -- Calculate text area needed
     local title_height = math.ceil(title_size * 2 * 1.3)
@@ -459,13 +452,11 @@ function OPDSGridMenu:_recalculateDimen()
 
     available_height = available_height - GRID_CONFIG.top_margin - GRID_CONFIG.bottom_margin
 
-    -- [Get border settings again for optimization logic]
-    local border_style = "none"
-    local border_size = 2
-    if self._manager and self._manager.settings then
-        border_style = self._manager.settings.grid_border_style or "none"
-        border_size = self._manager.settings.grid_border_size or 2
-    end
+    -- Get border settings via StateManager
+    local state = StateManager.getInstance()
+    local border_settings = state:getGridBorderSettings()
+    local border_style = border_settings.style
+    local border_size = border_settings.size
     local border_deduction = (border_style == "individual") and (border_size * 2) or 0
 
     -- Calculate rows per page
@@ -483,13 +474,10 @@ function OPDSGridMenu:_recalculateDimen()
         local total_spacing = (new_rows - 1) * GRID_CONFIG.row_spacing
         local new_cell_height = math.floor((available_height - total_spacing) / new_rows)
 
-        -- Calculate new cover height
-        local title_size = 14
-        local info_size = 12
-        if self._manager and self._manager.settings then
-            title_size = self._manager.settings.title_size or 14
-            info_size = self._manager.settings.info_size or 12
-        end
+        -- Get font settings for text height calculation
+        local font_settings = state:getFontSettings()
+        local title_size = font_settings.title_size or 14
+        local info_size = font_settings.info_size or 12
 
         local title_height = math.ceil(title_size * 2 * 1.3)
         local author_height = GRID_CONFIG.show_author and math.ceil(info_size * 1.2) or 0
@@ -548,20 +536,9 @@ function OPDSGridMenu:updateItems(select_number)
     self.page_info:resetLayout()
     self.return_button:resetLayout()
 
-    -- Get font settings
-    local font_settings = {}
-    if self._manager and self._manager.settings then
-        font_settings = {
-            title_font = self._manager.settings.title_font or "smallinfofont",
-            title_size = self._manager.settings.title_size or 14,
-            title_bold = self._manager.settings.title_bold,
-            info_font = self._manager.settings.info_font or "smallinfofont",
-            info_size = self._manager.settings.info_size or 12,
-            info_bold = self._manager.settings.info_bold or false,
-            info_color = self._manager.settings.info_color or "dark_gray",
-            use_same_font = self._manager.settings.use_same_font,
-        }
-    end
+    -- Get settings via StateManager
+    local state = StateManager.getInstance()
+    local font_settings = state:getFontSettings()
 
     if font_settings.title_bold == nil then
         font_settings.title_bold = true
@@ -570,17 +547,8 @@ function OPDSGridMenu:updateItems(select_number)
         font_settings.use_same_font = true
     end
 
-    -- Get border settings
-    local border_settings = {
-        style = "none",
-        size = 2,
-        color = "dark_gray",
-    }
-    if self._manager and self._manager.settings then
-        border_settings.style = self._manager.settings.grid_border_style or "none"
-        border_settings.size = self._manager.settings.grid_border_size or 2
-        border_settings.color = self._manager.settings.grid_border_color or "dark_gray"
-    end
+    -- Get border settings via StateManager
+    local border_settings = state:getGridBorderSettings()
 
     -- Build grid
     self._items_to_update = {}

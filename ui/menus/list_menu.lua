@@ -22,6 +22,7 @@ local logger = require("logger")
 local _ = require("gettext")
 
 local CoverLoader = require("services.cover_loader")
+local StateManager = require("core.state_manager")
 
 -- ============================================
 -- CONFIGURATION - Can be overridden by settings
@@ -318,26 +319,21 @@ local OPDSListMenu = Menu:extend {
 }
 
 function OPDSListMenu:_debugLog(...)
-    if self._manager and self._manager.settings and self._manager.settings.debug_mode then
+    if StateManager.getInstance():isDebugMode() then
         logger.dbg("OPDS+ List:", ...)
     end
 end
 
 -- Calculate and set cover dimensions based on available space
 function OPDSListMenu:setCoverDimensions()
-    -- Get the preset/target from settings
-    local preset_name = "Regular" -- Default
-    if self._manager and self._manager.settings and self._manager.settings.cover_size_preset then
-        preset_name = self._manager.settings.cover_size_preset
-    end
+    -- Get cover settings via StateManager
+    local cover_settings = StateManager.getInstance():getCoverSettings()
+    local preset_name = cover_settings.preset_name
 
     -- For custom sizes, we need a different approach
     if preset_name == "Custom" then
         -- Use the stored ratio for custom
-        local custom_ratio = 0.10 -- Default fallback
-        if self._manager and self._manager.settings and self._manager.settings.cover_height_ratio then
-            custom_ratio = self._manager.settings.cover_height_ratio
-        end
+        local custom_ratio = cover_settings.ratio
 
         local screen_height = Screen:getHeight()
         self.cover_height = math.floor(screen_height * custom_ratio)
@@ -461,31 +457,8 @@ function OPDSListMenu:updateItems(select_number)
     self.page_info:resetLayout()
     self.return_button:resetLayout()
 
-    -- Get font settings
-    local font_settings = {}
-    if self._manager and self._manager.settings then
-        font_settings = {
-            title_font = self._manager.settings.title_font or "smallinfofont",
-            title_size = self._manager.settings.title_size or 16,
-            title_bold = self._manager.settings.title_bold,
-            info_font = self._manager.settings.info_font or "smallinfofont",
-            info_size = self._manager.settings.info_size or 14,
-            info_bold = self._manager.settings.info_bold or false,
-            info_color = self._manager.settings.info_color or "dark_gray",
-            use_same_font = self._manager.settings.use_same_font,
-        }
-    elseif self.settings then
-        font_settings = {
-            title_font = self.settings.title_font or "smallinfofont",
-            title_size = self.settings.title_size or 16,
-            title_bold = self.settings.title_bold,
-            info_font = self.settings.info_font or "smallinfofont",
-            info_size = self.settings.info_size or 14,
-            info_bold = self.settings.info_bold or false,
-            info_color = self.settings.info_color or "dark_gray",
-            use_same_font = self.settings.use_same_font,
-        }
-    end
+    -- Get font settings via StateManager
+    local font_settings = StateManager.getInstance():getFontSettings()
 
     -- Handle defaults
     if font_settings.title_bold == nil then
