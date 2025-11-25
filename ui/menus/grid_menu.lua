@@ -10,7 +10,6 @@ local HorizontalSpan = require("ui/widget/horizontalspan")
 local ImageWidget = require("ui/widget/imagewidget")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local Menu = require("ui/widget/menu")
-local RenderImage = require("ui/renderimage")
 local TextBoxWidget = require("ui/widget/textboxwidget")
 local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
@@ -21,6 +20,8 @@ local LineWidget = require("ui/widget/linewidget")
 local Screen = Device.screen
 local logger = require("logger")
 local _ = require("gettext")
+
+local CoverLoader = require("services.cover_loader")
 
 -- ============================================
 -- GRID CONFIGURATION
@@ -801,90 +802,17 @@ function OPDSGridMenu:getPageInfo()
     return "▦ " .. self.page .. " / " .. self.page_num .. " (" .. self.perpage .. " items, " .. columns .. " cols)"
 end
 
--- Reuse cover loading logic
 function OPDSGridMenu:_loadVisibleCovers()
-    if #self._items_to_update == 0 then
-        return
+    local halt = CoverLoader.loadVisibleCovers(self, function(...)
+        self:_debugLog(...)
+    end)
+    if halt then
+        self.halt_image_loading = halt
     end
-
-    local urls = {}
-    local items_by_url = {}
-
-    for i, item_data in ipairs(self._items_to_update) do
-        local url = item_data.entry.cover_url
-        if url and not items_by_url[url] then
-            table.insert(urls, url)
-            items_by_url[url] = { item_data }
-        elseif url then
-            table.insert(items_by_url[url], item_data)
-        end
-    end
-
-    if #urls == 0 then
-        return
-    end
-
-    self:_debugLog("Loading", #urls, "covers")
-
-    local ImageLoader = require("services.image_loader")
-    local username = self.root_catalog_username
-    local password = self.root_catalog_password
-
-    -- Get debug mode setting
-    local debug_mode = self._manager and self._manager.settings and self._manager.settings.debug_mode
-
-    local _, halt = ImageLoader:loadImages(urls, function(url, content)
-        local items = items_by_url[url]
-        if not items then return end
-
-        for j, item_data in ipairs(items) do
-            local entry = item_data.entry
-            local widget = item_data.widget
-
-            entry.lazy_load_cover = false
-
-            local ok, cover_bb = pcall(function()
-                return RenderImage:renderImageData(
-                    content,
-                    #content,
-                    false,
-                    self.cover_width,
-                    self.cover_height
-                )
-            end)
-
-            if ok and cover_bb then
-                entry.cover_bb = cover_bb
-                entry.cover_failed = false
-                widget.entry = entry
-                widget:update()
-            else
-                entry.cover_failed = true
-                widget.entry = entry
-                widget:update()
-            end
-        end
-    end, username, password, debug_mode)
-
-    self.halt_image_loading = halt
-    self._items_to_update = {}
 end
 
 function OPDSGridMenu:onCloseWidget()
-    if self.halt_image_loading then
-        self.halt_image_loading()
-        self.halt_image_loading = nil
-    end
-
-    if self.item_table then
-        for k, entry in ipairs(self.item_table) do
-            if entry.cover_bb then
-                entry.cover_bb:free()
-                entry.cover_bb = nil
-            end
-        end
-    end
-
+    CoverLoader.cleanup(self)
     Menu.onCloseWidget(self)
 end
 
