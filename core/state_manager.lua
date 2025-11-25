@@ -130,7 +130,63 @@ function StateManager:getFiletypes()
 	return self:getSetting("filetypes")
 end
 
---- Register a listener for state changes
+-- ============================================
+-- UI Settings Accessors
+-- ============================================
+
+--- Get all font settings as a table
+-- @return table Font settings with defaults applied
+function StateManager:getFontSettings()
+	local Constants = require("models.constants")
+	local defaults = Constants.DEFAULT_FONT_SETTINGS
+	return {
+		title_font = self:getSetting("title_font", defaults.title_font or "smallinfofont"),
+		title_size = self:getSetting("title_size", defaults.title_size or 16),
+		title_bold = self:getSetting("title_bold", defaults.title_bold or false),
+		info_font = self:getSetting("info_font", defaults.info_font or "smallinfofont"),
+		info_size = self:getSetting("info_size", defaults.info_size or 14),
+		info_bold = self:getSetting("info_bold", defaults.info_bold or false),
+		info_color = self:getSetting("info_color", defaults.info_color or "dark_gray"),
+		use_same_font = self:getSetting("use_same_font", defaults.use_same_font or false),
+	}
+end
+
+--- Get cover size settings for list view
+-- @return table Cover settings {preset_name, ratio}
+function StateManager:getCoverSettings()
+	local Constants = require("models.constants")
+	return {
+		preset_name = self:getSetting("cover_size_preset", "Regular"),
+		ratio = self:getSetting("cover_height_ratio", Constants.DEFAULT_COVER_HEIGHT_RATIO),
+	}
+end
+
+--- Get grid layout settings
+-- @return table Grid settings {preset_name, columns}
+function StateManager:getGridLayoutSettings()
+	local Constants = require("models.constants")
+	local defaults = Constants.DEFAULT_GRID_SETTINGS
+	return {
+		preset_name = self:getSetting("grid_size_preset", defaults.size_preset or "Balanced"),
+		columns = self:getSetting("grid_columns", defaults.columns or 3),
+	}
+end
+
+--- Get grid border settings
+-- @return table Border settings {style, size, color}
+function StateManager:getGridBorderSettings()
+	local Constants = require("models.constants")
+	local defaults = Constants.DEFAULT_GRID_BORDER_SETTINGS
+	return {
+		style = self:getSetting("grid_border_style", defaults.border_style or "none"),
+		size = self:getSetting("grid_border_size", defaults.border_size or 2),
+		color = self:getSetting("grid_border_color", defaults.border_color or "dark_gray"),
+	}
+end
+
+-- ============================================
+-- Change Listeners
+-- ============================================
 -- @param listener function Callback function(event_type)
 -- @return number Listener ID for removal
 function StateManager:addChangeListener(listener)

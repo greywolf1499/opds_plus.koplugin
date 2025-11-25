@@ -3,6 +3,7 @@ local OPDSListMenu = require("ui.menus.list_menu")
 local OPDSGridMenu = require("ui.menus.grid_menu")
 local UIManager = require("ui/uimanager")
 local Debug = require("utils.debug")
+local StateManager = require("core.state_manager")
 
 local OPDSCoverMenu = Menu:extend {
     title_shrink_font_to_fit = true,
@@ -42,11 +43,8 @@ function OPDSCoverMenu:updateItems(select_number)
         end
     end
 
-    -- Get display mode setting (default to "list")
-    local display_mode = "list"
-    if self._manager and self._manager.settings and self._manager.settings.display_mode then
-        display_mode = self._manager.settings.display_mode
-    end
+    -- Get display mode setting via StateManager
+    local display_mode = StateManager.getInstance():getDisplayMode()
 
     self:_debugLog("updateItems - has_covers:", has_covers, "display_mode:", display_mode)
 
@@ -149,11 +147,8 @@ function OPDSCoverMenu:onCloseWidget()
     end
 
     if has_cover_items then
-        -- Check which mode we're in
-        local display_mode = "list"
-        if self._manager and self._manager.settings and self._manager.settings.display_mode then
-            display_mode = self._manager.settings.display_mode
-        end
+        -- Check which mode we're in via StateManager
+        local display_mode = StateManager.getInstance():getDisplayMode()
 
         if display_mode == "grid" then
             OPDSGridMenu.onCloseWidget(self)
