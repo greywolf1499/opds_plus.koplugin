@@ -51,7 +51,7 @@ function OPDS:init()
 end
 
 function OPDS:getCoverHeightRatio()
-    return self.settings.cover_height_ratio or 0.10
+    return self.settings.cover_height_ratio or Constants.DEFAULT_COVER_HEIGHT_RATIO
 end
 
 function OPDS:setCoverHeightRatio(ratio, preset_name)

@@ -2,6 +2,7 @@ local logger = require("logger")
 local getUrlContent = require("services.http_client")
 local UIManager = require("ui/uimanager")
 local Trapper = require("ui/trapper")
+local Constants = require("models.constants")
 
 local ImageLoader = {}
 
@@ -40,7 +41,10 @@ function Batch:loadImages(urls)
             end
 
             local completed, success, content = Trapper:dismissableRunInSubprocess(function()
-                return getUrlContent(url, 10, 30, self.username, self.password)
+                return getUrlContent(url,
+                    Constants.TIMEOUTS.IMAGE_LOAD,
+                    Constants.TIMEOUTS.IMAGE_MAX_TIME,
+                    self.username, self.password)
             end)
 
             if completed and success then
@@ -51,7 +55,7 @@ function Batch:loadImages(urls)
             end
 
             if #url_queue > 0 then
-                UIManager:scheduleIn(0.2, run_image)
+                UIManager:scheduleIn(Constants.UI_TIMING.IMAGE_BATCH_DELAY, run_image)
             else
                 self.loading = false
             end

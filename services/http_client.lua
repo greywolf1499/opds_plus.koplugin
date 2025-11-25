@@ -1,5 +1,6 @@
 -- Utility to fetch content from URLs
 local logger = require("logger")
+local Constants = require("models.constants")
 
 local function getUrlContent(url, timeout, maxtime, username, password)
     local http = require("socket.http")
@@ -12,16 +13,16 @@ local function getUrlContent(url, timeout, maxtime, username, password)
     if parsed.scheme ~= "http" and parsed.scheme ~= "https" then
         return false, "Unsupported protocol"
     end
-    if not timeout then timeout = 10 end
+    if not timeout then timeout = Constants.TIMEOUTS.DEFAULT end
 
     local sink = {}
-    socketutil:set_timeout(timeout, maxtime or 30)
+    socketutil:set_timeout(timeout, maxtime or Constants.TIMEOUTS.MAX_TIME)
     local request = {
-        url     = url,
-        method  = "GET",
-        sink    = maxtime and socketutil.table_sink(sink) or ltn12.sink.table(sink),
-        user    = username,      -- Add username
-        password = password,     -- Add password
+        url      = url,
+        method   = "GET",
+        sink     = maxtime and socketutil.table_sink(sink) or ltn12.sink.table(sink),
+        user     = username, -- Add username
+        password = password, -- Add password
     }
 
     local code, headers, status = socket.skip(1, http.request(request))
@@ -39,11 +40,11 @@ local function getUrlContent(url, timeout, maxtime, username, password)
         logger.warn("No HTTP headers:", status or code or "network unreachable")
         return false, "Network or remote server unavailable"
     end
-    if not code or code < 200 or code > 299 then
+    if not code or code < Constants.HTTP_SUCCESS_MIN or code > Constants.HTTP_SUCCESS_MAX then
         logger.warn("HTTP status not okay:", status or code or "network unreachable")
-        if code == 401 then
+        if code == Constants.HTTP_STATUS.UNAUTHORIZED then
             return false, "Authentication required (401)"
-        elseif code == 403 then
+        elseif code == Constants.HTTP_STATUS.FORBIDDEN then
             return false, "Authentication failed (403)"
         end
         return false, "Remote server error or unavailable"

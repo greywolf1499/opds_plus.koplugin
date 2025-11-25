@@ -19,6 +19,8 @@ local _ = require("gettext")
 local N_ = _.ngettext
 local T = require("ffi/util").template
 
+local Constants = require("models.constants")
+
 local DownloadManager = {}
 
 -- Extract filetype from an acquisition link
@@ -100,7 +102,7 @@ function DownloadManager.downloadFile(browser, local_path, remote_url, username,
 			caller_callback(local_path)
 		end
 		return true
-	elseif code == 302 and remote_url:match("^https") and headers.location:match("^http[^s]") then
+	elseif code == Constants.HTTP_STATUS.FOUND and remote_url:match("^https") and headers.location:match("^http[^s]") then
 		util.removeFile(local_path)
 		UIManager:show(InfoMessage:new {
 			text = T(_("Insecure HTTPS → HTTP downgrade attempted by redirect from:\n\n'%1'\n\nto\n\n'%2'.\n\nPlease inform the server administrator that many clients disallow this because it could be a downgrade attack."),
@@ -130,12 +132,12 @@ end
 -- @param caller_callback function|nil Callback function on success
 function DownloadManager.checkDownloadFile(browser, local_path, remote_url, username, password, caller_callback)
 	local function download()
-		UIManager:scheduleIn(1, function()
+		UIManager:scheduleIn(Constants.UI_TIMING.DOWNLOAD_SCHEDULE_DELAY, function()
 			DownloadManager.downloadFile(browser, local_path, remote_url, username, password, caller_callback)
 		end)
 		UIManager:show(InfoMessage:new {
 			text = _("Downloading…"),
-			timeout = 1,
+			timeout = Constants.UI_TIMING.NOTIFICATION_TIMEOUT,
 		})
 	end
 
@@ -247,7 +249,8 @@ function DownloadManager.downloadPendingSyncs(browser, dl_list)
 				if attr then
 					if attr.size > 0 then
 						table.remove(dl_list, i)
-						if attr.modification > os.time() - 300 then -- Only count files touched in the last 5 mins
+						-- Only count files touched within the freshness window
+						if attr.modification > os.time() - Constants.SYNC.DOWNLOAD_FRESHNESS_SECONDS then
 							dl_count = dl_count + 1
 						end
 					else -- incomplete download
@@ -263,7 +266,7 @@ function DownloadManager.downloadPendingSyncs(browser, dl_list)
 		-- Make downloaded count timeout if there's a duplicate file prompt
 		local timeout = nil
 		if duplicate_count > 0 then
-			timeout = 3
+			timeout = Constants.UI_TIMING.DUPLICATE_NOTIFICATION_TIMEOUT
 		end
 
 		if dl_count > 0 then

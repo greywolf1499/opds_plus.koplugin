@@ -26,6 +26,49 @@ local Constants = {
 		["x-stanza-cover-image-thumbnail"] = true,
 	},
 
+	-- HTTP Status Codes
+	HTTP_STATUS = {
+		OK = 200,
+		MOVED_PERMANENTLY = 301,
+		FOUND = 302, -- Redirect
+		BAD_REQUEST = 400,
+		UNAUTHORIZED = 401,
+		FORBIDDEN = 403,
+		NOT_FOUND = 404,
+		NOT_ACCEPTABLE = 406,
+	},
+
+	-- HTTP Success Range
+	HTTP_SUCCESS_MIN = 200,
+	HTTP_SUCCESS_MAX = 299,
+
+	-- Network Timeouts (in seconds)
+	TIMEOUTS = {
+		DEFAULT = 10,
+		MAX_TIME = 30,
+		IMAGE_LOAD = 10,
+		IMAGE_MAX_TIME = 30,
+	},
+
+	-- Sync Settings
+	SYNC = {
+		DEFAULT_MAX_DOWNLOADS = 50,
+		MAX_DOWNLOADS_LIMIT = 1000,
+		STEP = 10,
+		HOLD_STEP = 50,
+		-- Time window (in seconds) to consider a file as "recently downloaded"
+		-- Used to count downloads after subprocess interruption
+		DOWNLOAD_FRESHNESS_SECONDS = 300, -- 5 minutes
+	},
+
+	-- UI Timing (in seconds)
+	UI_TIMING = {
+		NOTIFICATION_TIMEOUT = 1,
+		DUPLICATE_NOTIFICATION_TIMEOUT = 3,
+		DOWNLOAD_SCHEDULE_DELAY = 1,
+		IMAGE_BATCH_DELAY = 0.2,
+	},
+
 	-- Cache Configuration
 	CACHE_SLOTS = 20,
 
@@ -75,6 +118,9 @@ local Constants = {
 		},
 	},
 
+	-- Default Cover Height Ratio
+	DEFAULT_COVER_HEIGHT_RATIO = 0.10,
+
 	-- Default Font Settings
 	DEFAULT_FONT_SETTINGS = {
 		title_font = "smallinfofont",
@@ -85,6 +131,13 @@ local Constants = {
 		info_bold = false,
 		info_color = "dark_gray",
 		use_same_font = true,
+	},
+
+	-- Default Grid Settings
+	DEFAULT_GRID_SETTINGS = {
+		columns = 3,
+		cover_height_ratio = 0.20,
+		size_preset = "Balanced",
 	},
 
 	-- Default Grid Border Settings
