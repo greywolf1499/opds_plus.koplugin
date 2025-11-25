@@ -7,7 +7,8 @@ local util = require("util")
 local _ = require("gettext")
 
 local Constants = require("models.constants")
-local OPDSUtils = require("opds_utils")
+local UrlUtils = require("utils.url_utils")
+local CatalogUtils = require("utils.catalog_utils")
 local BrowserContext = require("core.browser_context")
 
 local NavigationHandler = {}
@@ -31,7 +32,7 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 	facet_groups = {}
 
 	local function build_href(href)
-		return OPDSUtils.buildAbsoluteUrl(item_url, href)
+		return UrlUtils.buildAbsolute(item_url, href)
 	end
 
 	local has_opensearch = false
@@ -93,7 +94,7 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 				local link_href = build_href(link.href)
 
 				-- Check if it's a navigation link (sub-catalog)
-				if OPDSUtils.isCatalogNavigationLink(link, browser_context.catalog_type) then
+				if UrlUtils.isCatalogNavigationLink(link, browser_context.catalog_type) then
 					item.url = link_href
 				end
 
@@ -104,7 +105,7 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 							type = "borrow",
 						})
 						-- Acquisition links (downloads)
-					elseif OPDSUtils.isAcquisitionLink(link, browser_context.acquisition_rel) then
+					elseif UrlUtils.isAcquisitionLink(link, browser_context.acquisition_rel) then
 						table.insert(item.acquisitions, {
 							type  = link.type,
 							href  = link_href,
@@ -112,7 +113,7 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 						})
 						-- PSE streaming
 					elseif link.rel == browser_context.stream_rel then
-						local count, last_read = OPDSUtils.extractPSEStreamInfo(link)
+						local count, last_read = CatalogUtils.extractPSEStreamInfo(link)
 						if count then
 							table.insert(item.acquisitions, {
 								type      = link.type,
@@ -169,9 +170,9 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 		end
 
 		-- Parse title and author
-		local title = OPDSUtils.parseEntryTitle(entry.title, _(Constants.DEFAULT_TITLE))
+		local title = CatalogUtils.parseEntryTitle(entry.title, _(Constants.DEFAULT_TITLE))
 		item.text = title
-		local author = OPDSUtils.parseEntryAuthor(entry.author, _(Constants.DEFAULT_AUTHOR))
+		local author = CatalogUtils.parseEntryAuthor(entry.author, _(Constants.DEFAULT_AUTHOR))
 		if author then
 			item.text = title .. " - " .. author
 		end

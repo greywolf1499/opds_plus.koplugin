@@ -15,7 +15,8 @@ local T = require("ffi/util").template
 
 local OPDSParser = require("core.parser")
 local Constants = require("models.constants")
-local OPDSUtils = require("opds_utils")
+local UrlUtils = require("utils.url_utils")
+local FileUtils = require("utils.file_utils")
 local Result = require("utils.result")
 
 local FeedFetcher = {}
@@ -155,7 +156,7 @@ function FeedFetcher.getServerFileName(item_url, filetype, username, password)
 	local filename
 
 	if headers then
-		filename = OPDSUtils.parseContentDisposition(headers["content-disposition"])
+		filename = UrlUtils.parseContentDisposition(headers["content-disposition"])
 
 		if not filename and headers["location"] then
 			filename = headers["location"]:gsub(".*/", "")
@@ -163,10 +164,10 @@ function FeedFetcher.getServerFileName(item_url, filetype, username, password)
 	end
 
 	if not filename then
-		filename = OPDSUtils.extractFilenameFromUrl(item_url)
+		filename = UrlUtils.extractFilename(item_url)
 	end
 
-	filename = OPDSUtils.ensureFileExtension(filename, filetype)
+	filename = FileUtils.ensureExtension(filename, filetype)
 
 	return filename
 end
