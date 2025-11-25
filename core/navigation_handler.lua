@@ -8,6 +8,7 @@ local _ = require("gettext")
 
 local Constants = require("models.constants")
 local OPDSUtils = require("opds_utils")
+local BrowserContext = require("core.browser_context")
 
 local NavigationHandler = {}
 
@@ -214,29 +215,17 @@ function NavigationHandler.updateCatalog(item_url, browser, paths_updated)
 		browser:_debugLog("updateCatalog called for:", item_url)
 	end
 
+	local context = BrowserContext.fromBrowser(browser)
+	local debug_callback = function(...) if browser._debugLog then browser:_debugLog(...) end end
+
 	local menu_table = FeedFetcher.genItemTableFromURL(
 		item_url,
-		browser.root_catalog_username,
-		browser.root_catalog_password,
-		function(...) if browser._debugLog then browser:_debugLog(...) end end,
+		context.username,
+		context.password,
+		debug_callback,
 		function(catalog, url)
-			local context = {
-				catalog_type = browser.catalog_type,
-				search_type = browser.search_type,
-				search_template_type = browser.search_template_type,
-				acquisition_rel = browser.acquisition_rel,
-				borrow_rel = browser.borrow_rel,
-				stream_rel = browser.stream_rel,
-				facet_rel = browser.facet_rel,
-				thumbnail_rel = browser.thumbnail_rel,
-				image_rel = browser.image_rel,
-				sync = browser.sync,
-				username = browser.root_catalog_username,
-				password = browser.root_catalog_password,
-			}
 			local items, facets, search = NavigationHandler.genItemTableFromCatalog(
-				catalog, url, context,
-				function(...) if browser._debugLog then browser:_debugLog(...) end end)
+				catalog, url, context, debug_callback)
 			browser.facet_groups = facets
 			browser.search_url = search
 			return items
@@ -296,30 +285,18 @@ end
 function NavigationHandler.appendCatalog(item_url, browser)
 	local FeedFetcher = require("core.feed_fetcher")
 
+	local context = BrowserContext.fromBrowser(browser)
+	local debug_callback = function(...) if browser._debugLog then browser:_debugLog(...) end end
+
 	local menu_table = FeedFetcher.genItemTableFromURL(
 		item_url,
-		browser.root_catalog_username,
-		browser.root_catalog_password,
-		function(...) if browser._debugLog then browser:_debugLog(...) end end,
+		context.username,
+		context.password,
+		debug_callback,
 		function(catalog, url)
-			local context = {
-				catalog_type = browser.catalog_type,
-				search_type = browser.search_type,
-				search_template_type = browser.search_template_type,
-				acquisition_rel = browser.acquisition_rel,
-				borrow_rel = browser.borrow_rel,
-				stream_rel = browser.stream_rel,
-				facet_rel = browser.facet_rel,
-				thumbnail_rel = browser.thumbnail_rel,
-				image_rel = browser.image_rel,
-				sync = browser.sync,
-				username = browser.root_catalog_username,
-				password = browser.root_catalog_password,
-			}
 			-- luacheck: ignore facets search
 			local items, facets, search = NavigationHandler.genItemTableFromCatalog(
-				catalog, url, context,
-				function(...) if browser._debugLog then browser:_debugLog(...) end end)
+				catalog, url, context, debug_callback)
 			return items
 		end
 	)

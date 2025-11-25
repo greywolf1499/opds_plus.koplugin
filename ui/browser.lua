@@ -38,6 +38,9 @@ local CatalogManager = require("core.catalog_manager")
 -- Import the navigation handler
 local NavigationHandler = require("core.navigation_handler")
 
+-- Import the browser context factory
+local BrowserContext = require("core.browser_context")
+
 -- Import the debug utility
 local Debug = require("utils.debug")
 
@@ -201,20 +204,7 @@ function OPDSBrowser:genItemTableFromURL(item_url)
 end
 
 function OPDSBrowser:genItemTableFromCatalog(catalog, item_url)
-    local context = {
-        catalog_type = self.catalog_type,
-        search_type = self.search_type,
-        search_template_type = self.search_template_type,
-        acquisition_rel = self.acquisition_rel,
-        borrow_rel = self.borrow_rel,
-        stream_rel = self.stream_rel,
-        facet_rel = self.facet_rel,
-        thumbnail_rel = self.thumbnail_rel,
-        image_rel = self.image_rel,
-        sync = self.sync,
-        username = self.root_catalog_username,
-        password = self.root_catalog_password,
-    }
+    local context = BrowserContext.fromBrowser(self)
 
     local item_table, facet_groups, search_url = NavigationHandler.genItemTableFromCatalog(
         catalog, item_url, context,
