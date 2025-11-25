@@ -1,14 +1,9 @@
 local BD = require("ui/bidi")
 local ButtonDialog = require("ui/widget/buttondialog")
 local ConfirmBox = require("ui/widget/confirmbox")
-local Device = require("device")
 local InfoMessage = require("ui/widget/infomessage")
-local InputDialog = require("ui/widget/inputdialog")
 local Menu = require("ui/widget/menu")
 local NetworkMgr = require("ui/network/manager")
-local SpinWidget = require("ui/widget/spinwidget")
-local TextViewer = require("ui/widget/textviewer")
-local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
 local ffiUtil = require("ffi/util")
 local logger = require("logger")
@@ -40,6 +35,9 @@ local NavigationHandler = require("core.navigation_handler")
 
 -- Import the browser context factory
 local BrowserContext = require("core.browser_context")
+
+-- Import the sync manager
+local SyncManager = require("core.sync_manager")
 
 -- Import the debug utility
 local Debug = require("utils.debug")
@@ -452,74 +450,15 @@ function OPDSBrowser:downloadDownloadList()
 end
 
 function OPDSBrowser:setMaxSyncDownload()
-    local current_max_dl = self.settings.sync_max_dl or 50
-    local spin = SpinWidget:new {
-        title_text = "Set maximum sync size",
-        info_text = "Set the max number of books to download at a time",
-        value = current_max_dl,
-        value_min = 0,
-        value_max = 1000,
-        value_step = 10,
-        value_hold_step = 50,
-        default_value = 50,
-        wrap = true,
-        ok_text = "Save",
-        callback = function(spin)
-            self.settings.sync_max_dl = spin.value
-            self._manager.updated = true
-        end,
-    }
-    UIManager:show(spin)
+    SyncManager.showMaxSyncDialog(self)
 end
 
 function OPDSBrowser:setSyncDir()
-    local force_chooser_dir
-    if Device:isAndroid() then
-        force_chooser_dir = Device.home_dir
-    end
-
-    require("ui/downloadmgr"):new {
-        onConfirm = function(inbox)
-            logger.info("set opds sync folder", inbox)
-            self.settings.sync_dir = inbox
-            self._manager.updated = true
-        end,
-    }:chooseDir(force_chooser_dir)
+    SyncManager.showSyncDirChooser(self)
 end
 
--- Set string for desired filetypes
-function OPDSBrowser:setSyncFiletypes(filetype_list)
-    local input = self.settings.filetypes
-    local dialog
-    dialog = InputDialog:new {
-        title = _("File types to sync"),
-        description = _("A comma separated list of desired filetypes"),
-        input_hint = _("epub, mobi"),
-        input = input,
-        buttons = {
-            {
-                {
-                    text = _("Cancel"),
-                    id = "close",
-                    callback = function()
-                        UIManager:close(dialog)
-                    end,
-                },
-                {
-                    text = _("Save"),
-                    is_enter_default = true,
-                    callback = function()
-                        local str = dialog:getInputText()
-                        self.settings.filetypes = str ~= "" and str or nil
-                        self._manager.updated = true
-                        UIManager:close(dialog)
-                    end,
-                },
-            },
-        },
-    }
-    UIManager:show(dialog)
-    dialog:onShowKeyboard()
+function OPDSBrowser:setSyncFiletypes()
+    SyncManager.showFiletypesDialog(self)
 end
 
 -- Helper function to get filename and set nil if using raw names
@@ -541,234 +480,7 @@ function OPDSBrowser:updateFieldInCatalog(item, name, value)
 end
 
 function OPDSBrowser:checkSyncDownload(idx)
-    if self.settings.sync_dir then
-        self.sync = true
-        local info = InfoMessage:new {
-            text = _("Synchronizing lists…"),
-        }
-        UIManager:show(info)
-        UIManager:forceRePaint()
-        if idx then
-            self:fillPendingSyncs(self.servers[idx - 1]) -- First item is "Downloads"
-        else
-            for _, item in ipairs(self.servers) do
-                if item.sync then
-                    self:fillPendingSyncs(item)
-                end
-            end
-        end
-        UIManager:close(info)
-        if #self.pending_syncs > 0 then
-            Trapper:wrap(function()
-                self:downloadPendingSyncs()
-            end)
-        else
-            UIManager:show(InfoMessage:new {
-                text = _("Up to date!"),
-            })
-        end
-        self.sync = false
-    else
-        UIManager:show(InfoMessage:new {
-            text = _("Please choose a folder for sync downloads first"),
-        })
-    end
-end
-
--- Add entries to self.pending_syncs
-function OPDSBrowser:fillPendingSyncs(server)
-    self.root_catalog_password  = server.password
-    self.root_catalog_raw_names = server.raw_names
-    self.root_catalog_username  = server.username
-    self.root_catalog_title     = server.title
-    self.sync_server            = server
-    self.sync_server_list       = self.sync_server_list or {}
-    self.sync_max_dl            = self.settings.sync_max_dl or 50
-
-    local file_list
-    local file_str              = self.settings.filetypes
-    local new_last_download     = nil
-    local dl_count              = 1
-    if file_str then
-        file_list = {}
-        for filetype in util.gsplit(file_str, ",") do
-            file_list[util.trim(filetype)] = true
-        end
-    end
-    local sync_list = self:getSyncDownloadList()
-    if sync_list then
-        for i, entry in ipairs(sync_list) do
-            -- for project gutenberg
-            local sub_table = {}
-            local item
-            if entry.url then
-                sub_table = self:getSyncDownloadList(entry.url) or {}
-            end
-            if #sub_table > 0 then
-                -- The first element seems to be most compatible. Second element has most options
-                item = sub_table[2]
-            else
-                item = entry
-            end
-            for j, link in ipairs(item.acquisitions) do
-                -- Only save first link in case of several file types
-                if i == 1 and j == 1 then
-                    new_last_download = link.href
-                end
-                local filetype = DownloadManager.getFiletype(link)
-                if filetype then
-                    if not file_str or file_list and file_list[filetype] then
-                        local filename = self:getFileName(entry)
-                        local download_path = self:getLocalDownloadPath(filename, filetype, link.href)
-                        if dl_count <= self.sync_max_dl then -- Append only max_dl entries... may still have sync backlog
-                            table.insert(self.pending_syncs, {
-                                file = download_path,
-                                url = link.href,
-                                username = self.root_catalog_username,
-                                password = self.root_catalog_password,
-                                catalog = server.url,
-                            })
-                            dl_count = dl_count + 1
-                        end
-                        break
-                    end
-                end
-            end
-        end
-    end
-    self.sync_server_list[server.url] = true
-    if new_last_download then
-        logger.dbg("Updating opds last download for server", server.title, "to", new_last_download)
-        self:updateFieldInCatalog(server, "last_download", new_last_download)
-    end
-end
-
--- Get list of books to download bigger than sync_max_dl
-function OPDSBrowser:getSyncDownloadList(url_arg)
-    local sync_table = {}
-    local fetch_url = url_arg or self.sync_server.url
-    local sub_table
-    local up_to_date = false
-    while #sync_table < self.sync_max_dl and not up_to_date do
-        sub_table = self:genItemTableFromURL(fetch_url)
-        -- timeout
-        if #sub_table == 0 then
-            return sync_table
-        end
-        local count = 1
-        local acquisitions_empty = false
-        -- For project gutenberg
-        while #sub_table[count].acquisitions == 0 do
-            if util.stringEndsWith(sub_table[count].url, ".opds") then
-                acquisitions_empty = true
-                break
-            end
-            if count == #sub_table then
-                return sync_table
-            end
-            count = count + 1
-        end
-        -- First entry in table is the newest
-        -- If already downloaded, return
-        local first_href
-        if acquisitions_empty then
-            first_href = sub_table[count].url
-        else
-            first_href = sub_table[1].acquisitions[1].href
-        end
-        if first_href == self.sync_server.last_download and not self.sync_force then
-            return nil
-        end
-        local href
-        for i, entry in ipairs(sub_table) do
-            if acquisitions_empty then
-                if i >= count then
-                    href = entry.url
-                else
-                    href = nil
-                end
-            else
-                href = entry.acquisitions[1].href
-            end
-            if href then
-                if href == self.sync_server.last_download and not self.sync_force then
-                    up_to_date = true
-                    break
-                else
-                    table.insert(sync_table, entry)
-                end
-            end
-        end
-        if not sub_table.hrefs.next then
-            break
-        end
-        fetch_url = sub_table.hrefs.next
-    end
-    return sync_table
-end
-
--- Download pending syncs list
-function OPDSBrowser:downloadPendingSyncs()
-    local dl_list = self.pending_syncs
-    local duplicate_list = DownloadManager.downloadPendingSyncs(self, dl_list)
-
-    if duplicate_list and #duplicate_list > 0 then
-        local textviewer
-        local duplicate_files = { _("These files are already on the device:") }
-        for _, entry in ipairs(duplicate_list) do
-            table.insert(duplicate_files, entry.file)
-        end
-        local text = table.concat(duplicate_files, "\n")
-        textviewer = TextViewer:new {
-            title = _("Duplicate files"),
-            text = text,
-            buttons_table = {
-                {
-                    {
-                        text = _("Do nothing"),
-                        callback = function()
-                            textviewer:onClose()
-                        end
-                    },
-                    {
-                        text = _("Overwrite"),
-                        callback = function()
-                            self.sync_force = true
-                            textviewer:onClose()
-                            for _, entry in ipairs(duplicate_list) do
-                                table.insert(dl_list, entry)
-                            end
-                            Trapper:wrap(function()
-                                DownloadManager.downloadPendingSyncs(self, dl_list)
-                            end)
-                        end
-                    },
-                    {
-                        text = _("Download copies"),
-                        callback = function()
-                            self.sync_force = true
-                            textviewer:onClose()
-                            local copy_download_dir, original_dir, copies_dir, copy_download_path
-                            copies_dir = "copies"
-                            original_dir = util.splitFilePathName(duplicate_list[1].file)
-                            copy_download_dir = original_dir .. copies_dir .. "/"
-                            util.makePath(copy_download_dir)
-                            for _, entry in ipairs(duplicate_list) do
-                                local _, file_name = util.splitFilePathName(entry.file)
-                                copy_download_path = copy_download_dir .. file_name
-                                entry.file = copy_download_path
-                                table.insert(dl_list, entry)
-                            end
-                            Trapper:wrap(function()
-                                DownloadManager.downloadPendingSyncs(self, dl_list)
-                            end)
-                        end
-                    },
-                },
-            },
-        }
-        UIManager:show(textviewer)
-    end
+    SyncManager.checkAndStartSync(self, idx)
 end
 
 return OPDSBrowser
