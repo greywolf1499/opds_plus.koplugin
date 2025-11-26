@@ -153,13 +153,15 @@ local function showFormatSelectionDialog(browser, item, downloadable, add_to_que
 			{
 				text = text,
 				callback = function()
+					-- IMPORTANT: Capture filename BEFORE closing dialogs
+					-- because onCloseWidget clears browser._custom_filename
+					local filename = browser._custom_filename
+
 					UIManager:close(browser.format_dialog)
 					if parent_dialog then
 						UIManager:close(parent_dialog)
 					end
 
-					-- Get the current filename at download time (not dialog creation time)
-					local filename = browser._custom_filename
 					local local_path = DownloadManager.getLocalDownloadPath(
 						browser, filename, dl.filetype, dl.acquisition.href)
 
@@ -473,9 +475,11 @@ function BookInfoDialog.build(browser, item)
 			table.insert(action_row, {
 				text = Constants.ICONS.DOWNLOAD .. " " .. _("Download") .. " (" .. string.upper(dl.filetype) .. ")",
 				callback = function()
+					-- Capture filename BEFORE closing dialog
+					local filename = browser._custom_filename
 					UIManager:close(browser.book_info_dialog)
 					local local_path = DownloadManager.getLocalDownloadPath(
-						browser, browser._custom_filename, dl.filetype, dl.acquisition.href)
+						browser, filename, dl.filetype, dl.acquisition.href)
 					DownloadManager.checkDownloadFile(browser, local_path, dl.acquisition.href,
 						browser.root_catalog_username, browser.root_catalog_password,
 						browser.file_downloaded_callback)
@@ -496,9 +500,11 @@ function BookInfoDialog.build(browser, item)
 			table.insert(action_row, {
 				text = "+" .. " " .. _("Queue"),
 				callback = function()
+					-- Capture filename BEFORE closing dialog
+					local filename = browser._custom_filename
 					UIManager:close(browser.book_info_dialog)
 					local local_path = DownloadManager.getLocalDownloadPath(
-						browser, browser._custom_filename, dl.filetype, dl.acquisition.href)
+						browser, filename, dl.filetype, dl.acquisition.href)
 					DownloadManager.addToDownloadQueue(browser, {
 						file     = local_path,
 						url      = dl.acquisition.href,
