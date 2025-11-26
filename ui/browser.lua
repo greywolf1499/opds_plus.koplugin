@@ -261,7 +261,7 @@ function OPDSBrowser:onMenuSelect(item)
     if item.acquisitions and item.acquisitions[1] then -- book
         logger.dbg("Downloads available:", item)
         -- Show book info dialog first, allowing user to see details before downloading
-        local book_info_dialog = BookInfoDialog.buildBookInfoDialog(self, item)
+        local book_info_dialog = BookInfoDialog.build(self, item)
         UIManager:show(book_info_dialog)
     else                         -- catalog or Search item
         if #self.paths == 0 then -- root list
