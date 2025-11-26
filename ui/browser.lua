@@ -24,6 +24,9 @@ local OPDSMenuBuilder = require("ui.dialogs.menu_builder")
 local DownloadManager = require("core.download_manager")
 local DownloadDialogBuilder = require("ui.dialogs.download_builder")
 
+-- Import the book info dialog
+local BookInfoDialog = require("ui.dialogs.book_info_dialog")
+
 -- Import the feed fetcher
 local FeedFetcher = require("core.feed_fetcher")
 
@@ -257,7 +260,9 @@ end
 function OPDSBrowser:onMenuSelect(item)
     if item.acquisitions and item.acquisitions[1] then -- book
         logger.dbg("Downloads available:", item)
-        self:showDownloads(item)
+        -- Show book info dialog first, allowing user to see details before downloading
+        local book_info_dialog = BookInfoDialog.buildBookInfoDialog(self, item)
+        UIManager:show(book_info_dialog)
     else                         -- catalog or Search item
         if #self.paths == 0 then -- root list
             if item.idx == 1 then
