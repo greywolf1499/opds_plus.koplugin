@@ -141,10 +141,9 @@ end
 -- @param browser table OPDSBrowser instance
 -- @param item table Book item
 -- @param downloadable table List of downloadable acquisitions
--- @param filename string Filename to use
 -- @param add_to_queue boolean If true, add to queue instead of download
 -- @param parent_dialog table Parent dialog to close
-local function showFormatSelectionDialog(browser, item, downloadable, filename, add_to_queue, parent_dialog)
+local function showFormatSelectionDialog(browser, item, downloadable, add_to_queue, parent_dialog)
 	local DownloadManager = require("core.download_manager")
 	local buttons = {}
 
@@ -159,6 +158,8 @@ local function showFormatSelectionDialog(browser, item, downloadable, filename, 
 						UIManager:close(parent_dialog)
 					end
 
+					-- Get the current filename at download time (not dialog creation time)
+					local filename = browser._custom_filename
 					local local_path = DownloadManager.getLocalDownloadPath(
 						browser, filename, dl.filetype, dl.acquisition.href)
 
@@ -208,6 +209,7 @@ end
 -- @return table Dialog widget
 function BookInfoDialog.build(browser, item)
 	local DownloadManager = require("core.download_manager")
+	local ImageLoader = require("services.image_loader")
 
 	-- Store custom filename in the browser context for this item
 	-- Initialize with default filename
@@ -219,11 +221,6 @@ function BookInfoDialog.build(browser, item)
 		browser._custom_filename = nil
 	else
 		browser._custom_filename = browser._custom_filename or util.replaceAllInvalidChars(base_filename)
-	end
-
-	-- Helper to get current filename
-	local function getCurrentFilename()
-		return browser._custom_filename
 	end
 
 	-- Get PSE and downloadable acquisitions
@@ -240,31 +237,111 @@ function BookInfoDialog.build(browser, item)
 	local cover_height = math.floor(screen_height * 0.25)
 	local cover_width = math.floor(cover_height * (2 / 3)) -- book aspect ratio
 
-	-- Build cover widget
-	-- We create a COPY of the cover_bb to avoid affecting the menu's cover
-	local cover_widget
-	local dialog_cover_bb = nil -- Track our own copy for cleanup
+	-- Cover link for full view and high-res loading
+	local cover_link = item.image or item.thumbnail
 
-	if item.cover_bb then
-		-- Create a scaled copy for the dialog at higher resolution
-		-- Use the original cover_bb but DON'T let ImageWidget manage it
-		cover_widget = ImageWidget:new {
-			image = item.cover_bb,
-			width = cover_width,
-			height = cover_height,
-			scale_factor = 0, -- scale to fit
-			alpha = true,
-			image_disposable = false, -- IMPORTANT: Don't free the menu's cover_bb
-		}
-	elseif item.thumbnail or item.image then
-		-- Show placeholder - cover not loaded yet
-		cover_widget = CenterContainer:new {
+	-- Function to show full cover
+	local function showFullCover()
+		if cover_link then
+			OPDSPSE:streamPages(cover_link, 1, false,
+				browser.root_catalog_username, browser.root_catalog_password)
+		end
+	end
+
+	-- Build cover widget - make it tappable
+	local cover_container
+	local dialog_cover_bb = nil -- Track our high-res cover for cleanup
+	local cover_image_widget = nil -- Reference to update later
+
+	if item.cover_bb or cover_link then
+		-- Create the image widget (start with low-res if available, or placeholder)
+		if item.cover_bb then
+			cover_image_widget = ImageWidget:new {
+				image = item.cover_bb,
+				width = cover_width,
+				height = cover_height,
+				scale_factor = 0,
+				alpha = true,
+				image_disposable = false, -- Don't free the menu's cover_bb
+			}
+		else
+			-- Placeholder while loading
+			cover_image_widget = CenterContainer:new {
+				dimen = Geom:new { w = cover_width, h = cover_height },
+				TextWidget:new {
+					text = "📖",
+					face = Font:getFace("cfont", 48),
+				},
+			}
+		end
+
+		-- Wrap in InputContainer to make it tappable
+		cover_container = InputContainer:new {
 			dimen = Geom:new { w = cover_width, h = cover_height },
-			TextWidget:new {
-				text = "📖",
-				face = Font:getFace("cfont", 48),
+			cover_image_widget,
+		}
+		cover_container.ges_events = {
+			TapCover = {
+				GestureRange:new {
+					ges = "tap",
+					range = cover_container.dimen,
+				},
 			},
 		}
+		function cover_container:onTapCover()
+			showFullCover()
+			return true
+		end
+
+		-- Load high-res cover asynchronously if we have a URL
+		if cover_link then
+			local function updateCoverWidget(content)
+				-- Render at higher resolution for the dialog
+				local target_height = cover_height * 2 -- 2x resolution
+				local target_width = cover_width * 2
+				local ok, hi_res_bb = pcall(function()
+					return RenderImage:renderImageData(
+						content,
+						#content,
+						false,
+						target_width,
+						target_height
+					)
+				end)
+
+				if ok and hi_res_bb then
+					-- Store for cleanup
+					dialog_cover_bb = hi_res_bb
+
+					-- Create new high-res image widget
+					local new_cover_widget = ImageWidget:new {
+						image = hi_res_bb,
+						width = cover_width,
+						height = cover_height,
+						scale_factor = 0,
+						alpha = true,
+						image_disposable = false, -- We'll free it ourselves
+					}
+
+					-- Update the container
+					cover_container[1] = new_cover_widget
+					cover_image_widget = new_cover_widget
+
+					-- Refresh the dialog
+					UIManager:setDirty(browser.book_info_dialog, "ui")
+				end
+			end
+
+			-- Start async load
+			ImageLoader:loadImages(
+				{ cover_link },
+				function(loaded_url, content)
+					updateCoverWidget(content)
+				end,
+				browser.root_catalog_username,
+				browser.root_catalog_password
+			)
+		end
 	end
 
 	-- Build info text parts
@@ -286,7 +363,7 @@ function BookInfoDialog.build(browser, item)
 
 	-- Build the text info widget
 	local text_width = dialog_width - cover_width - Size.padding.large * 4
-	if not cover_widget then
+	if not cover_container then
 		text_width = dialog_width - Size.padding.large * 2
 	end
 
@@ -305,12 +382,12 @@ function BookInfoDialog.build(browser, item)
 
 	-- Header row with cover and info
 	local header_content
-	if cover_widget then
+	if cover_container then
 		header_content = HorizontalGroup:new {
 			align = "top",
 			CenterContainer:new {
 				dimen = Geom:new { w = cover_width + Size.padding.default, h = cover_height },
-				cover_widget,
+				cover_container,
 			},
 			HorizontalSpan:new { width = Size.padding.default },
 			info_widget,
@@ -327,7 +404,7 @@ function BookInfoDialog.build(browser, item)
 
 	-- Calculate remaining height for description
 	local title_bar_height = Size.padding.large * 3 -- approximate
-	local header_height = cover_widget and cover_height or info_widget:getSize().h
+	local header_height = cover_container and cover_height or info_widget:getSize().h
 	local button_height = Size.padding.large * 4 -- approximate for buttons
 	local description_height = dialog_height - title_bar_height - header_height - button_height - Size.padding.large * 4
 
@@ -398,7 +475,7 @@ function BookInfoDialog.build(browser, item)
 				callback = function()
 					UIManager:close(browser.book_info_dialog)
 					local local_path = DownloadManager.getLocalDownloadPath(
-						browser, getCurrentFilename(), dl.filetype, dl.acquisition.href)
+						browser, browser._custom_filename, dl.filetype, dl.acquisition.href)
 					DownloadManager.checkDownloadFile(browser, local_path, dl.acquisition.href,
 						browser.root_catalog_username, browser.root_catalog_password,
 						browser.file_downloaded_callback)
@@ -408,8 +485,7 @@ function BookInfoDialog.build(browser, item)
 			table.insert(action_row, {
 				text = Constants.ICONS.DOWNLOAD .. " " .. _("Download…"),
 				callback = function()
-					showFormatSelectionDialog(browser, item, downloadable, getCurrentFilename(), false,
-						browser.book_info_dialog)
+					showFormatSelectionDialog(browser, item, downloadable, false, browser.book_info_dialog)
 				end,
 			})
 		end
@@ -422,7 +498,7 @@ function BookInfoDialog.build(browser, item)
 				callback = function()
 					UIManager:close(browser.book_info_dialog)
 					local local_path = DownloadManager.getLocalDownloadPath(
-						browser, getCurrentFilename(), dl.filetype, dl.acquisition.href)
+						browser, browser._custom_filename, dl.filetype, dl.acquisition.href)
 					DownloadManager.addToDownloadQueue(browser, {
 						file     = local_path,
 						url      = dl.acquisition.href,
@@ -437,8 +513,7 @@ function BookInfoDialog.build(browser, item)
 			table.insert(action_row, {
 				text = "+" .. " " .. _("Queue…"),
 				callback = function()
-					showFormatSelectionDialog(browser, item, downloadable, getCurrentFilename(), true,
-						browser.book_info_dialog)
+					showFormatSelectionDialog(browser, item, downloadable, true, browser.book_info_dialog)
 				end,
 			})
 		end
@@ -449,15 +524,11 @@ function BookInfoDialog.build(browser, item)
 	-- Row 3: Additional options
 	local options_row = {}
 
-	-- View full cover button
-	local cover_link = item.image or item.thumbnail
+	-- View full cover button (only if cover exists)
 	if cover_link then
 		table.insert(options_row, {
 			text = _("Full Cover"),
-			callback = function()
-				OPDSPSE:streamPages(cover_link, 1, false,
-					browser.root_catalog_username, browser.root_catalog_password)
-			end,
+			callback = showFullCover,
 		})
 	end
 
@@ -587,7 +658,7 @@ function BookInfoDialog.build(browser, item)
 	function browser.book_info_dialog:onCloseWidget()
 		-- Clean up custom filename when dialog closes
 		browser._custom_filename = nil
-		-- Clean up our dialog cover if we created one
+		-- Clean up our high-res dialog cover if we created one
 		if dialog_cover_bb then
 			dialog_cover_bb:free()
 			dialog_cover_bb = nil
