@@ -209,15 +209,21 @@ end
 function BookInfoDialog.build(browser, item)
 	local DownloadManager = require("core.download_manager")
 
-	-- Generate filename
-	local filename = item.title
+	-- Store custom filename in the browser context for this item
+	-- Initialize with default filename
+	local base_filename = item.title
 	if item.author then
-		filename = item.author .. " - " .. filename
+		base_filename = item.author .. " - " .. base_filename
 	end
 	if browser.root_catalog_raw_names then
-		filename = nil
+		browser._custom_filename = nil
 	else
-		filename = util.replaceAllInvalidChars(filename)
+		browser._custom_filename = browser._custom_filename or util.replaceAllInvalidChars(base_filename)
+	end
+
+	-- Helper to get current filename
+	local function getCurrentFilename()
+		return browser._custom_filename
 	end
 
 	-- Get PSE and downloadable acquisitions
@@ -230,23 +236,28 @@ function BookInfoDialog.build(browser, item)
 	local dialog_width = math.floor(screen_width * 0.9)
 	local dialog_height = math.floor(screen_height * 0.85)
 
-	-- Cover image dimensions
+	-- Cover image dimensions - larger for the dialog
 	local cover_height = math.floor(screen_height * 0.25)
 	local cover_width = math.floor(cover_height * (2 / 3)) -- book aspect ratio
 
 	-- Build cover widget
+	-- We create a COPY of the cover_bb to avoid affecting the menu's cover
 	local cover_widget
+	local dialog_cover_bb = nil -- Track our own copy for cleanup
+
 	if item.cover_bb then
-		-- Use already loaded cover from menu
+		-- Create a scaled copy for the dialog at higher resolution
+		-- Use the original cover_bb but DON'T let ImageWidget manage it
 		cover_widget = ImageWidget:new {
 			image = item.cover_bb,
 			width = cover_width,
 			height = cover_height,
 			scale_factor = 0, -- scale to fit
 			alpha = true,
+			image_disposable = false, -- IMPORTANT: Don't free the menu's cover_bb
 		}
 	elseif item.thumbnail or item.image then
-		-- Placeholder while we could load it, or just show placeholder
+		-- Show placeholder - cover not loaded yet
 		cover_widget = CenterContainer:new {
 			dimen = Geom:new { w = cover_width, h = cover_height },
 			TextWidget:new {
@@ -387,7 +398,7 @@ function BookInfoDialog.build(browser, item)
 				callback = function()
 					UIManager:close(browser.book_info_dialog)
 					local local_path = DownloadManager.getLocalDownloadPath(
-						browser, filename, dl.filetype, dl.acquisition.href)
+						browser, getCurrentFilename(), dl.filetype, dl.acquisition.href)
 					DownloadManager.checkDownloadFile(browser, local_path, dl.acquisition.href,
 						browser.root_catalog_username, browser.root_catalog_password,
 						browser.file_downloaded_callback)
@@ -397,7 +408,8 @@ function BookInfoDialog.build(browser, item)
 			table.insert(action_row, {
 				text = Constants.ICONS.DOWNLOAD .. " " .. _("Download…"),
 				callback = function()
-					showFormatSelectionDialog(browser, item, downloadable, filename, false, browser.book_info_dialog)
+					showFormatSelectionDialog(browser, item, downloadable, getCurrentFilename(), false,
+						browser.book_info_dialog)
 				end,
 			})
 		end
@@ -410,7 +422,7 @@ function BookInfoDialog.build(browser, item)
 				callback = function()
 					UIManager:close(browser.book_info_dialog)
 					local local_path = DownloadManager.getLocalDownloadPath(
-						browser, filename, dl.filetype, dl.acquisition.href)
+						browser, getCurrentFilename(), dl.filetype, dl.acquisition.href)
 					DownloadManager.addToDownloadQueue(browser, {
 						file     = local_path,
 						url      = dl.acquisition.href,
@@ -425,7 +437,8 @@ function BookInfoDialog.build(browser, item)
 			table.insert(action_row, {
 				text = "+" .. " " .. _("Queue…"),
 				callback = function()
-					showFormatSelectionDialog(browser, item, downloadable, filename, true, browser.book_info_dialog)
+					showFormatSelectionDialog(browser, item, downloadable, getCurrentFilename(), true,
+						browser.book_info_dialog)
 				end,
 			})
 		end
@@ -452,7 +465,7 @@ function BookInfoDialog.build(browser, item)
 	table.insert(options_row, {
 		text = _("Options…"),
 		callback = function()
-			BookInfoDialog.showDownloadOptionsDialog(browser, item, filename)
+			BookInfoDialog.showDownloadOptionsDialog(browser, item)
 		end,
 	})
 
@@ -572,6 +585,13 @@ function BookInfoDialog.build(browser, item)
 	end
 
 	function browser.book_info_dialog:onCloseWidget()
+		-- Clean up custom filename when dialog closes
+		browser._custom_filename = nil
+		-- Clean up our dialog cover if we created one
+		if dialog_cover_bb then
+			dialog_cover_bb:free()
+			dialog_cover_bb = nil
+		end
 		UIManager:setDirty(nil, "ui")
 	end
 
@@ -581,8 +601,7 @@ end
 --- Show download options dialog (folder and filename)
 -- @param browser table OPDSBrowser instance
 -- @param item table Book item
--- @param filename string Current filename
-function BookInfoDialog.showDownloadOptionsDialog(browser, item, filename)
+function BookInfoDialog.showDownloadOptionsDialog(browser, item)
 	local DownloadManager = require("core.download_manager")
 
 	-- Generate original filename for reset
@@ -591,6 +610,9 @@ function BookInfoDialog.showDownloadOptionsDialog(browser, item, filename)
 		filename_orig = item.author .. " - " .. filename_orig
 	end
 	filename_orig = util.replaceAllInvalidChars(filename_orig)
+
+	-- Current custom filename or default
+	local current_filename = browser._custom_filename or filename_orig
 
 	local buttons = {
 		{
@@ -615,7 +637,7 @@ function BookInfoDialog.showDownloadOptionsDialog(browser, item, filename)
 					local dialog
 					dialog = InputDialog:new {
 						title = _("Enter filename"),
-						input = filename or filename_orig,
+						input = current_filename,
 						input_hint = filename_orig,
 						buttons = {
 							{
@@ -627,11 +649,23 @@ function BookInfoDialog.showDownloadOptionsDialog(browser, item, filename)
 									end,
 								},
 								{
-									text = _("Set filename"),
+									text = _("Reset"),
+									callback = function()
+										-- Reset to original filename
+										browser._custom_filename = filename_orig
+										UIManager:close(dialog)
+									end,
+								},
+								{
+									text = _("Set"),
 									is_enter_default = true,
 									callback = function()
-										-- Note: filename changes won't persist in the current implementation
-										-- This is a limitation we can address later
+										local new_filename = dialog:getInputText()
+										if new_filename and new_filename ~= "" then
+											-- Sanitize the filename
+											browser._custom_filename = util.replaceAllInvalidChars(new_filename)
+											logger.dbg("Custom filename set to:", browser._custom_filename)
+										end
 										UIManager:close(dialog)
 									end,
 								},
@@ -657,7 +691,7 @@ function BookInfoDialog.showDownloadOptionsDialog(browser, item, filename)
 	local current_dir = DownloadManager.getCurrentDownloadDir(browser)
 
 	browser.options_dialog = ButtonDialog:new {
-		title = T(_("Download Options\n\nCurrent folder:\n%1"), BD.dirpath(current_dir)),
+		title = T(_("Download Options\n\nFolder: %1\n\nFilename: %2"), BD.dirpath(current_dir), current_filename),
 		buttons = buttons,
 	}
 	UIManager:show(browser.options_dialog)
