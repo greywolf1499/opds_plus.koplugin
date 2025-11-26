@@ -2,20 +2,43 @@
 -- Displays book information with download/queue actions
 
 local BD = require("ui/bidi")
+local Blitbuffer = require("ffi/blitbuffer")
 local ButtonDialog = require("ui/widget/buttondialog")
+local ButtonTable = require("ui/widget/buttontable")
+local CenterContainer = require("ui/widget/container/centercontainer")
+local CloseButton = require("ui/widget/closebutton")
+local Device = require("device")
+local Font = require("ui/font")
+local FrameContainer = require("ui/widget/container/framecontainer")
+local Geom = require("ui/geometry")
+local GestureRange = require("ui/gesturerange")
+local HorizontalGroup = require("ui/widget/horizontalgroup")
+local HorizontalSpan = require("ui/widget/horizontalspan")
+local ImageWidget = require("ui/widget/imagewidget")
+local InputContainer = require("ui/widget/container/inputcontainer")
 local InputDialog = require("ui/widget/inputdialog")
+local MovableContainer = require("ui/widget/container/movablecontainer")
 local NetworkMgr = require("ui/network/manager")
+local OverlapGroup = require("ui/widget/overlapgroup")
+local RenderImage = require("ui/renderimage")
+local ScrollableContainer = require("ui/widget/container/scrollablecontainer")
+local Size = require("ui/size")
 local TextBoxWidget = require("ui/widget/textboxwidget")
-local TextViewer = require("ui/widget/textviewer")
+local TextWidget = require("ui/widget/textwidget")
+local TitleBar = require("ui/widget/titlebar")
 local UIManager = require("ui/uimanager")
+local VerticalGroup = require("ui/widget/verticalgroup")
+local VerticalSpan = require("ui/widget/verticalspan")
 local logger = require("logger")
 local url = require("socket.url")
 local util = require("util")
 local _ = require("gettext")
+local Screen = Device.screen
 local T = require("ffi/util").template
 
 local Constants = require("models.constants")
 local OPDSPSE = require("services.kavita")
+local HttpClient = require("services.http_client")
 
 local BookInfoDialog = {}
 
@@ -180,10 +203,10 @@ local function showFormatSelectionDialog(browser, item, downloadable, filename, 
 end
 
 --- Build the book info dialog
--- Shows book information with action buttons
+-- Shows book information with action buttons and cover image
 -- @param browser table OPDSBrowser instance
 -- @param item table Book item with acquisitions
--- @return table TextViewer widget
+-- @return table Dialog widget
 function BookInfoDialog.build(browser, item)
 	local DownloadManager = require("core.download_manager")
 
@@ -198,12 +221,129 @@ function BookInfoDialog.build(browser, item)
 		filename = util.replaceAllInvalidChars(filename)
 	end
 
-	-- Build info text
-	local info_text = buildBookInfoText(item, DownloadManager)
-
 	-- Get PSE and downloadable acquisitions
 	local pse_acquisition = getPSEAcquisition(item.acquisitions)
 	local downloadable = getDownloadableAcquisitions(item.acquisitions, DownloadManager)
+
+	-- Dialog dimensions
+	local screen_width = Screen:getWidth()
+	local screen_height = Screen:getHeight()
+	local dialog_width = math.floor(screen_width * 0.9)
+	local dialog_height = math.floor(screen_height * 0.85)
+
+	-- Cover image dimensions
+	local cover_height = math.floor(screen_height * 0.25)
+	local cover_width = math.floor(cover_height * (2 / 3)) -- book aspect ratio
+
+	-- Build cover widget
+	local cover_widget
+	if item.cover_bb then
+		-- Use already loaded cover from menu
+		cover_widget = ImageWidget:new {
+			image = item.cover_bb,
+			width = cover_width,
+			height = cover_height,
+			scale_factor = 0, -- scale to fit
+			alpha = true,
+		}
+	elseif item.thumbnail or item.image then
+		-- Placeholder while we could load it, or just show placeholder
+		cover_widget = CenterContainer:new {
+			dimen = Geom:new { w = cover_width, h = cover_height },
+			TextWidget:new {
+				text = "📖",
+				face = Font:getFace("cfont", 48),
+			},
+		}
+	end
+
+	-- Build info text parts
+	local info_parts = {}
+
+	-- Author
+	if item.author then
+		table.insert(info_parts, {
+			label = _("Author"),
+			value = item.author,
+		})
+	end
+
+	-- Available formats
+	table.insert(info_parts, {
+		label = _("Formats"),
+		value = formatAvailableFormats(item.acquisitions, DownloadManager),
+	})
+
+	-- Build the text info widget
+	local text_width = dialog_width - cover_width - Size.padding.large * 4
+	if not cover_widget then
+		text_width = dialog_width - Size.padding.large * 2
+	end
+
+	local info_text_parts = {}
+	for _, part in ipairs(info_parts) do
+		table.insert(info_text_parts, TextBoxWidget.PTF_BOLD_START .. part.label .. ":" .. TextBoxWidget.PTF_BOLD_END)
+		table.insert(info_text_parts, " " .. part.value .. "\n")
+	end
+
+	local info_widget = TextBoxWidget:new {
+		text = TextBoxWidget.PTF_HEADER .. table.concat(info_text_parts),
+		width = text_width,
+		face = Font:getFace("x_smallinfofont"),
+		alignment = "left",
+	}
+
+	-- Header row with cover and info
+	local header_content
+	if cover_widget then
+		header_content = HorizontalGroup:new {
+			align = "top",
+			CenterContainer:new {
+				dimen = Geom:new { w = cover_width + Size.padding.default, h = cover_height },
+				cover_widget,
+			},
+			HorizontalSpan:new { width = Size.padding.default },
+			info_widget,
+		}
+	else
+		header_content = info_widget
+	end
+
+	-- Description section
+	local description_text = _("No description available.")
+	if item.content and type(item.content) == "string" then
+		description_text = util.htmlToPlainTextIfHtml(item.content)
+	end
+
+	-- Calculate remaining height for description
+	local title_bar_height = Size.padding.large * 3 -- approximate
+	local header_height = cover_widget and cover_height or info_widget:getSize().h
+	local button_height = Size.padding.large * 4 -- approximate for buttons
+	local description_height = dialog_height - title_bar_height - header_height - button_height - Size.padding.large * 4
+
+	local description_widget = ScrollableContainer:new {
+		dimen = Geom:new {
+			w = dialog_width - Size.padding.large * 2,
+			h = math.max(description_height, 100),
+		},
+		show_parent = browser,
+		VerticalGroup:new {
+			align = "left",
+			VerticalSpan:new { height = Size.padding.small },
+			TextBoxWidget:new {
+				text = TextBoxWidget.PTF_HEADER .. TextBoxWidget.PTF_BOLD_START .. _("Description") .. TextBoxWidget.PTF_BOLD_END,
+				width = dialog_width - Size.padding.large * 4,
+				face = Font:getFace("x_smallinfofont"),
+			},
+			VerticalSpan:new { height = Size.padding.small },
+			TextBoxWidget:new {
+				text = description_text,
+				width = dialog_width - Size.padding.large * 4,
+				face = Font:getFace("x_smallinfofont"),
+				alignment = "left",
+			},
+		},
+	}
 
 	-- Build buttons
 	local buttons_table = {}
@@ -234,7 +374,6 @@ function BookInfoDialog.build(browser, item)
 		end
 
 		table.insert(buttons_table, stream_row)
-		table.insert(buttons_table, {}) -- separator
 	end
 
 	-- Row 2: Download and Queue buttons
@@ -243,7 +382,6 @@ function BookInfoDialog.build(browser, item)
 
 		-- Download button
 		if #downloadable == 1 then
-			-- Single format - download directly
 			local dl = downloadable[1]
 			table.insert(action_row, {
 				text = Constants.ICONS.DOWNLOAD .. " " .. _("Download") .. " (" .. string.upper(dl.filetype) .. ")",
@@ -257,7 +395,6 @@ function BookInfoDialog.build(browser, item)
 				end,
 			})
 		else
-			-- Multiple formats - show selection
 			table.insert(action_row, {
 				text = Constants.ICONS.DOWNLOAD .. " " .. _("Download…"),
 				callback = function()
@@ -270,7 +407,7 @@ function BookInfoDialog.build(browser, item)
 		if #downloadable == 1 then
 			local dl = downloadable[1]
 			table.insert(action_row, {
-				text = "+" .. " " .. _("Add to Queue"),
+				text = "+" .. " " .. _("Queue"),
 				callback = function()
 					UIManager:close(browser.book_info_dialog)
 					local local_path = DownloadManager.getLocalDownloadPath(
@@ -287,7 +424,7 @@ function BookInfoDialog.build(browser, item)
 			})
 		else
 			table.insert(action_row, {
-				text = "+" .. " " .. _("Add to Queue…"),
+				text = "+" .. " " .. _("Queue…"),
 				callback = function()
 					showFormatSelectionDialog(browser, item, downloadable, filename, true, browser.book_info_dialog)
 				end,
@@ -304,7 +441,7 @@ function BookInfoDialog.build(browser, item)
 	local cover_link = item.image or item.thumbnail
 	if cover_link then
 		table.insert(options_row, {
-			text = _("View Cover"),
+			text = _("Full Cover"),
 			callback = function()
 				OPDSPSE:streamPages(cover_link, 1, false,
 					browser.root_catalog_username, browser.root_catalog_password)
@@ -312,7 +449,7 @@ function BookInfoDialog.build(browser, item)
 		})
 	end
 
-	-- Download options button (folder/filename)
+	-- Download options button
 	table.insert(options_row, {
 		text = _("Options…"),
 		callback = function()
@@ -320,19 +457,124 @@ function BookInfoDialog.build(browser, item)
 		end,
 	})
 
+	-- Close button
+	table.insert(options_row, {
+		text = _("Close"),
+		callback = function()
+			UIManager:close(browser.book_info_dialog)
+		end,
+	})
+
 	if #options_row > 0 then
-		table.insert(buttons_table, {}) -- separator
 		table.insert(buttons_table, options_row)
 	end
 
-	-- Create the dialog
-	browser.book_info_dialog = TextViewer:new {
-		title = item.title or _("Book Information"),
-		title_multilines = true,
-		text = info_text,
-		text_type = "book_info",
-		buttons_table = buttons_table,
+	-- Create button table widget
+	local button_table = ButtonTable:new {
+		width = dialog_width - Size.padding.large * 2,
+		buttons = buttons_table,
+		zero_sep = true,
+		show_parent = browser,
 	}
+
+	-- Main content layout
+	local content = VerticalGroup:new {
+		align = "center",
+		VerticalSpan:new { height = Size.padding.default },
+		header_content,
+		VerticalSpan:new { height = Size.padding.default },
+		description_widget,
+		VerticalSpan:new { height = Size.padding.default },
+		button_table,
+	}
+
+	-- Title bar
+	local title_bar = TitleBar:new {
+		title = item.title or _("Book Information"),
+		fullscreen = true,
+		width = dialog_width,
+		with_bottom_line = true,
+		bottom_line_color = Blitbuffer.COLOR_DARK_GRAY,
+		bottom_line_h_padding = Size.padding.large,
+		close_callback = function()
+			UIManager:close(browser.book_info_dialog)
+		end,
+		show_parent = browser,
+	}
+
+	-- Frame the content
+	local content_frame = FrameContainer:new {
+		padding = Size.padding.default,
+		padding_top = 0,
+		margin = 0,
+		bordersize = 0,
+		background = Blitbuffer.COLOR_WHITE,
+		content,
+	}
+
+	-- Complete dialog layout
+	local dialog_frame = FrameContainer:new {
+		radius = Size.radius.window,
+		bordersize = Size.border.window,
+		background = Blitbuffer.COLOR_WHITE,
+		padding = 0,
+		margin = 0,
+		VerticalGroup:new {
+			align = "center",
+			title_bar,
+			content_frame,
+		},
+	}
+
+	-- Create the dialog as an InputContainer for gesture handling
+	browser.book_info_dialog = InputContainer:new {
+		ignore_events = { "swipe", "pan", "pan_release" },
+	}
+	browser.book_info_dialog.dimen = Geom:new {
+		w = dialog_width,
+		h = dialog_height,
+	}
+	browser.book_info_dialog.movable = MovableContainer:new {
+		dialog_frame,
+	}
+	browser.book_info_dialog[1] = CenterContainer:new {
+		dimen = Geom:new {
+			w = screen_width,
+			h = screen_height,
+		},
+		browser.book_info_dialog.movable,
+	}
+
+	-- Add close on tap outside
+	browser.book_info_dialog.ges_events = {
+		TapClose = {
+			GestureRange:new {
+				ges = "tap",
+				range = Geom:new {
+					x = 0, y = 0,
+					w = screen_width,
+					h = screen_height,
+				},
+			},
+		},
+	}
+
+	function browser.book_info_dialog:onTapClose(arg, ges)
+		if ges.pos:notIntersectWith(self.movable.dimen) then
+			UIManager:close(self)
+			return true
+		end
+		return false
+	end
+
+	function browser.book_info_dialog:onClose()
+		UIManager:close(self)
+		return true
+	end
+
+	function browser.book_info_dialog:onCloseWidget()
+		UIManager:setDirty(nil, "ui")
+	end
 
 	return browser.book_info_dialog
 end
