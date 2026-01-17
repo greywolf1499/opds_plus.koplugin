@@ -173,7 +173,7 @@ end
 
 function OPDS:onDispatcherRegisterActions()
     Dispatcher:registerAction("opdsplus_show_catalog",
-        { category = "none", event = "ShowOPDSPlusCatalog", title = _("OPDS Plus Catalog"), filemanager = true, }
+        { category = "none", event = "ShowOPDSCatalog", title = _("OPDS Plus Catalog"), filemanager = true, }
     )
 end
 
