@@ -211,12 +211,12 @@ function BookInfoDialog.build(browser, item)
 	-- Build cover widget - make it tappable
 	local cover_container
 	local dialog_cover_bb = nil -- Track our high-res cover for cleanup
-	local cover_image_widget = nil -- Reference to update later
 
 	if item.cover_bb or cover_link then
 		-- Create the image widget (start with low-res if available, or placeholder)
+		local initial_cover_widget
 		if item.cover_bb then
-			cover_image_widget = ImageWidget:new {
+			initial_cover_widget = ImageWidget:new {
 				image = item.cover_bb,
 				width = cover_width,
 				height = cover_height,
@@ -226,7 +226,7 @@ function BookInfoDialog.build(browser, item)
 			}
 		else
 			-- Placeholder while loading
-			cover_image_widget = CenterContainer:new {
+			initial_cover_widget = CenterContainer:new {
 				dimen = Geom:new { w = cover_width, h = cover_height },
 				TextWidget:new {
 					text = "📖",
@@ -238,7 +238,7 @@ function BookInfoDialog.build(browser, item)
 		-- Wrap in InputContainer to make it tappable
 		cover_container = InputContainer:new {
 			dimen = Geom:new { w = cover_width, h = cover_height },
-			cover_image_widget,
+			initial_cover_widget,
 		}
 		cover_container.ges_events = {
 			TapCover = {
@@ -285,7 +285,6 @@ function BookInfoDialog.build(browser, item)
 
 					-- Update the container
 					cover_container[1] = new_cover_widget
-					cover_image_widget = new_cover_widget
 
 					-- Refresh the dialog
 					UIManager:setDirty(browser.book_info_dialog, "ui")
