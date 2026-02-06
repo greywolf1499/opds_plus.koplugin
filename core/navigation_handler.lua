@@ -139,7 +139,7 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 
 					-- Special handling for PDF links
 					if link.title == "pdf" or link.type == "application/pdf"
-						and link.rel ~= "subsection" then
+							and link.rel ~= "subsection" then
 						local original_href = link.href
 						local parsed = socket_url.parse(original_href)
 						if not parsed then parsed = { path = original_href } end
@@ -183,8 +183,17 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 				debug_callback("Book entry with cover:", title)
 			end
 
-			-- Prefer thumbnail over full image for performance
-			if item.thumbnail then
+			local DataStorage = require("datastorage")
+			local opds_settings_file = DataStorage:getSettingsDir() .. "/opdsplus.lua"
+			local Settings = require("config.settings")
+			local settings_manager = Settings:new(opds_settings_file)
+			local opds_settings = settings_manager.storage
+
+			-- Prefer thumbnail over full image for performance unless told otherwise
+			if opds_settings:readSetting("large_cover") and item.image then
+				item.cover_url = item.image
+				item.lazy_load_cover = true
+			elseif item.thumbnail then
 				item.cover_url = item.thumbnail
 				item.lazy_load_cover = true
 			elseif item.image then

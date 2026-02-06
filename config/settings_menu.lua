@@ -21,6 +21,20 @@ function SettingsMenu.create(plugin)
 					text = _("Display Mode"),
 					sub_item_table = {
 						{
+							text = _("Prefer Large Covers"),
+							checked_func = function()
+								if plugin.opds_settings:isTrue("large_cover") then
+									return true
+								else
+									return false
+								end
+							end,
+							callback = function()
+								plugin.opds_settings:flipNilOrFalse("large_cover")
+								plugin.opds_settings:flush()
+							end,
+						},
+						{
 							text = _("List View"),
 							checked_func = function()
 								local mode = plugin.settings.display_mode
@@ -94,8 +108,8 @@ function SettingsMenu.create(plugin)
 								plugin:saveSetting("use_same_font", not current)
 								UIManager:show(InfoMessage:new {
 									text = not current and
-										_("Now using the same font for title and details.\n\nChanges apply on next catalog browse.") or
-										_("Now using separate fonts for title and details.\n\nChanges apply on next catalog browse."),
+											_("Now using the same font for title and details.\n\nChanges apply on next catalog browse.") or
+											_("Now using separate fonts for title and details.\n\nChanges apply on next catalog browse."),
 									timeout = 2,
 								})
 							end,
@@ -125,8 +139,8 @@ function SettingsMenu.create(plugin)
 										plugin:saveSetting("title_bold", not current)
 										UIManager:show(InfoMessage:new {
 											text = not current and
-												_("Title is now bold.") or
-												_("Title is now regular weight."),
+													_("Title is now bold.") or
+													_("Title is now regular weight."),
 											timeout = 2,
 										})
 									end,
@@ -162,8 +176,8 @@ function SettingsMenu.create(plugin)
 										plugin:saveSetting("info_bold", not current)
 										UIManager:show(InfoMessage:new {
 											text = not current and
-												_("Information text is now bold.") or
-												_("Information text is now regular weight."),
+													_("Information text is now bold.") or
+													_("Information text is now regular weight."),
 											timeout = 2,
 										})
 									end,
@@ -217,8 +231,8 @@ function SettingsMenu.create(plugin)
 								plugin.opds_settings:flush()
 								UIManager:show(InfoMessage:new {
 									text = plugin.settings.debug_mode and
-										_("Debug mode enabled.\n\nDetailed logging is now active.") or
-										_("Debug mode disabled.\n\nNormal logging restored."),
+											_("Debug mode enabled.\n\nDetailed logging is now active.") or
+											_("Debug mode disabled.\n\nNormal logging restored."),
 									timeout = 2,
 								})
 							end,
