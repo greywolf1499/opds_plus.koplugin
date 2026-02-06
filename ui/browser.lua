@@ -258,6 +258,13 @@ end
 
 -- Menu action on item tap (Download a book / Show subcatalog / Search in catalog)
 function OPDSBrowser:onMenuSelect(item)
+    if item.acquisitions then
+        for i = #item.acquisitions, 1, -1 do
+            if item.acquisitions[i].href and not item.acquisitions[i].type then
+                table.remove(item.acquisitions, i)
+            end
+        end
+    end
     if item.acquisitions and item.acquisitions[1] then -- book
         logger.dbg("Downloads available:", item)
         -- Show book info dialog first, allowing user to see details before downloading
