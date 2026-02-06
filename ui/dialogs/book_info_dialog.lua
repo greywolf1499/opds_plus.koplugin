@@ -17,8 +17,6 @@ local ImageWidget = require("ui/widget/imagewidget")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local InputDialog = require("ui/widget/inputdialog")
 local MovableContainer = require("ui/widget/container/movablecontainer")
-local NetworkMgr = require("ui/network/manager")
-local OverlapGroup = require("ui/widget/overlapgroup")
 local RenderImage = require("ui/renderimage")
 local ScrollableContainer = require("ui/widget/container/scrollablecontainer")
 local Size = require("ui/size")
@@ -37,7 +35,6 @@ local T = require("ffi/util").template
 
 local Constants = require("models.constants")
 local OPDSPSE = require("services.kavita")
-local HttpClient = require("services.http_client")
 
 local BookInfoDialog = {}
 
@@ -64,45 +61,6 @@ local function formatAvailableFormats(acquisitions, DownloadManager)
 		return _("None available")
 	end
 	return table.concat(formats, ", ")
-end
-
---- Build the book information text with formatting
--- @param item table Book item
--- @param DownloadManager table DownloadManager module
--- @return string Formatted book information text
-local function buildBookInfoText(item, DownloadManager)
-	local parts = { TextBoxWidget.PTF_HEADER }
-
-	-- Author (if available and different from title display)
-	if item.author then
-		table.insert(parts, TextBoxWidget.PTF_BOLD_START)
-		table.insert(parts, _("Author"))
-		table.insert(parts, TextBoxWidget.PTF_BOLD_END)
-		table.insert(parts, "\n")
-		table.insert(parts, item.author)
-		table.insert(parts, "\n\n")
-	end
-
-	-- Available formats
-	table.insert(parts, TextBoxWidget.PTF_BOLD_START)
-	table.insert(parts, _("Available Formats"))
-	table.insert(parts, TextBoxWidget.PTF_BOLD_END)
-	table.insert(parts, "\n")
-	table.insert(parts, formatAvailableFormats(item.acquisitions, DownloadManager))
-	table.insert(parts, "\n\n")
-
-	-- Description/Summary
-	if item.content and type(item.content) == "string" then
-		table.insert(parts, TextBoxWidget.PTF_BOLD_START)
-		table.insert(parts, _("Description"))
-		table.insert(parts, TextBoxWidget.PTF_BOLD_END)
-		table.insert(parts, "\n")
-		table.insert(parts, util.htmlToPlainTextIfHtml(item.content))
-	else
-		table.insert(parts, _("No description available."))
-	end
-
-	return table.concat(parts)
 end
 
 --- Check if item has PSE streaming available
