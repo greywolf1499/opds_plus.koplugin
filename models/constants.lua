@@ -72,6 +72,16 @@ local Constants = {
 	-- Cache Configuration
 	CACHE_SLOTS = 20,
 
+	-- Cover Cache Configuration
+	COVER_CACHE = {
+		DEFAULT_MAX_MB = 64,
+		DEFAULT_TTL_MINUTES = 720, -- 12 hours
+		MIN_MAX_MB = 8,
+		MAX_MAX_MB = 1024,
+		MIN_TTL_MINUTES = 5,
+		MAX_TTL_MINUTES = 10080, -- 7 days
+	},
+
 	-- UI Icons
 	ICONS = {
 		MENU = "appbar.menu",

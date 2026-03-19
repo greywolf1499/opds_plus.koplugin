@@ -72,6 +72,19 @@ function Settings:initializeDefaults()
 	if not self.data.cover_size_preset then
 		self.data.cover_size_preset = "Regular"
 	end
+	if self.data.prefer_large_covers == nil then
+		-- Migrate legacy raw setting key if present.
+		self.data.prefer_large_covers = self.storage:readSetting("large_cover") == true
+	end
+	if self.data.cover_cache_enabled == nil then
+		self.data.cover_cache_enabled = true
+	end
+	if self.data.cover_cache_max_mb == nil then
+		self.data.cover_cache_max_mb = Constants.COVER_CACHE.DEFAULT_MAX_MB
+	end
+	if self.data.cover_cache_ttl_minutes == nil then
+		self.data.cover_cache_ttl_minutes = Constants.COVER_CACHE.DEFAULT_TTL_MINUTES
+	end
 
 	-- Font settings
 	for key, default_value in pairs(Constants.DEFAULT_FONT_SETTINGS) do

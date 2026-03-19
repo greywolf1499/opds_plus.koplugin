@@ -18,6 +18,66 @@ function SettingsMenu.create(plugin)
 			text = _("Settings"),
 			sub_item_table = {
 				{
+					text = _("Cover Settings"),
+					sub_item_table = {
+						{
+							text = _("Prefer Large Covers"),
+							checked_func = function()
+								return plugin:getSetting("prefer_large_covers") == true
+							end,
+							callback = function()
+								local current = plugin:getSetting("prefer_large_covers") == true
+								plugin:saveSetting("prefer_large_covers", not current)
+								UIManager:show(InfoMessage:new {
+									text = not current and
+										_("High-quality cover source enabled.\n\nChanges apply on next catalog browse.") or
+										_("Fast thumbnail cover source enabled.\n\nChanges apply on next catalog browse."),
+									timeout = 2,
+								})
+							end,
+						},
+						{
+							text = _("Enable Cover Cache"),
+							checked_func = function()
+								return plugin:getSetting("cover_cache_enabled") ~= false
+							end,
+							callback = function()
+								local current = plugin:getSetting("cover_cache_enabled") ~= false
+								plugin:saveSetting("cover_cache_enabled", not current)
+								UIManager:show(InfoMessage:new {
+									text = not current and
+										_("Cover cache enabled.\n\nPreviously downloaded covers can be reused.") or
+										_("Cover cache disabled.\n\nCovers will be fetched from the server each time."),
+									timeout = 2,
+								})
+							end,
+						},
+						{
+							text = _("Advanced"),
+							sub_item_table = {
+								{
+									text = _("Cache Size (MB)"),
+									callback = function()
+										plugin:showCoverCacheSizeDialog()
+									end,
+								},
+								{
+									text = _("Cache TTL (minutes)"),
+									callback = function()
+										plugin:showCoverCacheTTLDialog()
+									end,
+								},
+								{
+									text = _("Clear Cover Cache"),
+									callback = function()
+										plugin:clearCoverCache()
+									end,
+								},
+							},
+						},
+					},
+				},
+				{
 					text = _("Display Mode"),
 					sub_item_table = {
 						{

@@ -6,6 +6,7 @@ local InfoMessage = require("ui/widget/infomessage")
 local SpinWidget = require("ui/widget/spinwidget")
 local UIManager = require("ui/uimanager")
 local Constants = require("models.constants")
+local ImageLoader = require("services.image_loader")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
@@ -395,6 +396,71 @@ function SettingsDialogs.showGridBorderColorMenu(plugin)
 
 	plugin.grid_border_color_dialog = builder:build()
 	UIManager:show(plugin.grid_border_color_dialog)
+end
+
+--- Show cover cache size spinner (MB)
+-- @param plugin table Plugin instance
+function SettingsDialogs.showCoverCacheSizeDialog(plugin)
+	local current_mb = plugin:getSetting("cover_cache_max_mb") or Constants.COVER_CACHE.DEFAULT_MAX_MB
+
+	local spin_widget = SpinWidget:new {
+		title_text = _("Cover Cache Size"),
+		info_text = _("Set the maximum disk space used for cached cover images.\n\nLarger values improve offline reuse and reduce refetching after browsing."),
+		value = current_mb,
+		value_min = Constants.COVER_CACHE.MIN_MAX_MB,
+		value_max = Constants.COVER_CACHE.MAX_MAX_MB,
+		value_step = 8,
+		value_hold_step = 32,
+		unit = "MB",
+		ok_text = _("Apply"),
+		default_value = Constants.COVER_CACHE.DEFAULT_MAX_MB,
+		callback = function(spin)
+			plugin:saveSetting("cover_cache_max_mb", spin.value)
+			UIManager:show(InfoMessage:new {
+				text = T(_("Cover cache size set to %1 MB."), spin.value),
+				timeout = 2,
+			})
+		end,
+	}
+
+	UIManager:show(spin_widget)
+end
+
+--- Show cover cache TTL spinner (minutes)
+-- @param plugin table Plugin instance
+function SettingsDialogs.showCoverCacheTTLDialog(plugin)
+	local current_ttl = plugin:getSetting("cover_cache_ttl_minutes") or Constants.COVER_CACHE.DEFAULT_TTL_MINUTES
+
+	local spin_widget = SpinWidget:new {
+		title_text = _("Cover Cache TTL"),
+		info_text = _("Set how long cached covers remain fresh before revalidation by refetching.\n\nShorter TTL picks up changed covers sooner. Longer TTL reduces network requests."),
+		value = current_ttl,
+		value_min = Constants.COVER_CACHE.MIN_TTL_MINUTES,
+		value_max = Constants.COVER_CACHE.MAX_TTL_MINUTES,
+		value_step = 5,
+		value_hold_step = 60,
+		unit = _("min"),
+		ok_text = _("Apply"),
+		default_value = Constants.COVER_CACHE.DEFAULT_TTL_MINUTES,
+		callback = function(spin)
+			plugin:saveSetting("cover_cache_ttl_minutes", spin.value)
+			UIManager:show(InfoMessage:new {
+				text = T(_("Cover cache TTL set to %1 minutes."), spin.value),
+				timeout = 2,
+			})
+		end,
+	}
+
+	UIManager:show(spin_widget)
+end
+
+--- Clear disk cover cache
+function SettingsDialogs.clearCoverCache()
+	ImageLoader.clearCache()
+	UIManager:show(InfoMessage:new {
+		text = _("Cover cache cleared."),
+		timeout = 2,
+	})
 end
 
 return SettingsDialogs

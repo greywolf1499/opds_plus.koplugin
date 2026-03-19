@@ -97,6 +97,14 @@ function CoverLoader.loadVisibleCovers(menu, debug_log)
 	-- Get credentials from the menu
 	local username = menu.root_catalog_username
 	local password = menu.root_catalog_password
+	local cache_enabled = true
+	local cache_max_mb = nil
+	local cache_ttl_minutes = nil
+	if menu.settings and menu.settings.cover_cache_enabled ~= nil then
+		cache_enabled = menu.settings.cover_cache_enabled ~= false
+		cache_max_mb = menu.settings.cover_cache_max_mb
+		cache_ttl_minutes = menu.settings.cover_cache_ttl_minutes
+	end
 
 	-- Create render callback
 	local render_callback = CoverLoader.createRenderCallback(
@@ -106,7 +114,15 @@ function CoverLoader.loadVisibleCovers(menu, debug_log)
 	)
 
 	-- Load covers asynchronously
-	local _, halt = ImageLoader:loadImages(urls, render_callback, username, password)
+	local _, halt = ImageLoader:loadImages(
+		urls,
+		render_callback,
+		username,
+		password,
+		cache_enabled,
+		cache_max_mb,
+		cache_ttl_minutes
+	)
 
 	-- Clear the pending items
 	menu._items_to_update = {}

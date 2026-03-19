@@ -280,6 +280,18 @@ function OPDS:showGridBorderColorMenu()
     SettingsDialogs.showGridBorderColorMenu(self)
 end
 
+function OPDS:showCoverCacheSizeDialog()
+    SettingsDialogs.showCoverCacheSizeDialog(self)
+end
+
+function OPDS:showCoverCacheTTLDialog()
+    SettingsDialogs.showCoverCacheTTLDialog(self)
+end
+
+function OPDS:clearCoverCache()
+    SettingsDialogs.clearCoverCache()
+end
+
 function OPDS:onShowOPDSCatalog()
     self.opds_browser = self:_createBrowserInstance()
     UIManager:show(self.opds_browser)

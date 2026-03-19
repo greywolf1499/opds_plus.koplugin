@@ -298,7 +298,10 @@ function BookInfoDialog.build(browser, item)
 					updateCoverWidget(content)
 				end,
 				browser.root_catalog_username,
-				browser.root_catalog_password
+				browser.root_catalog_password,
+				browser.settings and browser.settings.cover_cache_enabled ~= false,
+				browser.settings and browser.settings.cover_cache_max_mb,
+				browser.settings and browser.settings.cover_cache_ttl_minutes
 			)
 		end
 	end

@@ -29,6 +29,7 @@ function BrowserContext.fromBrowser(browser)
 
 		-- Runtime state
 		sync = browser.sync,
+		prefer_large_covers = browser.settings and browser.settings.prefer_large_covers == true,
 
 		-- Authentication
 		username = browser.root_catalog_username,

@@ -183,8 +183,11 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 				debug_callback("Book entry with cover:", title)
 			end
 
-			-- Prefer thumbnail over full image for performance
-			if item.thumbnail then
+			-- Prefer larger images only when explicitly enabled.
+			if browser_context.prefer_large_covers and item.image then
+				item.cover_url = item.image
+				item.lazy_load_cover = true
+			elseif item.thumbnail then
 				item.cover_url = item.thumbnail
 				item.lazy_load_cover = true
 			elseif item.image then
