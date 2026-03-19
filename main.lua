@@ -175,6 +175,64 @@ function OPDS:onDispatcherRegisterActions()
     Dispatcher:registerAction("opdsplus_show_catalog",
         { category = "none", event = "ShowOPDSCatalog", title = _("OPDS Plus Catalog"), filemanager = true, }
     )
+
+    Dispatcher:registerAction("opdsplus_sync_all",
+        { category = "none", event = "StartOPDSSyncAllCatalogs", title = _("OPDS Plus: Sync all catalogs"), filemanager = true, }
+    )
+
+    Dispatcher:registerAction("opdsplus_force_sync_all",
+        { category = "none", event = "StartOPDSForceSyncAllCatalogs", title = _("OPDS Plus: Force sync all catalogs"), filemanager = true, }
+    )
+end
+
+function OPDS:_createBrowserInstance()
+    return OPDSBrowser:new {
+        servers = self.servers,
+        downloads = self.downloads,
+        settings = self.settings,
+        pending_syncs = self.pending_syncs,
+        title = _("OPDS Plus Catalog"),
+        is_popout = false,
+        is_borderless = true,
+        title_bar_fm_style = true,
+        show_covers = true,
+        _manager = self,
+        file_downloaded_callback = function(file)
+            self:showFileDownloadedDialog(file)
+        end,
+        close_callback = function()
+            if self.opds_browser.download_list then
+                self.opds_browser.download_list.close_callback()
+            end
+            UIManager:close(self.opds_browser)
+            self.opds_browser = nil
+            if self.last_downloaded_file then
+                if self.ui.file_chooser then
+                    local pathname = util.splitFilePathName(self.last_downloaded_file)
+                    self.ui.file_chooser:changeToPath(pathname, self.last_downloaded_file)
+                end
+                self.last_downloaded_file = nil
+            end
+        end,
+    }
+end
+
+function OPDS:_startSyncFromDispatcher(force_sync)
+    -- For gesture-triggered actions, create an off-screen browser context if needed.
+    if not self.opds_browser then
+        self.opds_browser = self:_createBrowserInstance()
+    end
+
+    self.opds_browser.sync_force = force_sync
+    self.opds_browser:checkSyncDownload()
+end
+
+function OPDS:onStartOPDSSyncAllCatalogs()
+    self:_startSyncFromDispatcher(false)
+end
+
+function OPDS:onStartOPDSForceSyncAllCatalogs()
+    self:_startSyncFromDispatcher(true)
 end
 
 function OPDS:addToMainMenu(menu_items)
@@ -223,35 +281,7 @@ function OPDS:showGridBorderColorMenu()
 end
 
 function OPDS:onShowOPDSCatalog()
-    self.opds_browser = OPDSBrowser:new {
-        servers = self.servers,
-        downloads = self.downloads,
-        settings = self.settings,
-        pending_syncs = self.pending_syncs,
-        title = _("OPDS Plus Catalog"),
-        is_popout = false,
-        is_borderless = true,
-        title_bar_fm_style = true,
-        show_covers = true,
-        _manager = self,
-        file_downloaded_callback = function(file)
-            self:showFileDownloadedDialog(file)
-        end,
-        close_callback = function()
-            if self.opds_browser.download_list then
-                self.opds_browser.download_list.close_callback()
-            end
-            UIManager:close(self.opds_browser)
-            self.opds_browser = nil
-            if self.last_downloaded_file then
-                if self.ui.file_chooser then
-                    local pathname = util.splitFilePathName(self.last_downloaded_file)
-                    self.ui.file_chooser:changeToPath(pathname, self.last_downloaded_file)
-                end
-                self.last_downloaded_file = nil
-            end
-        end,
-    }
+    self.opds_browser = self:_createBrowserInstance()
     UIManager:show(self.opds_browser)
 end
 
