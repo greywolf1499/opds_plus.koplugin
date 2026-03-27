@@ -173,7 +173,7 @@ end
 
 function OPDS:onDispatcherRegisterActions()
     Dispatcher:registerAction("opdsplus_show_catalog",
-        { category = "none", event = "ShowOPDSCatalog", title = _("OPDS Plus Catalog"), filemanager = true, }
+        { category = "none", event = "ShowOPDSPlusCatalog", title = _("OPDS Plus Catalog"), filemanager = true, }
     )
 
     Dispatcher:registerAction("opdsplus_sync_all",
@@ -292,7 +292,7 @@ function OPDS:clearCoverCache()
     SettingsDialogs.clearCoverCache()
 end
 
-function OPDS:onShowOPDSCatalog()
+function OPDS:onShowOPDSPlusCatalog()
     self.opds_browser = self:_createBrowserInstance()
     UIManager:show(self.opds_browser)
 end

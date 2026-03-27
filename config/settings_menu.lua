@@ -11,7 +11,7 @@ function SettingsMenu.create(plugin)
 		{
 			text = _("Browse Catalogs"),
 			callback = function()
-				plugin:onShowOPDSCatalog()
+				plugin:onShowOPDSPlusCatalog()
 			end,
 		},
 		{
