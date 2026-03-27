@@ -408,10 +408,19 @@ function BookInfoDialog.build(browser, item)
 						browser.root_catalog_username, browser.root_catalog_password)
 				end,
 			},
+			{
+				text = _("Stream from page") .. " " .. Constants.ICONS.STREAM_NEXT,
+				callback = function()
+					UIManager:close(browser.book_info_dialog)
+					OPDSPSE:streamPages(pse_acquisition.href, pse_acquisition.count, true,
+						browser.root_catalog_username, browser.root_catalog_password)
+				end,
+			},
 		}
 
 		if pse_acquisition.last_read then
-			table.insert(stream_row, {
+			table.insert(buttons_table, stream_row)
+			table.insert(buttons_table, {
 				text = Constants.ICONS.STREAM_RESUME .. " " .. _("Resume") .. " (" .. pse_acquisition.last_read .. ")",
 				callback = function()
 					UIManager:close(browser.book_info_dialog)
@@ -420,9 +429,9 @@ function BookInfoDialog.build(browser, item)
 						pse_acquisition.last_read)
 				end,
 			})
+		else
+			table.insert(buttons_table, stream_row)
 		end
-
-		table.insert(buttons_table, stream_row)
 	end
 
 	-- Row 2: Download and Queue buttons
