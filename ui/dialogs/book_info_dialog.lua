@@ -44,7 +44,7 @@ local BookInfoDialog = {}
 -- @return string Formatted list of available formats
 local function formatAvailableFormats(acquisitions, DownloadManager)
 	local formats = {}
-	for _, acquisition in ipairs(acquisitions) do
+	for i, acquisition in ipairs(acquisitions) do
 		if acquisition.count then
 			-- PSE streaming
 			table.insert(formats, _("Stream") .. " (" .. acquisition.count .. " " .. _("pages") .. ")")
