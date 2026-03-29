@@ -177,7 +177,7 @@ function OPDS:onDispatcherRegisterActions()
     )
 
     Dispatcher:registerAction("opdsplus_sync_all",
-        { category = "none", event = "StartOPDSSyncAllCatalogs", title = _("OPDS Plus: Sync all catalogs (verify_dups)"), filemanager = true, }
+        { category = "none", event = "StartOPDSSyncAllCatalogs", title = _("OPDS Plus: Sync all catalogs (verify dups)"), filemanager = true, }
     )
 
     Dispatcher:registerAction("opdsplus_sync_all_skip",
