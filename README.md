@@ -193,11 +193,13 @@ Access settings from: **OPDS Plus Catalog → Settings**
 ### Sync Actions & Settings (New in 1.2.0)
 
 - **Direct Sync Actions**:
-  - Sync all catalogs
-  - Force sync all catalogs
+  - Sync all catalogs (verify dups) - synchronize new items, and choose how to handle files already on your device
+  - Sync all catalogs (skip dups) - synchronize items not already on your device
+  - Force sync all catalogs -  re-download all items
 - **Gesture Integration**:
   - Actions are registered in KOReader's dispatcher as:
-    - `OPDS Plus: Sync all catalogs`
+    - `OPDS Plus: Sync all catalogs (verify dups)`
+    - `OPDS Plus: Sync all catalogs (skip dups)`
     - `OPDS Plus: Force sync all catalogs`
   - These can be assigned in KOReader's gesture/action configuration.
 - **Catalog Sync Controls**:

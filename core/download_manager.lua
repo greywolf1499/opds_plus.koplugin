@@ -178,17 +178,19 @@ function DownloadManager.downloadDownloadList(browser)
 	end
 
 	local dl_count = #browser.downloads
-	for i = dl_count, 1, -1 do
-		local item = browser.downloads[i]
-		if downloaded and downloaded[item.file] then
-			table.remove(browser.downloads, i)
-		else -- if subprocess has been interrupted, check for the downloaded file
-			local attr = lfs.attributes(item.file)
-			if attr then
-				if attr.size > 0 then
-					table.remove(browser.downloads, i)
-				else -- incomplete download
-					os.remove(item.file)
+	if dl_count and dl_count > 0 then
+		for i = dl_count, 1, -1 do
+			local item = browser.downloads[i]
+			if downloaded and downloaded[item.file] then
+				table.remove(browser.downloads, i)
+			else -- if subprocess has been interrupted, check for the downloaded file
+				local attr = lfs.attributes(item.file)
+				if attr then
+					if attr.size > 0 then
+						table.remove(browser.downloads, i)
+					else -- incomplete download
+						os.remove(item.file)
+					end
 				end
 			end
 		end
@@ -234,6 +236,8 @@ function DownloadManager.downloadPendingSyncs(browser, dl_list)
 			return dl, dupe_list
 		end, info)
 
+		-- clear the dupe_list if this is a skip dups runs - we needed to weed them out, but we don't want to consider them
+		if browser.sync_skip then duplicate_list = {} end
 		if completed then
 			UIManager:close(info)
 		end

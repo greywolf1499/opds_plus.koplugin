@@ -177,7 +177,11 @@ function OPDS:onDispatcherRegisterActions()
     )
 
     Dispatcher:registerAction("opdsplus_sync_all",
-        { category = "none", event = "StartOPDSSyncAllCatalogs", title = _("OPDS Plus: Sync all catalogs"), filemanager = true, }
+        { category = "none", event = "StartOPDSSyncAllCatalogs", title = _("OPDS Plus: Sync all catalogs (verify dups)"), filemanager = true, }
+    )
+
+    Dispatcher:registerAction("opdsplus_sync_all_skip",
+        { category = "none", event = "StartOPDSSkipSyncAllCatalogs", title = _("OPDS Plus: Sync all catalogs (skip dups)"), filemanager = true, }
     )
 
     Dispatcher:registerAction("opdsplus_force_sync_all",
@@ -217,22 +221,27 @@ function OPDS:_createBrowserInstance()
     }
 end
 
-function OPDS:_startSyncFromDispatcher(force_sync)
+function OPDS:_startSyncFromDispatcher(force_sync,skip_sync)
     -- For gesture-triggered actions, create an off-screen browser context if needed.
     if not self.opds_browser then
         self.opds_browser = self:_createBrowserInstance()
     end
 
     self.opds_browser.sync_force = force_sync
+    self.opds_browser.sync_skip = skip_sync
     self.opds_browser:checkSyncDownload()
 end
 
 function OPDS:onStartOPDSSyncAllCatalogs()
-    self:_startSyncFromDispatcher(false)
+    self:_startSyncFromDispatcher(false, false)
 end
 
 function OPDS:onStartOPDSForceSyncAllCatalogs()
-    self:_startSyncFromDispatcher(true)
+    self:_startSyncFromDispatcher(true, false)
+end
+
+function OPDS:onStartOPDSSkipSyncAllCatalogs()
+    self:_startSyncFromDispatcher(false, true)
 end
 
 function OPDS:addToMainMenu(menu_items)

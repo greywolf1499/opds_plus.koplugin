@@ -314,16 +314,29 @@ function OPDSBrowser:onMenuHold(item)
                         UIManager:close(dialog)
                         NetworkMgr:runWhenConnected(function()
                             self.sync_force = true
+                            self.sync_skip = false
                             self:checkSyncDownload(item.idx)
                         end)
                     end,
                 },
                 {
-                    text = _("Sync"),
+                    text = _("Sync (skip dups)"),
                     callback = function()
                         UIManager:close(dialog)
                         NetworkMgr:runWhenConnected(function()
                             self.sync_force = false
+                            self.sync_skip = true
+                            self:checkSyncDownload(item.idx)
+                        end)
+                    end,
+                },
+                {
+                    text = _("Sync (verify)"),
+                    callback = function()
+                        UIManager:close(dialog)
+                        NetworkMgr:runWhenConnected(function()
+                            self.sync_force = false
+                            self.sync_skip = false
                             self:checkSyncDownload(item.idx)
                         end)
                     end,

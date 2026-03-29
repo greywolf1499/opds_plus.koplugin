@@ -256,17 +256,17 @@ function SyncManager.getSyncDownloadList(browser, url_arg)
 
 		-- First entry in table is the newest
 		-- If already downloaded, return
-		local first_href
-		if acquisitions_empty then
-			first_href = sub_table[count].url
-		else
-			first_href = sub_table[1].acquisitions[1].href
+		if not browser.sync_force or browser.sync_skip then
+			local first_href
+			if acquisitions_empty then
+				first_href = sub_table[count].url
+			else
+				first_href = sub_table[1].acquisitions[1].href
+			end
+			if first_href == browser.sync_server.last_download and not browser.sync_force then
+				return nil
+			end
 		end
-
-		if first_href == browser.sync_server.last_download and not browser.sync_force then
-			return nil
-		end
-
 		local href
 		for i, entry in ipairs(sub_table) do
 			if acquisitions_empty then
@@ -282,7 +282,7 @@ function SyncManager.getSyncDownloadList(browser, url_arg)
 			if href then
 				if href == browser.sync_server.last_download and not browser.sync_force then
 					up_to_date = true
-					break
+					if not browser.sync_skip then break end
 				else
 					table.insert(sync_table, entry)
 				end
@@ -304,7 +304,7 @@ function SyncManager.downloadPendingSyncs(browser)
 	local dl_list = browser.pending_syncs
 	local duplicate_list = DownloadManager.downloadPendingSyncs(browser, dl_list)
 
-	if duplicate_list and #duplicate_list > 0 then
+	if duplicate_list and #duplicate_list > 0 and not browser.sync_skip then
 		SyncManager.showDuplicateFilesDialog(browser, dl_list, duplicate_list)
 	end
 end
@@ -336,6 +336,7 @@ function SyncManager.showDuplicateFilesDialog(browser, dl_list, duplicate_list)
 					text = _("Overwrite"),
 					callback = function()
 						browser.sync_force = true
+						browser.sync_skip = false
 						textviewer:onClose()
 						for _, entry in ipairs(duplicate_list) do
 							table.insert(dl_list, entry)
@@ -346,9 +347,21 @@ function SyncManager.showDuplicateFilesDialog(browser, dl_list, duplicate_list)
 					end
 				},
 				{
+					text = _("Skip Duplicates"),
+					callback = function()
+						browser.sync_force = false
+						browser.sync_skip = true
+						textviewer:onClose()
+						Trapper:wrap(function()
+							DownloadManager.downloadPendingSyncs(browser, dl_list)
+						end)
+					end
+				},
+				{
 					text = _("Download copies"),
 					callback = function()
 						browser.sync_force = true
+						browser.sync_skip = false
 						textviewer:onClose()
 						local copies_dir = "copies"
 						local original_dir = util.splitFilePathName(duplicate_list[1].file)

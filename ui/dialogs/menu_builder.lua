@@ -34,11 +34,24 @@ function OPDSMenuBuilder.buildOPDSMenu(browser)
 			} },
 			{},
 			{ {
-				text = _("Sync all catalogs"),
+				text = _("Sync all catalogs (skip dups)"),
 				callback = function()
 					UIManager:close(dialog)
 					NetworkMgr:runWhenConnected(function()
 						browser.sync_force = false
+						browser.sync_skip = true
+						browser:checkSyncDownload()
+					end)
+				end,
+				align = "left",
+			} },
+			{ {
+				text = _("Sync all catalogs (verify dups)"),
+				callback = function()
+					UIManager:close(dialog)
+					NetworkMgr:runWhenConnected(function()
+						browser.sync_force = false
+						browser.sync_skip = false
 						browser:checkSyncDownload()
 					end)
 				end,
@@ -50,6 +63,7 @@ function OPDSMenuBuilder.buildOPDSMenu(browser)
 					UIManager:close(dialog)
 					NetworkMgr:runWhenConnected(function()
 						browser.sync_force = true
+						browser.sync_skip = false
 						browser:checkSyncDownload()
 					end)
 				end,
