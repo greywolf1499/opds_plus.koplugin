@@ -41,7 +41,7 @@ function OPDS:init()
   settings_manager:initializeDefaults()
 
   if settings_manager.is_first_run then
-    self.updated = true     -- first run, force flush
+    self.updated = true -- first run, force flush
   end
 
   -- Initialize state manager singleton
@@ -93,7 +93,7 @@ function OPDS:getAvailableFonts()
 
   -- Scan font directories for available fonts
   local font_dirs = {
-    "./fonts",     -- KOReader's font directory
+    "./fonts", -- KOReader's font directory
   }
 
   -- Add user's font directory if it exists
@@ -245,9 +245,10 @@ function OPDS:onStartOPDSSkipSyncAllCatalogs()
 end
 
 function OPDS:addToMainMenu(menu_items)
-  if not self.ui.document then   -- FileManager menu only
+  if not self.ui.document then -- FileManager menu only
     menu_items.opdsplus = {
       text = _("OPDS++ Catalog"),
+      sorting_hint = "search",
       sub_item_table = SettingsMenu.create(self)
     }
   end
