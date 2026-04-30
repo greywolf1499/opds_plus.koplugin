@@ -1,4 +1,4 @@
--- State Manager for OPDS Plus
+-- State Manager for OPDS++
 -- Centralizes state change tracking and persistence notifications
 -- Reduces direct _manager.updated coupling throughout the codebase
 
@@ -12,59 +12,59 @@ local instance = nil
 -- @param plugin table Optional plugin instance to initialize with
 -- @return StateManager
 function StateManager.getInstance(plugin)
-	if not instance then
-		instance = setmetatable({
-			_plugin = plugin,
-			_dirty = false,
-			_change_listeners = {},
-		}, StateManager)
-	elseif plugin then
-		instance._plugin = plugin
-	end
-	return instance
+  if not instance then
+    instance = setmetatable({
+      _plugin = plugin,
+      _dirty = false,
+      _change_listeners = {},
+    }, StateManager)
+  elseif plugin then
+    instance._plugin = plugin
+  end
+  return instance
 end
 
 --- Reset the singleton (primarily for testing)
 function StateManager.reset()
-	instance = nil
+  instance = nil
 end
 
 --- Initialize with a plugin instance
 -- @param plugin table Plugin instance (OPDS main module)
 function StateManager:init(plugin)
-	self._plugin = plugin
-	self._dirty = false
+  self._plugin = plugin
+  self._dirty = false
 end
 
 --- Mark state as changed (needs persistence)
 -- This replaces scattered `browser._manager.updated = true` calls
 function StateManager:markDirty()
-	self._dirty = true
-	if self._plugin then
-		self._plugin.updated = true
-	end
-	self:_notifyListeners("dirty")
+  self._dirty = true
+  if self._plugin then
+    self._plugin.updated = true
+  end
+  self:_notifyListeners("dirty")
 end
 
 --- Check if state has unsaved changes
 -- @return boolean True if there are unsaved changes
 function StateManager:isDirty()
-	return self._dirty
+  return self._dirty
 end
 
 --- Clear the dirty flag (after save)
 function StateManager:markClean()
-	self._dirty = false
-	self:_notifyListeners("clean")
+  self._dirty = false
+  self:_notifyListeners("clean")
 end
 
 --- Get the current settings data
 -- @return table Settings data table
 function StateManager:getSettings()
-	if self._plugin and self._plugin.settings then
-		return self._plugin.settings
-	end
-	return {}
+  if self._plugin and self._plugin.settings then
+    return self._plugin.settings
+  end
+  return {}
 end
 
 --- Get a specific setting value
@@ -72,62 +72,62 @@ end
 -- @param default any Default value if not set
 -- @return any Setting value or default
 function StateManager:getSetting(key, default)
-	local settings = self:getSettings()
-	if settings[key] ~= nil then
-		return settings[key]
-	end
-	return default
+  local settings = self:getSettings()
+  if settings[key] ~= nil then
+    return settings[key]
+  end
+  return default
 end
 
 --- Update a setting value and mark dirty
 -- @param key string Setting key
 -- @param value any Value to set
 function StateManager:setSetting(key, value)
-	local settings = self:getSettings()
-	settings[key] = value
-	self:markDirty()
+  local settings = self:getSettings()
+  settings[key] = value
+  self:markDirty()
 end
 
 --- Check if debug mode is enabled
 -- @return boolean True if debug mode is on
 function StateManager:isDebugMode()
-	return self:getSetting("debug_mode", false)
+  return self:getSetting("debug_mode", false)
 end
 
 --- Get display mode (list/grid)
 -- @return string "list" or "grid"
 function StateManager:getDisplayMode()
-	return self:getSetting("display_mode", "list")
+  return self:getSetting("display_mode", "list")
 end
 
 --- Set display mode
 -- @param mode string "list" or "grid"
 function StateManager:setDisplayMode(mode)
-	self:setSetting("display_mode", mode)
-	-- Also persist immediately for display mode changes
-	if self._plugin and self._plugin.opds_settings then
-		self._plugin.opds_settings:saveSetting("settings", self:getSettings())
-		self._plugin.opds_settings:flush()
-	end
+  self:setSetting("display_mode", mode)
+  -- Also persist immediately for display mode changes
+  if self._plugin and self._plugin.opds_settings then
+    self._plugin.opds_settings:saveSetting("settings", self:getSettings())
+    self._plugin.opds_settings:flush()
+  end
 end
 
 --- Get sync directory
 -- @return string|nil Sync directory path or nil
 function StateManager:getSyncDir()
-	return self:getSetting("sync_dir")
+  return self:getSetting("sync_dir")
 end
 
 --- Get maximum sync downloads
 -- @return number Maximum downloads (default 50)
 function StateManager:getMaxSyncDownloads()
-	local Constants = require("models.constants")
-	return self:getSetting("sync_max_dl", Constants.SYNC.DEFAULT_MAX_DOWNLOADS)
+  local Constants = require("models.constants")
+  return self:getSetting("sync_max_dl", Constants.SYNC.DEFAULT_MAX_DOWNLOADS)
 end
 
 --- Get filetypes filter string
 -- @return string|nil Filetypes string or nil
 function StateManager:getFiletypes()
-	return self:getSetting("filetypes")
+  return self:getSetting("filetypes")
 end
 
 -- ============================================
@@ -137,51 +137,51 @@ end
 --- Get all font settings as a table
 -- @return table Font settings with defaults applied
 function StateManager:getFontSettings()
-	local Constants = require("models.constants")
-	local defaults = Constants.DEFAULT_FONT_SETTINGS
-	return {
-		title_font = self:getSetting("title_font", defaults.title_font or "smallinfofont"),
-		title_size = self:getSetting("title_size", defaults.title_size or 16),
-		title_bold = self:getSetting("title_bold", defaults.title_bold or false),
-		info_font = self:getSetting("info_font", defaults.info_font or "smallinfofont"),
-		info_size = self:getSetting("info_size", defaults.info_size or 14),
-		info_bold = self:getSetting("info_bold", defaults.info_bold or false),
-		info_color = self:getSetting("info_color", defaults.info_color or "dark_gray"),
-		use_same_font = self:getSetting("use_same_font", defaults.use_same_font or false),
-	}
+  local Constants = require("models.constants")
+  local defaults = Constants.DEFAULT_FONT_SETTINGS
+  return {
+    title_font = self:getSetting("title_font", defaults.title_font or "smallinfofont"),
+    title_size = self:getSetting("title_size", defaults.title_size or 16),
+    title_bold = self:getSetting("title_bold", defaults.title_bold or false),
+    info_font = self:getSetting("info_font", defaults.info_font or "smallinfofont"),
+    info_size = self:getSetting("info_size", defaults.info_size or 14),
+    info_bold = self:getSetting("info_bold", defaults.info_bold or false),
+    info_color = self:getSetting("info_color", defaults.info_color or "dark_gray"),
+    use_same_font = self:getSetting("use_same_font", defaults.use_same_font or false),
+  }
 end
 
 --- Get cover size settings for list view
 -- @return table Cover settings {preset_name, ratio}
 function StateManager:getCoverSettings()
-	local Constants = require("models.constants")
-	return {
-		preset_name = self:getSetting("cover_size_preset", "Regular"),
-		ratio = self:getSetting("cover_height_ratio", Constants.DEFAULT_COVER_HEIGHT_RATIO),
-	}
+  local Constants = require("models.constants")
+  return {
+    preset_name = self:getSetting("cover_size_preset", "Regular"),
+    ratio = self:getSetting("cover_height_ratio", Constants.DEFAULT_COVER_HEIGHT_RATIO),
+  }
 end
 
 --- Get grid layout settings
 -- @return table Grid settings {preset_name, columns}
 function StateManager:getGridLayoutSettings()
-	local Constants = require("models.constants")
-	local defaults = Constants.DEFAULT_GRID_SETTINGS
-	return {
-		preset_name = self:getSetting("grid_size_preset", defaults.size_preset or "Balanced"),
-		columns = self:getSetting("grid_columns", defaults.columns or 3),
-	}
+  local Constants = require("models.constants")
+  local defaults = Constants.DEFAULT_GRID_SETTINGS
+  return {
+    preset_name = self:getSetting("grid_size_preset", defaults.size_preset or "Balanced"),
+    columns = self:getSetting("grid_columns", defaults.columns or 3),
+  }
 end
 
 --- Get grid border settings
 -- @return table Border settings {style, size, color}
 function StateManager:getGridBorderSettings()
-	local Constants = require("models.constants")
-	local defaults = Constants.DEFAULT_GRID_BORDER_SETTINGS
-	return {
-		style = self:getSetting("grid_border_style", defaults.border_style or "none"),
-		size = self:getSetting("grid_border_size", defaults.border_size or 2),
-		color = self:getSetting("grid_border_color", defaults.border_color or "dark_gray"),
-	}
+  local Constants = require("models.constants")
+  local defaults = Constants.DEFAULT_GRID_BORDER_SETTINGS
+  return {
+    style = self:getSetting("grid_border_style", defaults.border_style or "none"),
+    size = self:getSetting("grid_border_size", defaults.border_size or 2),
+    color = self:getSetting("grid_border_color", defaults.border_color or "dark_gray"),
+  }
 end
 
 -- ============================================
@@ -190,24 +190,24 @@ end
 -- @param listener function Callback function(event_type)
 -- @return number Listener ID for removal
 function StateManager:addChangeListener(listener)
-	table.insert(self._change_listeners, listener)
-	return #self._change_listeners
+  table.insert(self._change_listeners, listener)
+  return #self._change_listeners
 end
 
 --- Remove a change listener
 -- @param listener_id number ID returned from addChangeListener
 function StateManager:removeChangeListener(listener_id)
-	self._change_listeners[listener_id] = nil
+  self._change_listeners[listener_id] = nil
 end
 
 --- Internal: notify all listeners of state change
 -- @param event_type string Type of event ("dirty" or "clean")
 function StateManager:_notifyListeners(event_type)
-	for _, listener in pairs(self._change_listeners) do
-		if type(listener) == "function" then
-			pcall(listener, event_type)
-		end
-	end
+  for _, listener in pairs(self._change_listeners) do
+    if type(listener) == "function" then
+      pcall(listener, event_type)
+    end
+  end
 end
 
 return StateManager

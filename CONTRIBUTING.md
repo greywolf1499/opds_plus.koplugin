@@ -1,34 +1,34 @@
-# Contributing to OPDS Plus
+# Contributing to OPDS++
 
-First off, thank you for considering contributing to OPDS Plus! It's people like you that make OPDS Plus such a great tool for the KOReader community.
+First off, thank you for considering contributing to OPDS++! It's people like you that make OPDS++ such a great tool for the KOReader community.
 
 ## Table of Contents
 
-- [Contributing to OPDS Plus](#contributing-to-opds-plus)
-	- [Table of Contents](#table-of-contents)
-	- [Code of Conduct](#code-of-conduct)
-	- [How Can I Contribute?](#how-can-i-contribute)
-		- [Reporting Bugs](#reporting-bugs)
-		- [Suggesting Enhancements](#suggesting-enhancements)
-		- [Your First Code Contribution](#your-first-code-contribution)
-		- [Pull Requests](#pull-requests)
-			- [Pull Request Process](#pull-request-process)
-	- [Style Guidelines](#style-guidelines)
-		- [Lua Code Style](#lua-code-style)
-		- [Git Commit Messages](#git-commit-messages)
-		- [Documentation Style](#documentation-style)
-	- [Development Setup](#development-setup)
-		- [Prerequisites](#prerequisites)
-		- [Setting Up Development Environment](#setting-up-development-environment)
-		- [File Structure Understanding](#file-structure-understanding)
-		- [Key Components](#key-components)
-	- [Testing](#testing)
-		- [Manual Testing Checklist](#manual-testing-checklist)
-		- [Test on Multiple Catalogs](#test-on-multiple-catalogs)
-		- [Device Testing](#device-testing)
-		- [Debug Mode Testing](#debug-mode-testing)
-	- [Questions?](#questions)
-	- [Recognition](#recognition)
+- [Contributing to OPDS++](#contributing-to-opds-plus)
+  - [Table of Contents](#table-of-contents)
+  - [Code of Conduct](#code-of-conduct)
+  - [How Can I Contribute?](#how-can-i-contribute)
+    - [Reporting Bugs](#reporting-bugs)
+    - [Suggesting Enhancements](#suggesting-enhancements)
+    - [Your First Code Contribution](#your-first-code-contribution)
+    - [Pull Requests](#pull-requests)
+      - [Pull Request Process](#pull-request-process)
+  - [Style Guidelines](#style-guidelines)
+    - [Lua Code Style](#lua-code-style)
+    - [Git Commit Messages](#git-commit-messages)
+    - [Documentation Style](#documentation-style)
+  - [Development Setup](#development-setup)
+    - [Prerequisites](#prerequisites)
+    - [Setting Up Development Environment](#setting-up-development-environment)
+    - [File Structure Understanding](#file-structure-understanding)
+    - [Key Components](#key-components)
+  - [Testing](#testing)
+    - [Manual Testing Checklist](#manual-testing-checklist)
+    - [Test on Multiple Catalogs](#test-on-multiple-catalogs)
+    - [Device Testing](#device-testing)
+    - [Debug Mode Testing](#debug-mode-testing)
+  - [Questions?](#questions)
+  - [Recognition](#recognition)
 
 ## Code of Conduct
 
@@ -47,7 +47,7 @@ Before creating bug reports, please check the existing issues to avoid duplicate
 - **Expected behavior** and what actually happened
 - **Screenshots** if applicable
 - **KOReader version** and device information
-- **OPDS Plus version** (found in Settings → About)
+- **OPDS++ version** (found in Settings → About)
 - **OPDS catalog** you were browsing when the issue occurred
 - **Log files** if available (enable Debug Mode in Developer settings)
 
@@ -57,7 +57,7 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
 
 - **Use a clear, descriptive title**
 - **Provide a detailed description** of the suggested enhancement
-- **Explain why this enhancement would be useful** to most OPDS Plus users
+- **Explain why this enhancement would be useful** to most OPDS++ users
 - **List any similar features** in other applications if applicable
 - **Include mockups or examples** if you have them
 
@@ -132,6 +132,7 @@ return MyModule
 ```
 
 **Key conventions:**
+
 - 4 spaces for indentation
 - `snake_case` for variables and functions
 - `PascalCase` for class/module names
@@ -157,6 +158,7 @@ return MyModule
   - ✅ `:white_check_mark:` - Adding tests
 
 **Example:**
+
 ```
 ✨ Add custom border color option for grid view
 
@@ -189,17 +191,20 @@ Closes #42
 ### Setting Up Development Environment
 
 1. **Clone your fork:**
+
    ```bash
    git clone https://github.com/YOUR_USERNAME/opds_plus.koplugin.git
    cd opds_plus.koplugin
    ```
 
 2. **Create a development branch:**
+
    ```bash
    git checkout -b feature/my-new-feature
    ```
 
 3. **Link to KOReader plugins directory:**
+
    ```bash
    # Linux example
    ln -s $(pwd) ~/.config/koreader/plugins/opds_plus.koplugin
@@ -209,7 +214,7 @@ Closes #42
    ```
 
 4. **Enable Debug Mode:**
-   - In KOReader: OPDS Plus → Settings → Developer → Debug Mode
+   - In KOReader: OPDS++ → Settings → Developer → Debug Mode
    - This enables detailed logging for development
 
 5. **Make your changes** and test in KOReader
@@ -268,6 +273,7 @@ Before submitting a PR, test the following:
 ### Test on Multiple Catalogs
 
 Test with different OPDS catalogs:
+
 - Project Gutenberg (large catalog)
 - Standard Ebooks (high-quality covers)
 - Your local Calibre library (if available)
@@ -276,6 +282,7 @@ Test with different OPDS catalogs:
 ### Device Testing
 
 If possible, test on:
+
 - E-ink device (Kindle, Kobo)
 - Android device
 - Desktop (Linux/Windows/macOS)
@@ -290,6 +297,7 @@ If possible, test on:
 ## Questions?
 
 Feel free to:
+
 - Open an issue for discussion
 - Ask questions in pull requests
 - Reach out to the maintainer
@@ -297,10 +305,11 @@ Feel free to:
 ## Recognition
 
 Contributors will be recognized in:
+
 - Git commit history
 - Release notes
 - README credits (for significant contributions)
 
 ---
 
-Thank you for contributing to OPDS Plus! 📚✨
+Thank you for contributing to OPDS++! 📚✨

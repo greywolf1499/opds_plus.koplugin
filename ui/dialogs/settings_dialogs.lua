@@ -1,4 +1,4 @@
--- Settings dialog builders for OPDS Plus
+-- Settings dialog builders for OPDS++
 -- Extracted from main.lua for better organization and maintainability
 
 local ButtonDialogBuilder = require("utils.button_dialog_builder")
@@ -15,85 +15,85 @@ local SettingsDialogs = {}
 --- Show cover size preset selection menu
 -- @param plugin table Plugin instance (OPDS main)
 function SettingsDialogs.showCoverSizeMenu(plugin)
-	local current_preset = plugin:getCurrentPresetName()
-	local current_ratio = plugin:getCoverHeightRatio()
+  local current_preset = plugin:getCurrentPresetName()
+  local current_ratio = plugin:getCoverHeightRatio()
 
-	local builder = ButtonDialogBuilder:new()
-		:setTitle(_("Cover Size Settings\n\nSelect a preset or choose custom size"))
+  local builder = ButtonDialogBuilder:new()
+      :setTitle(_("Cover Size Settings\n\nSelect a preset or choose custom size"))
 
-	-- Add preset buttons with checkmarks and descriptions
-	local presets = Constants.COVER_SIZE_PRESETS
-	for i = 1, #presets do
-		local preset = presets[i]
-		local is_current = (current_preset == preset.name)
-		local button_text = preset.name .. " - " .. preset.description
-		if is_current then
-			button_text = "✓ " .. button_text
-		end
+  -- Add preset buttons with checkmarks and descriptions
+  local presets = Constants.COVER_SIZE_PRESETS
+  for i = 1, #presets do
+    local preset = presets[i]
+    local is_current = (current_preset == preset.name)
+    local button_text = preset.name .. " - " .. preset.description
+    if is_current then
+      button_text = "✓ " .. button_text
+    end
 
-		builder:addButton(button_text, function()
-			UIManager:close(plugin.cover_size_dialog)
-			plugin:setCoverHeightRatio(preset.ratio, preset.name)
-			UIManager:show(InfoMessage:new {
-				text = T(_("Cover size set to %1 (%2%).\n\n%3\n\nChanges will apply when you next browse a catalog."),
-					preset.name,
-					math.floor(preset.ratio * 100),
-					preset.description),
-				timeout = 3,
-			})
-		end)
-	end
+    builder:addButton(button_text, function()
+      UIManager:close(plugin.cover_size_dialog)
+      plugin:setCoverHeightRatio(preset.ratio, preset.name)
+      UIManager:show(InfoMessage:new {
+        text = T(_("Cover size set to %1 (%2%).\n\n%3\n\nChanges will apply when you next browse a catalog."),
+          preset.name,
+          math.floor(preset.ratio * 100),
+          preset.description),
+        timeout = 3,
+      })
+    end)
+  end
 
-	builder:addSeparator()
+  builder:addSeparator()
 
-	-- Add custom option
-	local custom_button_text = "Custom"
-	if current_preset == "Custom" then
-		custom_button_text = "✓ " .. custom_button_text .. " (" .. math.floor(current_ratio * 100) .. "%)"
-	end
+  -- Add custom option
+  local custom_button_text = "Custom"
+  if current_preset == "Custom" then
+    custom_button_text = "✓ " .. custom_button_text .. " (" .. math.floor(current_ratio * 100) .. "%)"
+  end
 
-	builder:addButton(custom_button_text, function()
-		UIManager:close(plugin.cover_size_dialog)
-		SettingsDialogs.showCustomSizeDialog(plugin)
-	end)
+  builder:addButton(custom_button_text, function()
+    UIManager:close(plugin.cover_size_dialog)
+    SettingsDialogs.showCustomSizeDialog(plugin)
+  end)
 
-	plugin.cover_size_dialog = builder:build()
-	UIManager:show(plugin.cover_size_dialog)
+  plugin.cover_size_dialog = builder:build()
+  UIManager:show(plugin.cover_size_dialog)
 end
 
 --- Show custom cover size spinner dialog
 -- @param plugin table Plugin instance (OPDS main)
 function SettingsDialogs.showCustomSizeDialog(plugin)
-	local current_ratio = plugin:getCoverHeightRatio()
-	local current_percent = math.floor(current_ratio * 100)
-	local spin_widget
-	spin_widget = SpinWidget:new {
-		title_text = _("Custom Cover Size"),
-		info_text = _("Adjust the size of book covers as a percentage of screen height.\n\n• Smaller values = more books per page\n• Larger values = bigger covers, fewer books per page\n\nRecommended: 8-12% for compact, 15-20% for large"),
-		value = current_percent,
-		value_min = 5,
-		value_max = 25,
-		value_step = 1,
-		value_hold_step = 5,
-		unit = "%",
-		ok_text = _("Apply"),
-		default_value = 10,
-		callback = function(spin)
-			local new_ratio = spin.value / 100
-			plugin:setCoverHeightRatio(new_ratio, "Custom")
-			UIManager:show(InfoMessage:new {
-				text = T(_("Cover size set to Custom (%1%).\n\nChanges will apply when you next browse a catalog."),
-					spin.value),
-				timeout = 3,
-			})
-		end,
-		extra_text = _("Back to Presets"),
-		extra_callback = function()
-			UIManager:close(spin_widget)
-			SettingsDialogs.showCoverSizeMenu(plugin)
-		end,
-	}
-	UIManager:show(spin_widget)
+  local current_ratio = plugin:getCoverHeightRatio()
+  local current_percent = math.floor(current_ratio * 100)
+  local spin_widget
+  spin_widget = SpinWidget:new {
+    title_text = _("Custom Cover Size"),
+    info_text = _("Adjust the size of book covers as a percentage of screen height.\n\n• Smaller values = more books per page\n• Larger values = bigger covers, fewer books per page\n\nRecommended: 8-12% for compact, 15-20% for large"),
+    value = current_percent,
+    value_min = 5,
+    value_max = 25,
+    value_step = 1,
+    value_hold_step = 5,
+    unit = "%",
+    ok_text = _("Apply"),
+    default_value = 10,
+    callback = function(spin)
+      local new_ratio = spin.value / 100
+      plugin:setCoverHeightRatio(new_ratio, "Custom")
+      UIManager:show(InfoMessage:new {
+        text = T(_("Cover size set to Custom (%1%).\n\nChanges will apply when you next browse a catalog."),
+          spin.value),
+        timeout = 3,
+      })
+    end,
+    extra_text = _("Back to Presets"),
+    extra_callback = function()
+      UIManager:close(spin_widget)
+      SettingsDialogs.showCoverSizeMenu(plugin)
+    end,
+  }
+  UIManager:show(spin_widget)
 end
 
 --- Show font selection menu
@@ -101,39 +101,39 @@ end
 -- @param setting_key string Setting key (e.g., "title_font")
 -- @param title string Dialog title
 function SettingsDialogs.showFontSelectionMenu(plugin, setting_key, title)
-	local current_font = plugin:getSetting(setting_key)
-	local available_fonts = plugin:getAvailableFonts()
+  local current_font = plugin:getSetting(setting_key)
+  local available_fonts = plugin:getAvailableFonts()
 
-	local builder = ButtonDialogBuilder:new()
-		:setTitle(T(_("%1 Selection\n\nChoose a font"), title))
+  local builder = ButtonDialogBuilder:new()
+      :setTitle(T(_("%1 Selection\n\nChoose a font"), title))
 
-	-- Add fonts with checkmarks, with separators every 5 items
-	for i, font_info in ipairs(available_fonts) do
-		local is_current = (current_font == font_info.value)
-		local button_text = font_info.name
-		if is_current then
-			button_text = "✓ " .. button_text
-		end
+  -- Add fonts with checkmarks, with separators every 5 items
+  for i, font_info in ipairs(available_fonts) do
+    local is_current = (current_font == font_info.value)
+    local button_text = font_info.name
+    if is_current then
+      button_text = "✓ " .. button_text
+    end
 
-		builder:addButton(button_text, function()
-			UIManager:close(plugin.font_dialog)
-			plugin:saveSetting(setting_key, font_info.value)
-			UIManager:show(InfoMessage:new {
-				text = T(_("%1 set to:\n%2\n\nChanges will apply when you next browse a catalog."),
-					title,
-					font_info.name),
-				timeout = 3,
-			})
-		end)
+    builder:addButton(button_text, function()
+      UIManager:close(plugin.font_dialog)
+      plugin:saveSetting(setting_key, font_info.value)
+      UIManager:show(InfoMessage:new {
+        text = T(_("%1 set to:\n%2\n\nChanges will apply when you next browse a catalog."),
+          title,
+          font_info.name),
+        timeout = 3,
+      })
+    end)
 
-		-- Add separator every 5 items for readability
-		if i % 5 == 0 and i < #available_fonts then
-			builder:addSeparator()
-		end
-	end
+    -- Add separator every 5 items for readability
+    if i % 5 == 0 and i < #available_fonts then
+      builder:addSeparator()
+    end
+  end
 
-	plugin.font_dialog = builder:build()
-	UIManager:show(plugin.font_dialog)
+  plugin.font_dialog = builder:build()
+  UIManager:show(plugin.font_dialog)
 end
 
 --- Show font size selection spinner
@@ -144,323 +144,323 @@ end
 -- @param max_size number Maximum font size
 -- @param default_size number Default font size
 function SettingsDialogs.showSizeSelectionMenu(plugin, setting_key, title, min_size, max_size, default_size)
-	local current_size = plugin:getSetting(setting_key)
+  local current_size = plugin:getSetting(setting_key)
 
-	local spin_widget = SpinWidget:new {
-		title_text = title,
-		info_text = _("Adjust the font size.\n\nChanges will apply when you next browse a catalog."),
-		value = current_size,
-		value_min = min_size,
-		value_max = max_size,
-		value_step = 1,
-		value_hold_step = 2,
-		unit = "pt",
-		ok_text = _("Apply"),
-		default_value = default_size,
-		callback = function(spin)
-			plugin:saveSetting(setting_key, spin.value)
-			UIManager:show(InfoMessage:new {
-				text = T(_("%1 set to %2pt.\n\nChanges will apply when you next browse a catalog."),
-					title,
-					spin.value),
-				timeout = 2,
-			})
-		end,
-	}
-	UIManager:show(spin_widget)
+  local spin_widget = SpinWidget:new {
+    title_text = title,
+    info_text = _("Adjust the font size.\n\nChanges will apply when you next browse a catalog."),
+    value = current_size,
+    value_min = min_size,
+    value_max = max_size,
+    value_step = 1,
+    value_hold_step = 2,
+    unit = "pt",
+    ok_text = _("Apply"),
+    default_value = default_size,
+    callback = function(spin)
+      plugin:saveSetting(setting_key, spin.value)
+      UIManager:show(InfoMessage:new {
+        text = T(_("%1 set to %2pt.\n\nChanges will apply when you next browse a catalog."),
+          title,
+          spin.value),
+        timeout = 2,
+      })
+    end,
+  }
+  UIManager:show(spin_widget)
 end
 
 --- Show grid layout preset menu
 -- @param plugin table Plugin instance
 function SettingsDialogs.showGridLayoutMenu(plugin)
-	local current_columns = plugin.settings.grid_columns or 3
-	local current_preset = plugin.settings.grid_size_preset or "Balanced"
+  local current_columns = plugin.settings.grid_columns or 3
+  local current_preset = plugin.settings.grid_size_preset or "Balanced"
 
-	local presets = {
-		{ name = "Compact",  columns = 4, desc = _("More books per page, smaller covers") },
-		{ name = "Balanced", columns = 3, desc = _("Good balance of size and quantity") },
-		{ name = "Spacious", columns = 2, desc = _("Fewer books, larger covers") },
-	}
+  local presets = {
+    { name = "Compact",  columns = 4, desc = _("More books per page, smaller covers") },
+    { name = "Balanced", columns = 3, desc = _("Good balance of size and quantity") },
+    { name = "Spacious", columns = 2, desc = _("Fewer books, larger covers") },
+  }
 
-	local builder = ButtonDialogBuilder:new()
-		:setTitle(_("Grid Layout Presets\n\nChoose how books are displayed in grid view"))
+  local builder = ButtonDialogBuilder:new()
+      :setTitle(_("Grid Layout Presets\n\nChoose how books are displayed in grid view"))
 
-	-- Add preset buttons
-	for i, preset in ipairs(presets) do
-		local is_current = (current_preset == preset.name and current_columns == preset.columns)
-		local button_text = preset.name .. " (" .. preset.columns .. " " .. _("cols") .. ")"
-		if is_current then
-			button_text = "✓ " .. button_text
-		end
+  -- Add preset buttons
+  for i, preset in ipairs(presets) do
+    local is_current = (current_preset == preset.name and current_columns == preset.columns)
+    local button_text = preset.name .. " (" .. preset.columns .. " " .. _("cols") .. ")"
+    if is_current then
+      button_text = "✓ " .. button_text
+    end
 
-		builder:addButton(button_text, function()
-			UIManager:close(plugin.grid_layout_dialog)
-			plugin.settings.grid_columns = preset.columns
-			plugin.settings.grid_size_preset = preset.name
-			plugin.opds_settings:saveSetting("settings", plugin.settings)
-			plugin.opds_settings:flush()
-			UIManager:show(InfoMessage:new {
-				text = T(_("Grid layout set to %1\n\n%2\n\nChanges will apply when you next browse a catalog in grid view."),
-					preset.name, preset.desc),
-				timeout = 2.5,
-			})
-		end)
-	end
+    builder:addButton(button_text, function()
+      UIManager:close(plugin.grid_layout_dialog)
+      plugin.settings.grid_columns = preset.columns
+      plugin.settings.grid_size_preset = preset.name
+      plugin.opds_settings:saveSetting("settings", plugin.settings)
+      plugin.opds_settings:flush()
+      UIManager:show(InfoMessage:new {
+        text = T(_("Grid layout set to %1\n\n%2\n\nChanges will apply when you next browse a catalog in grid view."),
+          preset.name, preset.desc),
+        timeout = 2.5,
+      })
+    end)
+  end
 
-	builder:addSeparator()
+  builder:addSeparator()
 
-	-- Custom option
-	local custom_text = _("Custom")
-	local is_custom = (current_preset ~= "Compact" and current_preset ~= "Balanced" and current_preset ~= "Spacious")
-	if is_custom then
-		custom_text = "✓ " .. custom_text .. " (" .. current_columns .. " " .. _("cols") .. ")"
-	end
+  -- Custom option
+  local custom_text = _("Custom")
+  local is_custom = (current_preset ~= "Compact" and current_preset ~= "Balanced" and current_preset ~= "Spacious")
+  if is_custom then
+    custom_text = "✓ " .. custom_text .. " (" .. current_columns .. " " .. _("cols") .. ")"
+  end
 
-	builder:addButton(custom_text, function()
-		UIManager:close(plugin.grid_layout_dialog)
-		SettingsDialogs.showGridColumnsMenu(plugin)
-	end)
+  builder:addButton(custom_text, function()
+    UIManager:close(plugin.grid_layout_dialog)
+    SettingsDialogs.showGridColumnsMenu(plugin)
+  end)
 
-	plugin.grid_layout_dialog = builder:build()
-	UIManager:show(plugin.grid_layout_dialog)
+  plugin.grid_layout_dialog = builder:build()
+  UIManager:show(plugin.grid_layout_dialog)
 end
 
 --- Show custom grid columns menu
 -- @param plugin table Plugin instance
 function SettingsDialogs.showGridColumnsMenu(plugin)
-	local current_columns = plugin.settings.grid_columns or 3
+  local current_columns = plugin.settings.grid_columns or 3
 
-	local builder = ButtonDialogBuilder:new()
-		:setTitle(_("Custom Grid Columns\n\nManually choose column count"))
+  local builder = ButtonDialogBuilder:new()
+      :setTitle(_("Custom Grid Columns\n\nManually choose column count"))
 
-	for cols = 2, 4 do
-		local is_current = (current_columns == cols)
-		local button_text = tostring(cols)
-		if cols == 2 then
-			button_text = button_text .. " " .. _("columns (wider)")
-		elseif cols == 3 then
-			button_text = button_text .. " " .. _("columns (balanced)")
-		else
-			button_text = button_text .. " " .. _("columns (compact)")
-		end
+  for cols = 2, 4 do
+    local is_current = (current_columns == cols)
+    local button_text = tostring(cols)
+    if cols == 2 then
+      button_text = button_text .. " " .. _("columns (wider)")
+    elseif cols == 3 then
+      button_text = button_text .. " " .. _("columns (balanced)")
+    else
+      button_text = button_text .. " " .. _("columns (compact)")
+    end
 
-		if is_current then
-			button_text = "✓ " .. button_text
-		end
+    if is_current then
+      button_text = "✓ " .. button_text
+    end
 
-		builder:addButton(button_text, function()
-			UIManager:close(plugin.grid_columns_dialog)
-			plugin.settings.grid_columns = cols
-			plugin.settings.grid_size_preset = "Custom"
-			plugin.opds_settings:saveSetting("settings", plugin.settings)
-			plugin.opds_settings:flush()
-			UIManager:show(InfoMessage:new {
-				text = T(_("Grid columns set to %1 (Custom).\n\nChanges will apply when you next browse a catalog in grid mode."), cols),
-				timeout = 2,
-			})
-		end)
-	end
+    builder:addButton(button_text, function()
+      UIManager:close(plugin.grid_columns_dialog)
+      plugin.settings.grid_columns = cols
+      plugin.settings.grid_size_preset = "Custom"
+      plugin.opds_settings:saveSetting("settings", plugin.settings)
+      plugin.opds_settings:flush()
+      UIManager:show(InfoMessage:new {
+        text = T(_("Grid columns set to %1 (Custom).\n\nChanges will apply when you next browse a catalog in grid mode."), cols),
+        timeout = 2,
+      })
+    end)
+  end
 
-	builder:addSeparator()
-	builder:addBackButton("← " .. _("Back to Presets"), function()
-		UIManager:close(plugin.grid_columns_dialog)
-		SettingsDialogs.showGridLayoutMenu(plugin)
-	end)
+  builder:addSeparator()
+  builder:addBackButton("← " .. _("Back to Presets"), function()
+    UIManager:close(plugin.grid_columns_dialog)
+    SettingsDialogs.showGridLayoutMenu(plugin)
+  end)
 
-	plugin.grid_columns_dialog = builder:build()
-	UIManager:show(plugin.grid_columns_dialog)
+  plugin.grid_columns_dialog = builder:build()
+  UIManager:show(plugin.grid_columns_dialog)
 end
 
 --- Show grid border style menu
 -- @param plugin table Plugin instance
 function SettingsDialogs.showGridBorderMenu(plugin)
-	local current_style = plugin.settings.grid_border_style or "none"
-	local current_size = plugin.settings.grid_border_size or 2
-	local current_color = plugin.settings.grid_border_color or "dark_gray"
+  local current_style = plugin.settings.grid_border_style or "none"
+  local current_size = plugin.settings.grid_border_size or 2
+  local current_color = plugin.settings.grid_border_color or "dark_gray"
 
-	local styles = {
-		{ id = "none",       name = _("No Borders"),       desc = _("Clean, borderless grid") },
-		{ id = "hash",       name = _("Hash Grid"),        desc = _("Shared borders like # pattern") },
-		{ id = "individual", name = _("Individual Tiles"), desc = _("Each book has its own border") },
-	}
+  local styles = {
+    { id = "none",       name = _("No Borders"),       desc = _("Clean, borderless grid") },
+    { id = "hash",       name = _("Hash Grid"),        desc = _("Shared borders like # pattern") },
+    { id = "individual", name = _("Individual Tiles"), desc = _("Each book has its own border") },
+  }
 
-	local builder = ButtonDialogBuilder:new()
-		:setTitle(_("Grid Border Settings\n\nCustomize the appearance of grid borders"))
-		:addLabel(_("Border Style"))
+  local builder = ButtonDialogBuilder:new()
+      :setTitle(_("Grid Border Settings\n\nCustomize the appearance of grid borders"))
+      :addLabel(_("Border Style"))
 
-	-- Add style options
-	builder:addOptionsWithCheckmarkAndDesc(styles, current_style, function(style)
-		UIManager:close(plugin.grid_border_dialog)
-		plugin.settings.grid_border_style = style.id
-		plugin.opds_settings:saveSetting("settings", plugin.settings)
-		plugin.opds_settings:flush()
-		UIManager:show(InfoMessage:new {
-			text = T(_("Border style set to: %1\n\n%2\n\nChanges will apply when you next browse a catalog in grid view."),
-				style.name, style.desc),
-			timeout = 2.5,
-		})
-	end)
+  -- Add style options
+  builder:addOptionsWithCheckmarkAndDesc(styles, current_style, function(style)
+    UIManager:close(plugin.grid_border_dialog)
+    plugin.settings.grid_border_style = style.id
+    plugin.opds_settings:saveSetting("settings", plugin.settings)
+    plugin.opds_settings:flush()
+    UIManager:show(InfoMessage:new {
+      text = T(_("Border style set to: %1\n\n%2\n\nChanges will apply when you next browse a catalog in grid view."),
+        style.name, style.desc),
+      timeout = 2.5,
+    })
+  end)
 
-	builder:addSeparator()
+  builder:addSeparator()
 
-	-- Border Customization (only if not "none")
-	if current_style ~= "none" then
-		builder:addLabel(_("Customize Borders"))
+  -- Border Customization (only if not "none")
+  if current_style ~= "none" then
+    builder:addLabel(_("Customize Borders"))
 
-		-- Border Size
-		builder:addButton(T(_("Border Thickness: %1px"), current_size), function()
-			UIManager:close(plugin.grid_border_dialog)
-			SettingsDialogs.showGridBorderSizeMenu(plugin)
-		end)
+    -- Border Size
+    builder:addButton(T(_("Border Thickness: %1px"), current_size), function()
+      UIManager:close(plugin.grid_border_dialog)
+      SettingsDialogs.showGridBorderSizeMenu(plugin)
+    end)
 
-		-- Border Color
-		local color_display = current_color == "dark_gray" and _("Dark Gray") or
-			current_color == "light_gray" and _("Light Gray") or
-			_("Black")
-		builder:addButton(T(_("Border Color: %1"), color_display), function()
-			UIManager:close(plugin.grid_border_dialog)
-			SettingsDialogs.showGridBorderColorMenu(plugin)
-		end)
-	end
+    -- Border Color
+    local color_display = current_color == "dark_gray" and _("Dark Gray") or
+        current_color == "light_gray" and _("Light Gray") or
+        _("Black")
+    builder:addButton(T(_("Border Color: %1"), color_display), function()
+      UIManager:close(plugin.grid_border_dialog)
+      SettingsDialogs.showGridBorderColorMenu(plugin)
+    end)
+  end
 
-	plugin.grid_border_dialog = builder:build()
-	UIManager:show(plugin.grid_border_dialog)
+  plugin.grid_border_dialog = builder:build()
+  UIManager:show(plugin.grid_border_dialog)
 end
 
 --- Show border thickness spinner
 -- @param plugin table Plugin instance
 function SettingsDialogs.showGridBorderSizeMenu(plugin)
-	local current_size = plugin.settings.grid_border_size or 2
-	local spin_widget
-	spin_widget = SpinWidget:new {
-		title_text = _("Border Thickness"),
-		info_text = _("Adjust the thickness of grid borders.\n\n• Thinner borders = more subtle\n• Thicker borders = more defined\n\nRecommended: 2-3px"),
-		value = current_size,
-		value_min = 1,
-		value_max = 5,
-		value_step = 1,
-		value_hold_step = 1,
-		unit = "px",
-		ok_text = _("Apply"),
-		default_value = 2,
-		callback = function(spin)
-			plugin.settings.grid_border_size = spin.value
-			plugin.opds_settings:saveSetting("settings", plugin.settings)
-			plugin.opds_settings:flush()
-			UIManager:show(InfoMessage:new {
-				text = T(_("Border thickness set to %1px.\n\nChanges will apply when you next browse a catalog in grid view."),
-					spin.value),
-				timeout = 2,
-			})
-		end,
-		extra_text = _("Back to Borders"),
-		extra_callback = function()
-			UIManager:close(spin_widget)
-			SettingsDialogs.showGridBorderMenu(plugin)
-		end,
-	}
-	UIManager:show(spin_widget)
+  local current_size = plugin.settings.grid_border_size or 2
+  local spin_widget
+  spin_widget = SpinWidget:new {
+    title_text = _("Border Thickness"),
+    info_text = _("Adjust the thickness of grid borders.\n\n• Thinner borders = more subtle\n• Thicker borders = more defined\n\nRecommended: 2-3px"),
+    value = current_size,
+    value_min = 1,
+    value_max = 5,
+    value_step = 1,
+    value_hold_step = 1,
+    unit = "px",
+    ok_text = _("Apply"),
+    default_value = 2,
+    callback = function(spin)
+      plugin.settings.grid_border_size = spin.value
+      plugin.opds_settings:saveSetting("settings", plugin.settings)
+      plugin.opds_settings:flush()
+      UIManager:show(InfoMessage:new {
+        text = T(_("Border thickness set to %1px.\n\nChanges will apply when you next browse a catalog in grid view."),
+          spin.value),
+        timeout = 2,
+      })
+    end,
+    extra_text = _("Back to Borders"),
+    extra_callback = function()
+      UIManager:close(spin_widget)
+      SettingsDialogs.showGridBorderMenu(plugin)
+    end,
+  }
+  UIManager:show(spin_widget)
 end
 
 --- Show border color selection menu
 -- @param plugin table Plugin instance
 function SettingsDialogs.showGridBorderColorMenu(plugin)
-	local current_color = plugin.settings.grid_border_color or "dark_gray"
+  local current_color = plugin.settings.grid_border_color or "dark_gray"
 
-	local colors = {
-		{ id = "light_gray", name = _("Light Gray"), desc = _("Subtle, minimal contrast") },
-		{ id = "dark_gray",  name = _("Dark Gray"),  desc = _("Balanced, clear definition") },
-		{ id = "black",      name = _("Black"),      desc = _("High contrast, bold borders") },
-	}
+  local colors = {
+    { id = "light_gray", name = _("Light Gray"), desc = _("Subtle, minimal contrast") },
+    { id = "dark_gray",  name = _("Dark Gray"),  desc = _("Balanced, clear definition") },
+    { id = "black",      name = _("Black"),      desc = _("High contrast, bold borders") },
+  }
 
-	local builder = ButtonDialogBuilder:new()
-		:setTitle(_("Border Color\n\nChoose the color for grid borders"))
+  local builder = ButtonDialogBuilder:new()
+      :setTitle(_("Border Color\n\nChoose the color for grid borders"))
 
-	builder:addOptionsWithCheckmarkAndDesc(colors, current_color, function(color)
-		UIManager:close(plugin.grid_border_color_dialog)
-		plugin.settings.grid_border_color = color.id
-		plugin.opds_settings:saveSetting("settings", plugin.settings)
-		plugin.opds_settings:flush()
-		UIManager:show(InfoMessage:new {
-			text = T(_("Border color set to: %1\n\n%2\n\nChanges will apply when you next browse a catalog in grid view."),
-				color.name, color.desc),
-			timeout = 2.5,
-		})
-	end)
+  builder:addOptionsWithCheckmarkAndDesc(colors, current_color, function(color)
+    UIManager:close(plugin.grid_border_color_dialog)
+    plugin.settings.grid_border_color = color.id
+    plugin.opds_settings:saveSetting("settings", plugin.settings)
+    plugin.opds_settings:flush()
+    UIManager:show(InfoMessage:new {
+      text = T(_("Border color set to: %1\n\n%2\n\nChanges will apply when you next browse a catalog in grid view."),
+        color.name, color.desc),
+      timeout = 2.5,
+    })
+  end)
 
-	builder:addSeparator()
-	builder:addBackButton("← " .. _("Back to Border Settings"), function()
-		UIManager:close(plugin.grid_border_color_dialog)
-		SettingsDialogs.showGridBorderMenu(plugin)
-	end)
+  builder:addSeparator()
+  builder:addBackButton("← " .. _("Back to Border Settings"), function()
+    UIManager:close(plugin.grid_border_color_dialog)
+    SettingsDialogs.showGridBorderMenu(plugin)
+  end)
 
-	plugin.grid_border_color_dialog = builder:build()
-	UIManager:show(plugin.grid_border_color_dialog)
+  plugin.grid_border_color_dialog = builder:build()
+  UIManager:show(plugin.grid_border_color_dialog)
 end
 
 --- Show cover cache size spinner (MB)
 -- @param plugin table Plugin instance
 function SettingsDialogs.showCoverCacheSizeDialog(plugin)
-	local current_mb = plugin:getSetting("cover_cache_max_mb") or Constants.COVER_CACHE.DEFAULT_MAX_MB
+  local current_mb = plugin:getSetting("cover_cache_max_mb") or Constants.COVER_CACHE.DEFAULT_MAX_MB
 
-	local spin_widget = SpinWidget:new {
-		title_text = _("Cover Cache Size"),
-		info_text = _("Set the maximum disk space used for cached cover images.\n\nLarger values improve offline reuse and reduce refetching after browsing."),
-		value = current_mb,
-		value_min = Constants.COVER_CACHE.MIN_MAX_MB,
-		value_max = Constants.COVER_CACHE.MAX_MAX_MB,
-		value_step = 8,
-		value_hold_step = 32,
-		unit = "MB",
-		ok_text = _("Apply"),
-		default_value = Constants.COVER_CACHE.DEFAULT_MAX_MB,
-		callback = function(spin)
-			plugin:saveSetting("cover_cache_max_mb", spin.value)
-			UIManager:show(InfoMessage:new {
-				text = T(_("Cover cache size set to %1 MB."), spin.value),
-				timeout = 2,
-			})
-		end,
-	}
+  local spin_widget = SpinWidget:new {
+    title_text = _("Cover Cache Size"),
+    info_text = _("Set the maximum disk space used for cached cover images.\n\nLarger values improve offline reuse and reduce refetching after browsing."),
+    value = current_mb,
+    value_min = Constants.COVER_CACHE.MIN_MAX_MB,
+    value_max = Constants.COVER_CACHE.MAX_MAX_MB,
+    value_step = 8,
+    value_hold_step = 32,
+    unit = "MB",
+    ok_text = _("Apply"),
+    default_value = Constants.COVER_CACHE.DEFAULT_MAX_MB,
+    callback = function(spin)
+      plugin:saveSetting("cover_cache_max_mb", spin.value)
+      UIManager:show(InfoMessage:new {
+        text = T(_("Cover cache size set to %1 MB."), spin.value),
+        timeout = 2,
+      })
+    end,
+  }
 
-	UIManager:show(spin_widget)
+  UIManager:show(spin_widget)
 end
 
 --- Show cover cache TTL spinner (minutes)
 -- @param plugin table Plugin instance
 function SettingsDialogs.showCoverCacheTTLDialog(plugin)
-	local current_ttl = plugin:getSetting("cover_cache_ttl_minutes") or Constants.COVER_CACHE.DEFAULT_TTL_MINUTES
+  local current_ttl = plugin:getSetting("cover_cache_ttl_minutes") or Constants.COVER_CACHE.DEFAULT_TTL_MINUTES
 
-	local spin_widget = SpinWidget:new {
-		title_text = _("Cover Cache TTL"),
-		info_text = _("Set how long cached covers remain fresh before revalidation by refetching.\n\nShorter TTL picks up changed covers sooner. Longer TTL reduces network requests."),
-		value = current_ttl,
-		value_min = Constants.COVER_CACHE.MIN_TTL_MINUTES,
-		value_max = Constants.COVER_CACHE.MAX_TTL_MINUTES,
-		value_step = 5,
-		value_hold_step = 60,
-		unit = _("min"),
-		ok_text = _("Apply"),
-		default_value = Constants.COVER_CACHE.DEFAULT_TTL_MINUTES,
-		callback = function(spin)
-			plugin:saveSetting("cover_cache_ttl_minutes", spin.value)
-			UIManager:show(InfoMessage:new {
-				text = T(_("Cover cache TTL set to %1 minutes."), spin.value),
-				timeout = 2,
-			})
-		end,
-	}
+  local spin_widget = SpinWidget:new {
+    title_text = _("Cover Cache TTL"),
+    info_text = _("Set how long cached covers remain fresh before revalidation by refetching.\n\nShorter TTL picks up changed covers sooner. Longer TTL reduces network requests."),
+    value = current_ttl,
+    value_min = Constants.COVER_CACHE.MIN_TTL_MINUTES,
+    value_max = Constants.COVER_CACHE.MAX_TTL_MINUTES,
+    value_step = 5,
+    value_hold_step = 60,
+    unit = _("min"),
+    ok_text = _("Apply"),
+    default_value = Constants.COVER_CACHE.DEFAULT_TTL_MINUTES,
+    callback = function(spin)
+      plugin:saveSetting("cover_cache_ttl_minutes", spin.value)
+      UIManager:show(InfoMessage:new {
+        text = T(_("Cover cache TTL set to %1 minutes."), spin.value),
+        timeout = 2,
+      })
+    end,
+  }
 
-	UIManager:show(spin_widget)
+  UIManager:show(spin_widget)
 end
 
 --- Clear disk cover cache
 function SettingsDialogs.clearCoverCache()
-	ImageLoader.clearCache()
-	UIManager:show(InfoMessage:new {
-		text = _("Cover cache cleared."),
-		timeout = 2,
-	})
+  ImageLoader.clearCache()
+  UIManager:show(InfoMessage:new {
+    text = _("Cover cache cleared."),
+    timeout = 2,
+  })
 end
 
 return SettingsDialogs

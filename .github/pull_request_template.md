@@ -1,6 +1,6 @@
-# OPDS Plus Pull Request
+# OPDS++ Pull Request
 
-Thanks for contributing to OPDS Plus!
+Thanks for contributing to OPDS++!
 
 ## Summary
 

@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 ## [1.2.0] - 2026-03-19
 
 ### Added
+
 - **Book Info Dialog**: Added a dedicated dialog with at-a-glance book metadata and improved cover handling.
 - **Direct Sync Gesture Actions**: Added action-oriented gesture events for faster sync and navigation workflows.
 - **Improved Cover Pipeline**: Added higher-quality cover loading with disk-backed cache and lifecycle-safe image handling.
@@ -19,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
   - Supports direct invocation from KOReader gesture/action mapping
 
 ### Changed
+
 - **Debug Architecture Refactor**:
   - Standardized debug logging through shared utility usage.
   - Extended state manager integration across UI menu components.
@@ -27,6 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
   - Updated GitHub Actions dependencies for checkout and artifact upload/download workflows.
 
 ### Fixed
+
 - **Gesture Registration**: Fixed gesture registration failures (Issue #58).
 - **Duplicate PDF Entries**: Prevented duplicate PDF files from being shown in results (Issue #57).
 - **Book Info Dialog Stability**:
@@ -35,16 +38,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
   - Removed invalid imports and corrected build wiring.
 
 ### Notes
+
 - This release includes merged community and maintenance pull requests together with issue-resolution fixes.
 - Packaging layout improvements from prior releases are retained and compatible with the current codebase structure.
-- New settings are available under **OPDS Plus Catalog → Settings → Cover Settings**.
+- New settings are available under **OPDS++ Catalog → Settings → Cover Settings**.
 - Sync actions can be used from catalog long-press workflows or mapped through KOReader dispatcher actions.
 
 ## [1.1.0] - 2025-01-18
 
 ### Added
+
 - **Debug Mode Toggle**: Added developer setting to enable/disable verbose logging for troubleshooting
-- **Version Display**: Plugin version now shown in settings menu ("About OPDS Plus v1.1.0")
+- **Version Display**: Plugin version now shown in settings menu ("About OPDS++ v1.1.0")
 - **Smart Text Truncation**: Titles and authors now display with ellipsis (…) when truncated
   - UTF-8 safe truncation for international characters
   - Word-aware truncation attempts to break at word boundaries
@@ -56,6 +61,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
   - Adaptive sizing works across all device screen sizes
 
 ### Changed
+
 - **Improved List View Sizing**:
   - Preset sizes now target specific items per page (3, 4, 6, or 8 items)
   - Dynamically calculates optimal cover height to fill available space
@@ -72,6 +78,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
   - Significantly reduced log spam in production use
 
 ### Fixed
+
 - **Release Package Structure**: GitHub Actions workflow now creates clean zip without nested directories
 - **Template String Formatting**: Fixed `%%` appearing in confirmation dialogs (now displays as single `%`)
 - **Loop Variable Conflicts**:
@@ -82,18 +89,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 - **Font Method Calls**: Corrected text width measurement to use proper KOReader API (`RenderText:sizeUtf8Text()`)
 
 ### Technical Improvements
+
 - Conditional debug logging via `_debugLog()` method in all core modules
 - Improved error handling and logging consistency
 - Better separation of production vs. development logging
 - Enhanced code maintainability with cleaner function signatures
 
 ### Performance
+
 - Reduced UI lag from excessive logging in production
 - Optimized text truncation algorithm using binary search
 - Improved rendering performance with better whitespace calculations
 
 ### Notes
-- Debug mode can be toggled in: **OPDS Plus Catalog → Settings → Developer → Debug Mode**
+
+- Debug mode can be toggled in: **OPDS++ Catalog → Settings → Developer → Debug Mode**
 - Changes to view settings (cover sizes, grid layouts) apply when next browsing a catalog
 - Compatible with all KOReader-supported devices and screen sizes
 - Tested on e-readers, tablets, and desktop displays
@@ -101,8 +111,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 ---
 
 ## [1.0.0] - 2025-11-17
+
 ### Added
-- Initial public release of OPDS Plus plugin.
+
+- Initial public release of OPDS++ plugin.
 - Extended OPDS browsing with cover display support (list & grid view).
 - Grid view with customizable columns, border styles, thickness, and color.
 - Font customization for titles and information text (family, size, weight, color).
@@ -111,6 +123,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 - Persistent settings storage and retrieval.
 
 ### Notes
+
 - Derivative of KOReader's built-in OPDS plugin with major UI/UX enhancements.
 - Licensed under AGPLv3 consistent with KOReader.
 
