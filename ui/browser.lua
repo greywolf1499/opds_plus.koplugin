@@ -381,10 +381,9 @@ end
 
 -- Menu action on next-page chevron tap (request and show more catalog entries)
 function OPDSBrowser:onNextPage(fill_only)
-    -- self.page_num comes from menu.lua
-    local page_num = self.page_num
-    -- fetch more entries until we fill out one page or reach the end
-    while page_num == self.page_num do
+    -- Fetching blocks the UI, and a feed page holds several screens, so ask the server only
+    -- when running out: one page ahead, so the end is not felt. self.page_num comes from menu.lua.
+    while self.page + 2 > self.page_num do
         local hrefs = self.item_table.hrefs
         if hrefs and hrefs.next then
             if not self:appendCatalog(hrefs.next) then
