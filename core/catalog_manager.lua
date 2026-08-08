@@ -142,20 +142,6 @@ function CatalogManager.validateCatalogUrl(catalog_url)
 		return false, "Invalid hostname format"
 	end
 
-	-- Check for at least one dot in hostname (unless it's localhost)
-	if parsed.host ~= "localhost" and not parsed.host:match("%.") then
-		return false, "Invalid hostname: must be a domain name or IP address"
-	end
-
-	-- Validate that it's not just random characters
-	-- Should have a valid TLD or be an IP address
-	local is_ip = parsed.host:match("^%d+%.%d+%.%d+%.%d+$")
-	local has_valid_tld = parsed.host:match("%.%a%a+$") or parsed.host:match("%.%a%a%a+$")
-
-	if not is_ip and not has_valid_tld and parsed.host ~= "localhost" then
-		return false, "Invalid domain: '" .. parsed.host .. "' doesn't appear to be a valid hostname"
-	end
-
 	return true, catalog_url
 end
 
