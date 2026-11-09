@@ -228,7 +228,7 @@ Access settings from: **OPDS Plus Catalog → Settings**
   - These can be assigned in KOReader's gesture/action configuration.
 - **Catalog Sync Controls**:
   - Per-catalog sync and force-sync via catalog long-press actions.
-  - Sync folder selection.
+  - Sync folder selection: open the menu at the top left of the list of catalogs and tap **Set sync folder**. Sync needs a folder before it can start.
   - Maximum sync download count.
   - Filetype filtering for sync downloads.
 
