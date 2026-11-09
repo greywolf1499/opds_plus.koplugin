@@ -94,7 +94,7 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 				local link_href = build_href(link.href)
 
 				-- Check if it's a navigation link (sub-catalog)
-				if UrlUtils.isCatalogNavigationLink(link, browser_context.catalog_type) then
+				if UrlUtils.isCatalogNavigationLink(link, browser_context.catalog_type, browser_context.catalog_rel) then
 					item.url = link_href
 				end
 
