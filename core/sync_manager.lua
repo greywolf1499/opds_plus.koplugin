@@ -11,6 +11,7 @@ local UIManager = require("ui/uimanager")
 local logger = require("logger")
 local util = require("util")
 local _ = require("gettext")
+local T = require("ffi/util").template
 
 local Constants = require("models.constants")
 local DownloadManager = require("core.download_manager")
@@ -146,11 +147,23 @@ function SyncManager.checkAndStartSync(browser, server_idx)
 	UIManager:show(info)
 	UIManager:forceRePaint()
 
-	for _, server in ipairs(servers_to_sync) do
-		SyncManager.fillPendingSyncs(browser, server)
-	end
+	-- A failing feed must not leave the progress message on screen or the browser stuck in sync mode.
+	local ok, err = pcall(function()
+		for _, server in ipairs(servers_to_sync) do
+			SyncManager.fillPendingSyncs(browser, server)
+		end
+	end)
 
 	UIManager:close(info)
+	browser.sync = false
+
+	if not ok then
+		logger.err("OPDS Plus: sync failed:", err)
+		UIManager:show(InfoMessage:new {
+			text = T(_("Sync failed:\n%1"), tostring(err)),
+		})
+		return
+	end
 
 	if #browser.pending_syncs > 0 then
 		Trapper:wrap(function()
@@ -161,8 +174,6 @@ function SyncManager.checkAndStartSync(browser, server_idx)
 			text = _("Up to date!"),
 		})
 	end
-
-	browser.sync = false
 end
 
 --- Fill pending syncs list for a specific server
