@@ -4,7 +4,14 @@ local bit = require("bit")
 
 local CoverCache = {}
 
-local CACHE_DIR = DataStorage:getFullDataDir() .. "/cache/opds_plus/covers"
+-- getFullDataDir() makes a relative data dir absolute (Kindle runs from "."), but it is
+-- missing on older KOReader and returns nil for other relative data dirs.
+local function getBaseDir()
+	local dir = DataStorage.getFullDataDir and DataStorage:getFullDataDir()
+	return dir or DataStorage:getDataDir()
+end
+
+local CACHE_DIR = getBaseDir() .. "/cache/opds_plus/covers"
 
 local function ensureDir(path)
 	if lfs.attributes(path, "mode") == "directory" then
