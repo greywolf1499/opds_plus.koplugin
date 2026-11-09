@@ -2,6 +2,7 @@ local BD = require("ui/bidi")
 local ConfirmBox = require("ui/widget/confirmbox")
 local DataStorage = require("datastorage")
 local Dispatcher = require("dispatcher")
+local NetworkMgr = require("ui/network/manager")
 local OPDSBrowser = require("ui.browser")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
@@ -218,13 +219,13 @@ function OPDS:_createBrowserInstance()
 end
 
 function OPDS:_startSyncFromDispatcher(force_sync)
-    -- For gesture-triggered actions, create an off-screen browser context if needed.
-    if not self.opds_browser then
-        self.opds_browser = self:_createBrowserInstance()
-    end
-
-    self.opds_browser.sync_force = force_sync
-    self.opds_browser:checkSyncDownload()
+    NetworkMgr:runWhenConnected(function()
+        -- Syncing overwrites the browser's catalog credentials, so never reuse the browser the user may have open.
+        -- This one is not shown and is not kept in self.opds_browser, which is only for the visible browser.
+        local browser = self:_createBrowserInstance()
+        browser.sync_force = force_sync
+        browser:checkSyncDownload()
+    end)
 end
 
 function OPDS:onStartOPDSSyncAllCatalogs()
