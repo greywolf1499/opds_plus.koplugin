@@ -2,6 +2,7 @@ local BD = require("ui/bidi")
 local ConfirmBox = require("ui/widget/confirmbox")
 local DataStorage = require("datastorage")
 local Dispatcher = require("dispatcher")
+local ImageLoader = require("services.image_loader")
 local NetworkMgr = require("ui/network/manager")
 local OPDSBrowser = require("ui.browser")
 local UIManager = require("ui/uimanager")
@@ -35,6 +36,7 @@ local OPDS = WidgetContainer:extend {
 function OPDS:init()
     -- Initialize settings
     local settings_manager = Settings:new(self.opds_settings_file)
+    self.settings_manager = settings_manager
     self.opds_settings = settings_manager.storage
     self.settings = settings_manager.data
 
@@ -320,6 +322,14 @@ function OPDS:onFlushSettings()
         self.opds_settings:flush()
         self.updated = nil
     end
+end
+
+-- Called by KOReader's plugin manager for "Delete plugin and settings". Downloaded books are left alone.
+-- The plugin folder may already be gone when this runs, so it must not load any modules lazily.
+function OPDS:deletePluginSettings()
+    self.settings_manager:delete()
+    ImageLoader.purgeCache()
+    self.updated = nil
 end
 
 return OPDS

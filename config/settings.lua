@@ -63,6 +63,14 @@ function Settings:flush()
 	self.storage:flush()
 end
 
+--- Delete the settings file and its backup from disk
+-- Dropping the file path turns any later flush of the shared storage into a no-op, so nothing recreates the file.
+function Settings:delete()
+	self.storage:purge()
+	os.remove(self.settings_file .. ".old")
+	self.storage.file = nil
+end
+
 --- Initialize all default settings
 function Settings:initializeDefaults()
 	-- Cover settings
