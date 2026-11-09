@@ -35,6 +35,7 @@ local T = require("ffi/util").template
 
 local Constants = require("models.constants")
 local OPDSPSE = require("services.kavita")
+local CatalogUtils = require("utils.catalog_utils")
 
 local BookInfoDialog = {}
 
@@ -123,11 +124,13 @@ local function showFormatSelectionDialog(browser, item, downloadable, add_to_que
 					local local_path = DownloadManager.getLocalDownloadPath(
 						browser, filename, dl.filetype, dl.acquisition.href)
 
+					local description = CatalogUtils.getDescription(item)
+
 					if add_to_queue then
 						DownloadManager.addToDownloadQueue(browser, {
 							file     = local_path,
 							url      = dl.acquisition.href,
-							info     = type(item.content) == "string" and util.htmlToPlainTextIfHtml(item.content) or "",
+							info     = description,
 							catalog  = browser.root_catalog_title,
 							username = browser.root_catalog_username,
 							password = browser.root_catalog_password,
@@ -135,7 +138,7 @@ local function showFormatSelectionDialog(browser, item, downloadable, add_to_que
 					else
 						DownloadManager.checkDownloadFile(browser, local_path, dl.acquisition.href,
 							browser.root_catalog_username, browser.root_catalog_password,
-							browser.file_downloaded_callback)
+							browser.file_downloaded_callback, { description = description })
 					end
 				end,
 			},
@@ -452,7 +455,7 @@ function BookInfoDialog.build(browser, item)
 						browser, filename, dl.filetype, dl.acquisition.href)
 					DownloadManager.checkDownloadFile(browser, local_path, dl.acquisition.href,
 						browser.root_catalog_username, browser.root_catalog_password,
-						browser.file_downloaded_callback)
+						browser.file_downloaded_callback, { description = CatalogUtils.getDescription(item) })
 				end,
 			})
 		else
@@ -478,7 +481,7 @@ function BookInfoDialog.build(browser, item)
 					DownloadManager.addToDownloadQueue(browser, {
 						file     = local_path,
 						url      = dl.acquisition.href,
-						info     = type(item.content) == "string" and util.htmlToPlainTextIfHtml(item.content) or "",
+						info     = CatalogUtils.getDescription(item),
 						catalog  = browser.root_catalog_title,
 						username = browser.root_catalog_username,
 						password = browser.root_catalog_password,

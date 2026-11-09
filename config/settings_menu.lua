@@ -350,6 +350,22 @@ function SettingsMenu.create(plugin)
 					},
 				},
 				{
+					text = _("Save Description with Downloads"),
+					checked_func = function()
+						return plugin:getSetting("save_book_description") ~= false
+					end,
+					callback = function()
+						local current = plugin:getSetting("save_book_description") ~= false
+						plugin:saveSetting("save_book_description", not current)
+						UIManager:show(InfoMessage:new {
+							text = not current and
+								_("Descriptions will be saved with downloaded books.") or
+								_("Descriptions will no longer be saved with downloaded books."),
+							timeout = 2,
+						})
+					end,
+				},
+				{
 					text = _("Developer"),
 					sub_item_table = {
 						{
