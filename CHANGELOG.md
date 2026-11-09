@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 ## [Unreleased]
 
 ### Added
+- **Thumbnails on Navigation Entries**: Entries that only open a sub-catalog, such as a series in a comic server's feed, now show their thumbnail in list and grid view when the server provides one. "Thumbnails on Navigation Entries" under Settings > Cover Settings turns this off (Issue #24).
 - **Default Catalog**: Settings > Default Catalog picks the catalog that opens as soon as you browse catalogs. It opens on top of the list of catalogs, so Back returns to the list to pick another one. Choosing "None" starts from the list as before (Issue #89).
 - **Parallel Cover Downloads**: Covers are downloaded in background processes, two at a time, so pages of covers fill in faster and a slow server no longer freezes the screen while a cover downloads. "Parallel Cover Downloads" under Settings > Cover Settings turns this off. Where a background process can't be started, covers are downloaded one at a time as before (PR #98 by @demrom).
 - **Keyboard and D-pad Navigation**: Devices with hardware keys can browse without the touchscreen. Back walks up one catalog level, Home closes the browser, the D-pad moves the focus item by item (cell by cell in the grid) with an underline showing where it is, and Enter opens the focused item. List covers are slightly smaller on these devices to leave room for the underline (PR #93 by @iav).
