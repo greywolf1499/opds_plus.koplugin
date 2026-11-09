@@ -105,6 +105,7 @@ function CoverLoader.loadVisibleCovers(menu, debug_log)
 		cache_max_mb = menu.settings.cover_cache_max_mb
 		cache_ttl_minutes = menu.settings.cover_cache_ttl_minutes
 	end
+	local parallel_downloads = not menu.settings or menu.settings.cover_parallel_downloads ~= false
 
 	-- Create render callback
 	local render_callback = CoverLoader.createRenderCallback(
@@ -121,7 +122,8 @@ function CoverLoader.loadVisibleCovers(menu, debug_log)
 		password,
 		cache_enabled,
 		cache_max_mb,
-		cache_ttl_minutes
+		cache_ttl_minutes,
+		parallel_downloads
 	)
 
 	-- Clear the pending items

@@ -32,7 +32,11 @@ end
 -- file: a pipe could fill up and block the child before it exits. Returns nil
 -- when no subprocess could be started.
 local function startFetch(url, username, password)
-    local path = os.tmpname()
+    -- os.tmpname() raises where /tmp does not exist (Android).
+    local has_path, path = pcall(os.tmpname)
+    if not has_path then
+        return nil
+    end
     local parent = ffi.C.getpid()
     local pid = FFIUtil.runInSubProcess(function()
         if ffi.os == "Linux" then
@@ -147,6 +151,7 @@ function Batch:loadImages(urls)
 
         -- Cache hits share the per-tick budget, so decoding them is spread out too.
         local budget = Constants.IMAGE_LOADER.MAX_PARALLEL
+        local blocked = false
         while budget > 0 and #jobs < Constants.IMAGE_LOADER.MAX_PARALLEL and next_index <= #urls do
             budget = budget - 1
             local url = urls[next_index]
@@ -162,12 +167,13 @@ function Batch:loadImages(urls)
                     stale_content = cached.content
                 end
                 Debug.log("ImageLoader:", "Fetching cover with auth:", self.username and "yes" or "no")
-                local job = startFetch(url, self.username, self.password)
+                local job = self.parallel_downloads ~= false and startFetch(url, self.username, self.password)
                 if job then
                     job.stale_content = stale_content
                     table.insert(jobs, job)
                 else
-                    -- No subprocess available: fetch in this process, as before.
+                    -- Parallel downloads are off or no subprocess could be started:
+                    -- fetch in this process, as before.
                     local success, content = HttpClient.getUrlContent(
                         url,
                         Constants.TIMEOUTS.IMAGE_LOAD,
@@ -176,16 +182,22 @@ function Batch:loadImages(urls)
                         self.password
                     )
                     finish(url, success and content or nil, stale_content)
+                    -- The fetch blocked the UI: end this tick so it can run before the next cover.
+                    blocked = true
                 end
             end
             if stop_loading then
                 return
             end
+            if blocked then
+                break
+            end
         end
 
         self.loading = #jobs > 0 or next_index <= #urls
         if self.loading then
-            UIManager:scheduleIn(Constants.IMAGE_LOADER.POLL_INTERVAL, poll)
+            local delay = blocked and Constants.UI_TIMING.IMAGE_BATCH_DELAY or Constants.IMAGE_LOADER.POLL_INTERVAL
+            UIManager:scheduleIn(delay, poll)
         end
     end
 
@@ -215,14 +227,25 @@ end
 -- @param cover_cache_enabled boolean|nil Whether to use in-memory cover cache (default: true)
 -- @param cache_max_mb number|nil Maximum cache size in MB
 -- @param cache_ttl_minutes number|nil Cache TTL in minutes
+-- @param parallel_downloads boolean|nil Download covers in subprocesses (default: true)
 -- @return table, function Batch instance and halt function
-function ImageLoader:loadImages(urls, callback, username, password, cover_cache_enabled, cache_max_mb, cache_ttl_minutes)
+function ImageLoader:loadImages(
+    urls,
+    callback,
+    username,
+    password,
+    cover_cache_enabled,
+    cache_max_mb,
+    cache_ttl_minutes,
+    parallel_downloads
+)
     local batch = Batch:new {
         username = username,
         password = password,
         cover_cache_enabled = cover_cache_enabled ~= false,
         cache_max_mb = cache_max_mb,
         cache_ttl_minutes = cache_ttl_minutes,
+        parallel_downloads = parallel_downloads ~= false,
     }
     batch.callback = callback
     local halt = batch:loadImages(urls)

@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 ## [Unreleased]
 
 ### Added
+- **Parallel Cover Downloads**: Covers are downloaded in background processes, two at a time, so pages of covers fill in faster and a slow server no longer freezes the screen while a cover downloads. "Parallel Cover Downloads" under Settings > Cover Settings turns this off. Where a background process can't be started, covers are downloaded one at a time as before (PR #98 by @demrom).
 - **Keyboard and D-pad Navigation**: Devices with hardware keys can browse without the touchscreen. Back walks up one catalog level, Home closes the browser, the D-pad moves the focus item by item (cell by cell in the grid) with an underline showing where it is, and Enter opens the focused item. List covers are slightly smaller on these devices to leave room for the underline (PR #93 by @iav).
 
 ### Changed

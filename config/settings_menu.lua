@@ -53,6 +53,22 @@ function SettingsMenu.create(plugin)
 							end,
 						},
 						{
+							text = _("Parallel Cover Downloads"),
+							checked_func = function()
+								return plugin:getSetting("cover_parallel_downloads") ~= false
+							end,
+							callback = function()
+								local current = plugin:getSetting("cover_parallel_downloads") ~= false
+								plugin:saveSetting("cover_parallel_downloads", not current)
+								UIManager:show(InfoMessage:new {
+									text = not current and
+										_("Parallel cover downloads enabled.\n\nSeveral covers are downloaded at once.") or
+										_("Parallel cover downloads disabled.\n\nCovers are downloaded one at a time."),
+									timeout = 2,
+								})
+							end,
+						},
+						{
 							text = _("Advanced"),
 							sub_item_table = {
 								{
