@@ -176,6 +176,7 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 		if author then
 			item.text = title .. " - " .. author
 		end
+		item.series, item.series_index = CatalogUtils.parseEntrySeries(entry)
 
 		-- Add cover information for display. An entry that only opens a sub-catalog, such as a series in a
 		-- comic server's feed, can carry artwork too.

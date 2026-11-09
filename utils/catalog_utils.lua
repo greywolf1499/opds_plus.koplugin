@@ -46,13 +46,11 @@ function CatalogUtils.parseEntryTitle(entry_title, default)
 	return default
 end
 
---- Parse author from entry (handles various formats)
--- @param entry_author table Author information from OPDS entry
+--- Parse one author element (handles various formats)
+-- @param entry_author table A single <author> element
 -- @param default string Default value if parsing fails
 -- @return string|nil Parsed author name or nil
-function CatalogUtils.parseEntryAuthor(entry_author, default)
-	default = default or "Unknown Author"
-
+local function parseAuthorName(entry_author, default)
 	if type(entry_author) ~= "table" or not entry_author.name then
 		return nil
 	end
@@ -71,6 +69,147 @@ function CatalogUtils.parseEntryAuthor(entry_author, default)
 	end
 
 	return default
+end
+
+--- Parse author from entry (handles various formats)
+-- @param entry_author table Author information from OPDS entry: the list of its <author>
+--        elements, or a single <author> element
+-- @param default string Default value if parsing fails
+-- @return string|nil Parsed author names joined by ", " or nil
+function CatalogUtils.parseEntryAuthor(entry_author, default)
+	default = default or "Unknown Author"
+
+	-- Repeated <author> elements arrive as a list, a lone element as a table with a name
+	if type(entry_author) == "table" and entry_author.name == nil and #entry_author > 0 then
+		local names = {}
+		for _, author in ipairs(entry_author) do
+			local name = parseAuthorName(author, default)
+			if name then
+				table.insert(names, name)
+			end
+		end
+		if #names > 0 then
+			return table.concat(names, ", ")
+		end
+		return nil
+	end
+
+	return parseAuthorName(entry_author, default)
+end
+
+local function trimmed(text)
+	if type(text) ~= "string" then
+		return nil
+	end
+	text = util.trim(text)
+	return text ~= "" and text or nil
+end
+
+--- Series name and index from <dc:series> and <dc:series_index> (Calibre-Web-Automated),
+-- or <dc:seriesPosition> (dir2opds)
+local function seriesFromElements(entry)
+	local name = trimmed(entry["dc:series"])
+	if not name then
+		return nil
+	end
+	return name, entry["dc:series_index"] or entry["dc:seriesPosition"]
+end
+
+--- Whether the <meta> refines the element with this id.
+-- luxl skips punctuation at the start of an attribute value, so refines="#series" is read as "series".
+local function refersTo(meta, id)
+	return type(meta.refines) == "string" and meta.refines:gsub("^#", "") == id
+end
+
+--- Series name and index from EPUB3 collection metadata (Grimmory):
+-- <meta property="belongs-to-collection" id="series">Name</meta> and
+-- <meta property="group-position" refines="#series">3</meta>
+local function seriesFromMeta(metas)
+	if type(metas) ~= "table" then
+		return nil
+	end
+
+	local name, id
+	for _, meta in ipairs(metas) do
+		if type(meta) == "table" and meta.property == "belongs-to-collection" and trimmed(meta["#text"]) then
+			name, id = trimmed(meta["#text"]), meta.id
+			break
+		end
+	end
+	if not name then
+		return nil
+	end
+
+	local index
+	if id then
+		for _, meta in ipairs(metas) do
+			if type(meta) == "table" and meta.property == "group-position" and refersTo(meta, id) then
+				index = meta["#text"]
+				break
+			end
+		end
+	end
+	return name, index
+end
+
+-- Calibre and Calibre-Web start the content with the optional lines RATING, TAGS and SERIES
+local SERIES_LINE_LIMIT = 3
+
+--- Series name and index from the "SERIES: Name [3]" line of the content (Calibre, Calibre-Web)
+local function seriesFromContent(markup)
+	if type(markup) ~= "string" then
+		return nil
+	end
+
+	local lines_read = 0
+	for line in (markup .. "<br />"):gmatch("(.-)<br%s*/?>") do
+		lines_read = lines_read + 1
+		if lines_read > SERIES_LINE_LIMIT then
+			break
+		end
+
+		local text = line:gsub("^%s*<div[^>]*>", "")
+		local series = trimmed(text:match("^%s*SERIES:([^<]*)"))
+		if series then
+			local name, index = series:match("^(.-)%s*%[(%d[%d%.]*)%]$")
+			if name then
+				return trimmed(name), index
+			end
+			return series
+		end
+	end
+	return nil
+end
+
+--- Shorten an index such as "20.0" or "3.50" to "20" or "3.5"
+local function normalizeSeriesIndex(index)
+	index = trimmed(index)
+	if index and index:match("^%d+%.%d*$") then
+		index = index:gsub("0+$", "")
+		index = index:gsub("%.$", "")
+	end
+	return index
+end
+
+--- Get the series of an entry and the position of the book in it
+-- @param entry table Entry from the parsed OPDS feed
+-- @return string|nil, string|nil Series name and index, nil when the entry has no series
+function CatalogUtils.parseEntrySeries(entry)
+	local name, index = seriesFromElements(entry)
+	if not name then
+		name, index = seriesFromMeta(entry.meta)
+	end
+	if not name then
+		name, index = seriesFromContent(entry.content)
+	end
+	if not name then
+		name, index = seriesFromContent(entry.summary)
+	end
+	if not name then
+		return nil
+	end
+
+	return name, normalizeSeriesIndex(index)
 end
 
 --- Extract count and last_read from PSE stream link attributes

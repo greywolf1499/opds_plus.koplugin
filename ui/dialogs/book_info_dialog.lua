@@ -36,6 +36,7 @@ local T = require("ffi/util").template
 local Constants = require("models.constants")
 local OPDSPSE = require("services.kavita")
 local CatalogUtils = require("utils.catalog_utils")
+local UIUtils = require("ui.utils")
 
 local BookInfoDialog = {}
 
@@ -318,6 +319,15 @@ function BookInfoDialog.build(browser, item)
 		table.insert(info_parts, {
 			label = _("Author"),
 			value = item.author,
+		})
+	end
+
+	-- Series
+	local series_text = UIUtils.formatSeriesInfo(item.series, item.series_index)
+	if series_text then
+		table.insert(info_parts, {
+			label = _("Series"),
+			value = series_text,
 		})
 	end
 
