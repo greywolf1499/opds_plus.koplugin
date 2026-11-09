@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-11-09
+
+### Changed
+- **CI Maintenance**: Updated GitHub Actions dependencies for checkout and release publishing (PRs #81 and #88).
+
 ### Fixed
 - **Cover Cache on Kindle**: The cover cache directory now resolves to an absolute path, so covers are cached on devices where KOReader runs from a relative directory (Issue #86, PR #87 by @cardoso42).
 - **Cover Cache Keys**: Cache file names no longer change between LuaJIT's interpreter and compiled code, which made cached covers miss and download again (PR #97 by @demrom).
@@ -130,6 +135,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 - Derivative of KOReader's built-in OPDS plugin with major UI/UX enhancements.
 - Licensed under AGPLv3 consistent with KOReader.
 
+[1.2.1]: https://github.com/greywolf1499/opds_plus.koplugin/releases/tag/v1.2.1
 [1.2.0]: https://github.com/greywolf1499/opds_plus.koplugin/releases/tag/v1.2.0
 [1.1.0]: https://github.com/greywolf1499/opds_plus.koplugin/releases/tag/v1.1.0
 [1.0.0]: https://github.com/greywolf1499/opds_plus.koplugin/releases/tag/v1.0.0
