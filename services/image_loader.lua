@@ -146,4 +146,9 @@ function ImageLoader.clearCache()
     CoverCache.clear()
 end
 
+--- Remove the disk cover cache together with its directories.
+function ImageLoader.purgeCache()
+    CoverCache.purge()
+end
+
 return ImageLoader

@@ -2,6 +2,8 @@ local BD = require("ui/bidi")
 local ConfirmBox = require("ui/widget/confirmbox")
 local DataStorage = require("datastorage")
 local Dispatcher = require("dispatcher")
+local ImageLoader = require("services.image_loader")
+local NetworkMgr = require("ui/network/manager")
 local OPDSBrowser = require("ui.browser")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
@@ -34,6 +36,7 @@ local OPDS = WidgetContainer:extend {
 function OPDS:init()
     -- Initialize settings
     local settings_manager = Settings:new(self.opds_settings_file)
+    self.settings_manager = settings_manager
     self.opds_settings = settings_manager.storage
     self.settings = settings_manager.data
 
@@ -218,13 +221,13 @@ function OPDS:_createBrowserInstance()
 end
 
 function OPDS:_startSyncFromDispatcher(force_sync)
-    -- For gesture-triggered actions, create an off-screen browser context if needed.
-    if not self.opds_browser then
-        self.opds_browser = self:_createBrowserInstance()
-    end
-
-    self.opds_browser.sync_force = force_sync
-    self.opds_browser:checkSyncDownload()
+    NetworkMgr:runWhenConnected(function()
+        -- Syncing overwrites the browser's catalog credentials, so never reuse the browser the user may have open.
+        -- This one is not shown and is not kept in self.opds_browser, which is only for the visible browser.
+        local browser = self:_createBrowserInstance()
+        browser.sync_force = force_sync
+        browser:checkSyncDownload()
+    end)
 end
 
 function OPDS:onStartOPDSSyncAllCatalogs()
@@ -319,6 +322,14 @@ function OPDS:onFlushSettings()
         self.opds_settings:flush()
         self.updated = nil
     end
+end
+
+-- Called by KOReader's plugin manager for "Delete plugin and settings". Downloaded books are left alone.
+-- The plugin folder may already be gone when this runs, so it must not load any modules lazily.
+function OPDS:deletePluginSettings()
+    self.settings_manager:delete()
+    ImageLoader.purgeCache()
+    self.updated = nil
 end
 
 return OPDS

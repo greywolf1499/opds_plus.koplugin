@@ -176,4 +176,12 @@ function CoverCache.clear()
 	end
 end
 
+--- Remove all cached covers together with the plugin's cache directories.
+-- lfs.rmdir only removes empty directories, so files that are not ours are never deleted.
+function CoverCache.purge()
+	CoverCache.clear()
+	lfs.rmdir(CACHE_DIR)
+	lfs.rmdir(CACHE_DIR:match("^(.*)/[^/]+$"))
+end
+
 return CoverCache

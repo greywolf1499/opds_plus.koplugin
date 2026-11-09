@@ -11,6 +11,7 @@ local UIManager = require("ui/uimanager")
 local logger = require("logger")
 local util = require("util")
 local _ = require("gettext")
+local T = require("ffi/util").template
 
 local Constants = require("models.constants")
 local DownloadManager = require("core.download_manager")
@@ -120,6 +121,25 @@ function SyncManager.checkAndStartSync(browser, server_idx)
 		return
 	end
 
+	local servers_to_sync = {}
+	if server_idx then
+		-- A specific server is synced even when its sync option is off (first item is "Downloads", so subtract 1)
+		servers_to_sync[1] = browser.servers[server_idx - 1]
+	else
+		for _, server in ipairs(browser.servers) do
+			if server.sync then
+				table.insert(servers_to_sync, server)
+			end
+		end
+	end
+
+	if #servers_to_sync == 0 then
+		UIManager:show(InfoMessage:new {
+			text = _("No catalogs are set to sync.\n\nLong-press a catalog, tap Edit and tick “Sync catalog”."),
+		})
+		return
+	end
+
 	browser.sync = true
 	local info = InfoMessage:new {
 		text = _("Synchronizing lists…"),
@@ -127,19 +147,23 @@ function SyncManager.checkAndStartSync(browser, server_idx)
 	UIManager:show(info)
 	UIManager:forceRePaint()
 
-	if server_idx then
-		-- Sync specific server (first item is "Downloads", so subtract 1)
-		SyncManager.fillPendingSyncs(browser, browser.servers[server_idx - 1])
-	else
-		-- Sync all servers with sync enabled
-		for _, server in ipairs(browser.servers) do
-			if server.sync then
-				SyncManager.fillPendingSyncs(browser, server)
-			end
+	-- A failing feed must not leave the progress message on screen or the browser stuck in sync mode.
+	local ok, err = pcall(function()
+		for _, server in ipairs(servers_to_sync) do
+			SyncManager.fillPendingSyncs(browser, server)
 		end
-	end
+	end)
 
 	UIManager:close(info)
+	browser.sync = false
+
+	if not ok then
+		logger.err("OPDS Plus: sync failed:", err)
+		UIManager:show(InfoMessage:new {
+			text = T(_("Sync failed:\n%1"), tostring(err)),
+		})
+		return
+	end
 
 	if #browser.pending_syncs > 0 then
 		Trapper:wrap(function()
@@ -150,8 +174,6 @@ function SyncManager.checkAndStartSync(browser, server_idx)
 			text = _("Up to date!"),
 		})
 	end
-
-	browser.sync = false
 end
 
 --- Fill pending syncs list for a specific server
@@ -181,8 +203,8 @@ function SyncManager.fillPendingSyncs(browser, server)
 				sub_table = SyncManager.getSyncDownloadList(browser, entry.url) or {}
 			end
 			if #sub_table > 0 then
-				-- The first element seems to be most compatible. Second element has most options
-				item = sub_table[2]
+				-- Second element has most options, but a sub-feed may only have one entry
+				item = sub_table[2] or sub_table[1]
 			else
 				item = entry
 			end
@@ -243,8 +265,10 @@ function SyncManager.getSyncDownloadList(browser, url_arg)
 		local acquisitions_empty = false
 
 		-- Handle Project Gutenberg style entries
+		-- Entries without links (e.g. a notice at the top of the feed) have no url and no acquisitions
 		while #sub_table[count].acquisitions == 0 do
-			if util.stringEndsWith(sub_table[count].url, ".opds") then
+			local entry_url = sub_table[count].url
+			if entry_url and util.stringEndsWith(entry_url, ".opds") then
 				acquisitions_empty = true
 				break
 			end
@@ -260,7 +284,7 @@ function SyncManager.getSyncDownloadList(browser, url_arg)
 		if acquisitions_empty then
 			first_href = sub_table[count].url
 		else
-			first_href = sub_table[1].acquisitions[1].href
+			first_href = sub_table[count].acquisitions[1].href
 		end
 
 		if first_href == browser.sync_server.last_download and not browser.sync_force then
@@ -276,7 +300,7 @@ function SyncManager.getSyncDownloadList(browser, url_arg)
 					href = nil
 				end
 			else
-				href = entry.acquisitions[1].href
+				href = entry.acquisitions[1] and entry.acquisitions[1].href
 			end
 
 			if href then
