@@ -37,6 +37,10 @@ local function unescape(str)
     end)
 end
 
+-- Elements that can occur several times inside their parent, so they are collected
+-- into a list. Any other repeated element keeps only its last occurrence.
+local LIST_ELEMENTS = { entry = true, link = true, Url = true, author = true }
+
 function OPDSParser:createFlatXTable(xlex, curr_element)
     curr_element = curr_element or {}
 
@@ -54,7 +58,7 @@ function OPDSParser:createFlatXTable(xlex, curr_element)
                 -- if it does, if it's a table, add to it
                 -- if it doesn't, then add a table
                 local tab = self:createFlatXTable(xlex)
-                if txt == "entry" or txt == "link" or txt == "Url" then
+                if LIST_ELEMENTS[txt] then
                     if curr_element[txt] == nil then
                         curr_element[txt] = {}
                     end

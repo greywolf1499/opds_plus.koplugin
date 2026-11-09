@@ -46,13 +46,11 @@ function CatalogUtils.parseEntryTitle(entry_title, default)
 	return default
 end
 
---- Parse author from entry (handles various formats)
--- @param entry_author table Author information from OPDS entry
+--- Parse one author element (handles various formats)
+-- @param entry_author table A single <author> element
 -- @param default string Default value if parsing fails
 -- @return string|nil Parsed author name or nil
-function CatalogUtils.parseEntryAuthor(entry_author, default)
-	default = default or "Unknown Author"
-
+local function parseAuthorName(entry_author, default)
 	if type(entry_author) ~= "table" or not entry_author.name then
 		return nil
 	end
@@ -71,6 +69,32 @@ function CatalogUtils.parseEntryAuthor(entry_author, default)
 	end
 
 	return default
+end
+
+--- Parse author from entry (handles various formats)
+-- @param entry_author table Author information from OPDS entry: the list of its <author>
+--        elements, or a single <author> element
+-- @param default string Default value if parsing fails
+-- @return string|nil Parsed author names joined by ", " or nil
+function CatalogUtils.parseEntryAuthor(entry_author, default)
+	default = default or "Unknown Author"
+
+	-- Repeated <author> elements arrive as a list, a lone element as a table with a name
+	if type(entry_author) == "table" and entry_author.name == nil and #entry_author > 0 then
+		local names = {}
+		for _, author in ipairs(entry_author) do
+			local name = parseAuthorName(author, default)
+			if name then
+				table.insert(names, name)
+			end
+		end
+		if #names > 0 then
+			return table.concat(names, ", ")
+		end
+		return nil
+	end
+
+	return parseAuthorName(entry_author, default)
 end
 
 --- Extract count and last_read from PSE stream link attributes
