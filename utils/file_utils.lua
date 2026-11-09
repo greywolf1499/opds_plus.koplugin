@@ -5,15 +5,17 @@ local util = require("util")
 
 local FileUtils = {}
 
---- Add file extension if missing
+--- Add file extension if missing, or if it is not one the reader can open
 -- @param filename string Original filename
 -- @param filetype string Desired file extension (without dot)
+-- @param is_known function|nil Tells whether a suffix can be opened; without it only a missing one is replaced
 -- @return string Filename with extension
-function FileUtils.ensureExtension(filename, filetype)
+function FileUtils.ensureExtension(filename, filetype, is_known)
 	if not filename or not filetype then return filename end
 
+	-- util.getFileNameSuffix returns "" for a name without a dot, never nil
 	local current_suffix = util.getFileNameSuffix(filename)
-	if not current_suffix then
+	if current_suffix == "" or (is_known and not is_known(current_suffix)) then
 		filename = filename .. "." .. filetype:lower()
 	end
 

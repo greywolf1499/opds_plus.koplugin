@@ -432,11 +432,12 @@ function OPDSBrowser:onHoldReturn()
     return true
 end
 
--- Menu action on next-page chevron tap (request and show more catalog entries)
-function OPDSBrowser:onNextPage(fill_only)
-    -- Fetching blocks the UI, and a feed page holds several screens, so ask the server only
-    -- when running out: one page ahead, so the end is not felt. self.page_num comes from menu.lua.
-    while self.page + 2 > self.page_num do
+-- Fetch more catalog entries when `page` (default: the current one) is close to the last one fetched.
+-- Fetching blocks the UI, and a feed page holds several screens, so ask the server only
+-- when running out: one page ahead, so the end is not felt. self.page_num comes from menu.lua.
+function OPDSBrowser:fetchAhead(page)
+    page = page or self.page
+    while page + 2 > self.page_num do
         local hrefs = self.item_table.hrefs
         if hrefs and hrefs.next then
             if not self:appendCatalog(hrefs.next) then
@@ -446,11 +447,25 @@ function OPDSBrowser:onNextPage(fill_only)
             break
         end
     end
+end
+
+-- Menu action on next-page chevron tap (request and show more catalog entries)
+function OPDSBrowser:onNextPage(fill_only)
+    self:fetchAhead()
     if not fill_only then
         -- We also *do* want to paginate, so call the base class.
         OPDSCoverMenu.onNextPage(self)
     end
     return true
+end
+
+-- The last-page chevron and the page number dialog land on the last page fetched so far. Fetch ahead
+-- for them too, or the next-page chevron stays disabled and the rest of the feed is out of reach.
+function OPDSBrowser:onGotoPage(page)
+    if page >= self.page_num then
+        self:fetchAhead(page)
+    end
+    return OPDSCoverMenu.onGotoPage(self, page)
 end
 
 function OPDSBrowser:showDownloadList()

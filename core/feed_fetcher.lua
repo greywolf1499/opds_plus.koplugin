@@ -3,6 +3,7 @@
 
 local BD = require("ui/bidi")
 local Cache = require("cache")
+local DocumentRegistry = require("document/documentregistry")
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
 local http = require("socket.http")
@@ -32,16 +33,21 @@ local CatalogCache = Cache:new {
 -- @param headers_only boolean If true, only fetch headers (HEAD request)
 -- @param username string|nil Optional HTTP auth username
 -- @param password string|nil Optional HTTP auth password
+-- @param cached table|nil Earlier copy of the feed ({ xml, etag, last_modified }) the server may confirm unchanged
 -- @return string|table XML content or headers, nil on error
-function FeedFetcher.fetchFeed(item_url, headers_only, username, password)
+-- @return table|nil Response headers of a GET
+function FeedFetcher.fetchFeed(item_url, headers_only, username, password, cached)
 	local sink = {}
 	socketutil:set_timeout(socketutil.LARGE_BLOCK_TIMEOUT, socketutil.LARGE_TOTAL_TIMEOUT)
+	local own_headers = { ["Accept-Encoding"] = "identity" }
+	if cached and not headers_only then
+		own_headers["If-None-Match"] = cached.etag
+		own_headers["If-Modified-Since"] = cached.last_modified
+	end
 	local request = {
 		url      = item_url,
 		method   = headers_only and "HEAD" or "GET",
-		headers  = HttpClient.withCustomHeaders(item_url, {
-			["Accept-Encoding"] = "identity",
-		}),
+		headers  = HttpClient.withCustomHeaders(item_url, own_headers),
 		sink     = ltn12.sink.table(sink),
 		user     = username,
 		password = password,
@@ -53,9 +59,13 @@ function FeedFetcher.fetchFeed(item_url, headers_only, username, password)
 		return headers
 	end
 
+	if cached and code == Constants.HTTP_STATUS.NOT_MODIFIED then
+		return cached.xml, headers
+	end
+
 	if code == Constants.HTTP_STATUS.OK then
 		local xml = table.concat(sink)
-		return xml ~= "" and xml
+		return xml ~= "" and xml, headers
 	end
 
 	-- Handle errors
@@ -98,28 +108,22 @@ end
 -- @param debug_callback function|nil Optional debug logging callback
 -- @return table Parsed feed or nil on error
 function FeedFetcher.parseFeed(item_url, username, password, debug_callback)
-	local headers = FeedFetcher.fetchFeed(item_url, true, username, password)
-	local feed_last_modified = headers and headers["last-modified"]
-	local feed
+	-- One request per feed: a server that tags or dates its feeds answers "not modified" when the copy
+	-- kept here is still current, and one that does not just sends the feed.
+	local key = "opds|catalog|" .. item_url
+	local cached = CatalogCache:check(key)
+	local feed, headers = FeedFetcher.fetchFeed(item_url, false, username, password, cached)
 
-	if feed_last_modified then
-		local hash = "opds|catalog|" .. item_url .. "|" .. feed_last_modified
-		feed = CatalogCache:check(hash)
-		if feed then
-			if debug_callback then
-				debug_callback("Cache hit for", item_url)
-			end
-		else
-			if debug_callback then
-				debug_callback("Cache miss, fetching", item_url)
-			end
-			feed = FeedFetcher.fetchFeed(item_url, false, username, password)
-			if feed then
-				CatalogCache:insert(hash, feed)
-			end
+	if feed and cached and feed == cached.xml then
+		if debug_callback then
+			debug_callback("Cache hit for", item_url)
 		end
-	else
-		feed = FeedFetcher.fetchFeed(item_url, false, username, password)
+	elseif feed and headers and (headers["etag"] or headers["last-modified"]) then
+		CatalogCache:insert(key, {
+			xml = feed,
+			etag = headers["etag"],
+			last_modified = headers["last-modified"],
+		})
 	end
 
 	if feed then
@@ -168,7 +172,9 @@ function FeedFetcher.getServerFileName(item_url, filetype, username, password)
 		filename = UrlUtils.extractFilename(item_url)
 	end
 
-	filename = FileUtils.ensureExtension(filename, filetype)
+	filename = FileUtils.ensureExtension(filename, filetype, function(suffix)
+		return DocumentRegistry:hasProvider("dummy." .. suffix)
+	end)
 
 	return filename
 end

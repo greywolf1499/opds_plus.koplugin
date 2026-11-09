@@ -117,7 +117,7 @@ end
 function SyncManager.checkAndStartSync(browser, server_idx)
 	if not browser.settings.sync_dir then
 		UIManager:show(InfoMessage:new {
-			text = _("Please choose a folder for sync downloads first"),
+			text = _("Please choose a folder for sync downloads first.\n\nOpen the menu at the top left of the list of catalogs and tap \"Set sync folder\"."),
 		})
 		return
 	end

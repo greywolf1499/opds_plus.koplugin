@@ -3,6 +3,7 @@
 
 local BD = require("ui/bidi")
 local ConfirmBox = require("ui/widget/confirmbox")
+local Device = require("device")
 local DocSettings = require("docsettings")
 local DocumentRegistry = require("document/documentregistry")
 local InfoMessage = require("ui/widget/infomessage")
@@ -41,13 +42,16 @@ function DownloadManager.getFiletype(link)
 end
 
 -- Get the current download directory based on context
+-- Without a download folder set, use the home folder like KOReader does since koreader/koreader#16263:
+-- on a first launch the last folder is the hidden one holding the quickstart guide.
 -- @param browser table OPDSBrowser instance
 -- @return string Download directory path
 function DownloadManager.getCurrentDownloadDir(browser)
 	if browser.sync then
 		return browser.settings.sync_dir
 	else
-		return G_reader_settings:readSetting("download_dir") or G_reader_settings:readSetting("lastdir")
+		return G_reader_settings:readSetting("download_dir") or G_reader_settings:readSetting("home_dir")
+			or Device.home_dir or G_reader_settings:readSetting("lastdir")
 	end
 end
 
