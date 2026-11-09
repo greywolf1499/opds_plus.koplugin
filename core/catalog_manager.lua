@@ -47,6 +47,9 @@ function CatalogManager.editCatalogFromInput(servers, item_table, fields, item, 
 		-- Editing existing catalog
 		new_idx = item.idx
 		itemnumber = -1
+		-- The edit dialog has no field for the default catalog, so carry it over
+		local old_server = servers[new_idx - 1]
+		new_server.is_default = old_server and old_server.is_default or nil
 	else
 		-- Adding new catalog
 		new_idx = #servers + 2 -- +1 for 0-based, +1 for "Downloads" entry
@@ -102,6 +105,27 @@ function CatalogManager.findCatalogByTitle(servers, title)
 		end
 	end
 	return nil, nil
+end
+
+-- Find the catalog chosen to open on launch
+-- @param servers table List of server configurations
+-- @return table|nil, number|nil Catalog object and index, or nil if none is chosen
+function CatalogManager.findDefaultCatalog(servers)
+	for idx, server in ipairs(servers) do
+		if server.is_default then
+			return server, idx
+		end
+	end
+	return nil, nil
+end
+
+-- Choose the catalog to open on launch; at most one catalog is the default
+-- @param servers table List of server configurations
+-- @param default_server table|nil Catalog to make the default, nil for none
+function CatalogManager.setDefaultCatalog(servers, default_server)
+	for _, server in ipairs(servers) do
+		server.is_default = (server == default_server) or nil
+	end
 end
 
 -- Validate catalog URL

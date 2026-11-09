@@ -298,6 +298,7 @@ end
 function OPDS:onShowOPDSPlusCatalog()
     self.opds_browser = self:_createBrowserInstance()
     UIManager:show(self.opds_browser)
+    self.opds_browser:openDefaultCatalog()
 end
 
 function OPDS:showFileDownloadedDialog(file)
