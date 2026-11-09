@@ -32,7 +32,11 @@ end
 -- file: a pipe could fill up and block the child before it exits. Returns nil
 -- when no subprocess could be started.
 local function startFetch(url, username, password)
-    local path = os.tmpname()
+    -- os.tmpname() raises where /tmp does not exist (Android).
+    local has_path, path = pcall(os.tmpname)
+    if not has_path then
+        return nil
+    end
     local parent = ffi.C.getpid()
     local pid = FFIUtil.runInSubProcess(function()
         if ffi.os == "Linux" then
