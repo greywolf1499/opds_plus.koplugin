@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ### Fixed
 - **Rest of a Long Feed Unreachable**: Jumping to the last page with the end chevron or the page number dialog landed on the last page fetched so far and left the next page button greyed out, so the books after it, such as the rest of a Calibre-Web shelf, could only be reached with a swipe. The next part of the feed is now fetched when you land there, and the button stays usable to the end of the feed (Issue #100).
+- **Downloads Without a File Extension**: A book whose download address has no extension, such as `/download/7`, or ends in one KOReader cannot open, such as `get.php`, was saved under that name and could not be opened. The extension of the chosen format is now added.
 - **Duplicate PDF Download Buttons**: A PDF link whose address does not end in `.pdf` or `/pdf/` was added to the book a second time, with `.pdf` tacked on to an address the server never sent. When the link has a title, as in arXiv's feeds, the book info dialog listed the format twice ("EPUB, PDF, PDF"), the format chooser showed two PDF buttons, and a book with a single PDF asked which format to download. A link that is already a download is no longer added again. A catalog entry titled "pdf" also stays a catalog instead of turning into a book.
 
 ## [1.3.0] - 2026-11-09

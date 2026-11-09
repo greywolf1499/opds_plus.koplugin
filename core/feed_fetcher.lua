@@ -3,6 +3,7 @@
 
 local BD = require("ui/bidi")
 local Cache = require("cache")
+local DocumentRegistry = require("document/documentregistry")
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
 local http = require("socket.http")
@@ -168,7 +169,9 @@ function FeedFetcher.getServerFileName(item_url, filetype, username, password)
 		filename = UrlUtils.extractFilename(item_url)
 	end
 
-	filename = FileUtils.ensureExtension(filename, filetype)
+	filename = FileUtils.ensureExtension(filename, filetype, function(suffix)
+		return DocumentRegistry:hasProvider("dummy." .. suffix)
+	end)
 
 	return filename
 end
