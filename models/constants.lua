@@ -113,6 +113,7 @@ local Constants = {
 		STREAM_START = "\u{23EE}", -- Double triangle left
 		STREAM_NEXT = "\u{23E9}", -- Double triangle right
 		STREAM_RESUME = "\u{25B6}", -- Play triangle
+		SERIES = "\u{2756}", -- Black diamond minus white X, drawn by the bundled FreeSans/FreeSerif fonts
 	},
 
 	-- Default Display Values

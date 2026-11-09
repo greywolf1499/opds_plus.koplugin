@@ -21,6 +21,7 @@ local Screen = Device.screen
 local _ = require("gettext")
 
 local CoverLoader = require("services.cover_loader")
+local Constants = require("models.constants")
 local Debug = require("utils.debug")
 local StateManager = require("core.state_manager")
 
@@ -226,8 +227,7 @@ function OPDSListMenuItem:init()
         table.insert(text_group, VerticalSpan:new { width = text_padding })
 
         local series_face = Font:getFace(info_font, info_size - 1)
-        local icon = "📚 "
-        local full_series = icon .. series_text
+        local full_series = Constants.ICONS.SERIES .. " " .. series_text
         local truncated_series = UIUtils.truncateText(full_series, series_face, text_width)
 
         table.insert(text_group, TextWidget:new {

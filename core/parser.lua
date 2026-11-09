@@ -39,9 +39,14 @@ end
 
 -- Elements that can occur several times inside their parent, so they are collected
 -- into a list. Any other repeated element keeps only its last occurrence.
-local LIST_ELEMENTS = { entry = true, link = true, Url = true, author = true }
+local LIST_ELEMENTS = { entry = true, link = true, Url = true, author = true, meta = true }
 
-function OPDSParser:createFlatXTable(xlex, curr_element)
+-- Elements whose attributes say what their text means, as in
+-- <meta property="group-position" refines="#series">3</meta>. The text is stored
+-- under "#text" next to the attributes instead of replacing them.
+local ATTRIBUTES_WITH_TEXT = { meta = true }
+
+function OPDSParser:createFlatXTable(xlex, curr_element, keep_attributes)
     curr_element = curr_element or {}
 
     local curr_attr_name
@@ -57,7 +62,7 @@ function OPDSParser:createFlatXTable(xlex, curr_element)
 
                 -- if it does, if it's a table, add to it
                 -- if it doesn't, then add a table
-                local tab = self:createFlatXTable(xlex)
+                local tab = self:createFlatXTable(xlex, nil, ATTRIBUTES_WITH_TEXT[txt])
                 if LIST_ELEMENTS[txt] then
                     if curr_element[txt] == nil then
                         curr_element[txt] = {}
@@ -74,7 +79,11 @@ function OPDSParser:createFlatXTable(xlex, curr_element)
             attr_count = attr_count + 1
             curr_attr_name = nil
         elseif event == luxl.EVENT_TEXT then
-            curr_element = unescape(txt)
+            if keep_attributes and attr_count > 0 then
+                curr_element["#text"] = unescape(txt)
+            else
+                curr_element = unescape(txt)
+            end
         elseif event == luxl.EVENT_END then
             return curr_element
         end
