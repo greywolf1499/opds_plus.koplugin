@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 - **Cover Cache on Kindle**: The cover cache directory now resolves to an absolute path, so covers are cached on devices where KOReader runs from a relative directory (Issue #86, PR #87 by @cardoso42).
 - **Cover Cache Keys**: Cache file names no longer change between LuaJIT's interpreter and compiled code, which made cached covers miss and download again (PR #97 by @demrom).
 - **Cover Cache Robustness**: Falls back to KOReader's standard data directory when `getFullDataDir()` is missing or returns nothing, creates relative cache directories in place, and writes cached covers atomically so an interrupted write can no longer leave a truncated cover.
+- **Local Hostnames**: Catalog URLs whose host has no dot, such as `http://booktrove:8083/opds`, are no longer rejected as an invalid hostname (Issue #91, PR #95 by @439qi).
+- **Crawlable Catalogs**: Entries that link to a catalog with the OPDS `crawlable` relation, like the Standard Ebooks "All Ebooks" feed, now open instead of failing with "Cannot get catalog info from nil" (Issue #83).
+- **Truncated Listings**: Entries with an empty `<content/>` tag no longer swallow the entries after them, which cut some listings short (Issue #100).
 
 ### Notes
 - Covers cached by earlier versions are downloaded once more after updating, because the cache file naming changed.
