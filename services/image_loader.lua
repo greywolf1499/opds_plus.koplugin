@@ -151,6 +151,7 @@ function Batch:loadImages(urls)
 
         -- Cache hits share the per-tick budget, so decoding them is spread out too.
         local budget = Constants.IMAGE_LOADER.MAX_PARALLEL
+        local blocked = false
         while budget > 0 and #jobs < Constants.IMAGE_LOADER.MAX_PARALLEL and next_index <= #urls do
             budget = budget - 1
             local url = urls[next_index]
@@ -180,16 +181,22 @@ function Batch:loadImages(urls)
                         self.password
                     )
                     finish(url, success and content or nil, stale_content)
+                    -- The fetch blocked the UI: end this tick so it can run before the next cover.
+                    blocked = true
                 end
             end
             if stop_loading then
                 return
             end
+            if blocked then
+                break
+            end
         end
 
         self.loading = #jobs > 0 or next_index <= #urls
         if self.loading then
-            UIManager:scheduleIn(Constants.IMAGE_LOADER.POLL_INTERVAL, poll)
+            local delay = blocked and Constants.UI_TIMING.IMAGE_BATCH_DELAY or Constants.IMAGE_LOADER.POLL_INTERVAL
+            UIManager:scheduleIn(delay, poll)
         end
     end
 
