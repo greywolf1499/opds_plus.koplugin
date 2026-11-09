@@ -120,6 +120,25 @@ function SyncManager.checkAndStartSync(browser, server_idx)
 		return
 	end
 
+	local servers_to_sync = {}
+	if server_idx then
+		-- A specific server is synced even when its sync option is off (first item is "Downloads", so subtract 1)
+		servers_to_sync[1] = browser.servers[server_idx - 1]
+	else
+		for _, server in ipairs(browser.servers) do
+			if server.sync then
+				table.insert(servers_to_sync, server)
+			end
+		end
+	end
+
+	if #servers_to_sync == 0 then
+		UIManager:show(InfoMessage:new {
+			text = _("No catalogs are set to sync.\n\nLong-press a catalog, tap Edit and tick “Sync catalog”."),
+		})
+		return
+	end
+
 	browser.sync = true
 	local info = InfoMessage:new {
 		text = _("Synchronizing lists…"),
@@ -127,16 +146,8 @@ function SyncManager.checkAndStartSync(browser, server_idx)
 	UIManager:show(info)
 	UIManager:forceRePaint()
 
-	if server_idx then
-		-- Sync specific server (first item is "Downloads", so subtract 1)
-		SyncManager.fillPendingSyncs(browser, browser.servers[server_idx - 1])
-	else
-		-- Sync all servers with sync enabled
-		for _, server in ipairs(browser.servers) do
-			if server.sync then
-				SyncManager.fillPendingSyncs(browser, server)
-			end
-		end
+	for _, server in ipairs(servers_to_sync) do
+		SyncManager.fillPendingSyncs(browser, server)
 	end
 
 	UIManager:close(info)
