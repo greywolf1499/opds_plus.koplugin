@@ -3,9 +3,13 @@
 
 local logger = require("logger")
 local Constants = require("models.constants")
+local RequestHeaders = require("utils.request_headers")
 local Result = require("utils.result")
 
 local HttpClient = {}
+
+-- The live list of catalogs, which is where the custom headers of each catalog are kept
+local catalogs = nil
 
 --- Error codes for HTTP client operations
 HttpClient.ErrorCodes = {
@@ -17,6 +21,29 @@ HttpClient.ErrorCodes = {
     SERVER_ERROR = "SERVER_ERROR",
     INCOMPLETE_CONTENT = "INCOMPLETE_CONTENT",
 }
+
+--- Register the list of catalogs, so requests pick up the custom headers of the catalog they go to
+-- The list is read on every request, so catalogs edited later are seen without registering again
+-- @param servers table|nil List of catalogs
+function HttpClient.setCatalogs(servers)
+    catalogs = servers
+end
+
+--- Get the custom headers a request to a URL should carry
+-- Only a catalog on the same origin as the URL (scheme, host and port) can provide them
+-- @param url string URL the request goes to
+-- @return table|nil Header list, as kept by the catalog
+function HttpClient.customHeadersFor(url)
+    return RequestHeaders.forUrl(catalogs, url)
+end
+
+--- Add the custom headers of the catalog a URL belongs to
+-- @param url string URL the request goes to
+-- @param headers table|nil Headers the request sets itself; these are never replaced
+-- @return table|nil The headers to send
+function HttpClient.withCustomHeaders(url, headers)
+    return RequestHeaders.apply(headers, HttpClient.customHeadersFor(url))
+end
 
 --- Fetch content from a URL
 -- @param url string URL to fetch
@@ -44,6 +71,7 @@ function HttpClient.fetch(url, timeout, maxtime, username, password)
     local request = {
         url      = url,
         method   = "GET",
+        headers  = HttpClient.withCustomHeaders(url),
         sink     = maxtime and socketutil.table_sink(sink) or ltn12.sink.table(sink),
         user     = username,
         password = password,

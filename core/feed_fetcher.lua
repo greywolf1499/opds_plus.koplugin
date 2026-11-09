@@ -15,6 +15,7 @@ local T = require("ffi/util").template
 
 local OPDSParser = require("core.parser")
 local Constants = require("models.constants")
+local HttpClient = require("services.http_client")
 local UrlUtils = require("utils.url_utils")
 local FileUtils = require("utils.file_utils")
 local Result = require("utils.result")
@@ -38,9 +39,9 @@ function FeedFetcher.fetchFeed(item_url, headers_only, username, password)
 	local request = {
 		url      = item_url,
 		method   = headers_only and "HEAD" or "GET",
-		headers  = {
+		headers  = HttpClient.withCustomHeaders(item_url, {
 			["Accept-Encoding"] = "identity",
-		},
+		}),
 		sink     = ltn12.sink.table(sink),
 		user     = username,
 		password = password,

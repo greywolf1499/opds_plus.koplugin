@@ -21,6 +21,7 @@ local N_ = _.ngettext
 local T = require("ffi/util").template
 
 local Constants = require("models.constants")
+local HttpClient = require("services.http_client")
 local StateManager = require("core.state_manager")
 
 local DownloadManager = {}
@@ -137,9 +138,9 @@ function DownloadManager.downloadFile(browser, local_path, remote_url, username,
 		socketutil:set_timeout(socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT)
 		code, headers, status = socket.skip(1, http.request {
 			url      = remote_url,
-			headers  = {
+			headers  = HttpClient.withCustomHeaders(remote_url, {
 				["Accept-Encoding"] = "identity",
-			},
+			}),
 			sink     = ltn12.sink.file(io.open(local_path, "w")),
 			user     = username,
 			password = password,

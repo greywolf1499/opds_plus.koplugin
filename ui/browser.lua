@@ -31,6 +31,9 @@ local BookInfoDialog = require("ui.dialogs.book_info_dialog")
 -- Import the feed fetcher
 local FeedFetcher = require("core.feed_fetcher")
 
+-- Import the HTTP client
+local HttpClient = require("services.http_client")
+
 -- Import the catalog manager
 local CatalogManager = require("core.catalog_manager")
 
@@ -74,6 +77,8 @@ local OPDSBrowser = OPDSCoverMenu:extend {
 }
 
 function OPDSBrowser:init()
+    -- Every browser shares the same live list of catalogs, which holds their custom HTTP headers
+    HttpClient.setCatalogs(self.servers)
     self.item_table = self:genItemTableFromRoot()
     self.catalog_title = nil
     self.title_bar_left_icon = Constants.ICONS.MENU
