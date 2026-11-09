@@ -286,9 +286,11 @@ function OPDSGridCell:init()
         text_group,
     }
 
+    -- Not painted while idle: a white line would cut off the author text, which overflows its box by a few pixels.
     self._underline = LineWidget:new {
         dimen = Geom:new { w = self.cell_width, h = underline_size },
-        background = self._is_focused and Blitbuffer.COLOR_BLACK or Blitbuffer.COLOR_WHITE,
+        background = Blitbuffer.COLOR_BLACK,
+        style = self._is_focused and "solid" or "none",
     }
 
     self[1] = VerticalGroup:new {
@@ -325,13 +327,13 @@ end
 -- The cell is rebuilt when its cover arrives, hence the flag init() restores the line from.
 function OPDSGridCell:onFocus()
     self._is_focused = true
-    self._underline.background = Blitbuffer.COLOR_BLACK
+    self._underline.style = "solid"
     return true
 end
 
 function OPDSGridCell:onUnfocus()
     self._is_focused = false
-    self._underline.background = Blitbuffer.COLOR_WHITE
+    self._underline.style = "none"
     return true
 end
 
