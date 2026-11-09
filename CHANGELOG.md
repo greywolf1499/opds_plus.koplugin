@@ -13,6 +13,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 - **Local Hostnames**: Catalog URLs whose host has no dot, such as `http://booktrove:8083/opds`, are no longer rejected as an invalid hostname (Issue #91, PR #95 by @439qi).
 - **Crawlable Catalogs**: Entries that link to a catalog with the OPDS `crawlable` relation, like the Standard Ebooks "All Ebooks" feed, now open instead of failing with "Cannot get catalog info from nil" (Issue #83).
 - **Truncated Listings**: Entries with an empty `<content/>` tag no longer swallow the entries after them, which cut some listings short (Issue #100).
+- **Sync All Gesture**: "Sync all catalogs" and "Force sync all catalogs" now say when no catalog has "Sync catalog" ticked instead of reporting "Up to date!", and the gesture versions wait for the network like the menu entries do (Issue #96).
+- **Sync Failures**: A sync that fails no longer leaves "Synchronizing lists…" on screen, and the error is shown instead of being lost. Feeds with a link-less entry, such as a notice above the book list, and Project Gutenberg style catalogs with a single-book sub-feed now sync instead of failing (Issue #96).
+- **Delete Plugin Settings**: KOReader's plugin manager can now delete OPDS Plus's settings and cover cache with "Disable plugin and delete settings" and "Delete plugin and settings". Downloaded books are kept (Issue #82).
 
 ### Notes
 - Covers cached by earlier versions are downloaded once more after updating, because the cache file naming changed.
