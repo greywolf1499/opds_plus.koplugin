@@ -31,7 +31,9 @@ local function hashUrl(url)
 	for i = 1, #url do
 		local b = string.byte(url, i)
 		h1 = bit.tobit(bit.bxor((h1 * 33), b))
-		h2 = bit.tobit((h2 * 16777619) + b)
+		-- 16777619 = 2^24 + 403: h2 * 16777619 overflows exact doubles and the
+		-- interpreter and JIT traces round it differently; both terms here are exact.
+		h2 = bit.tobit(h2 * 403 + bit.lshift(h2, 24) + b)
 	end
 
 	return bit.tohex(h1) .. bit.tohex(h2)
