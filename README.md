@@ -199,6 +199,12 @@ Access settings from: **OPDS Plus Catalog → Settings**
   - Bold/regular weight
   - Color: Dark Gray or Black
 
+#### Downloads (New in 1.3.0)
+- **Save Description with Downloads**:
+  - Enabled (default): the description a catalog gives for a book is saved with the downloaded file, so it shows in KOReader's **Book information**. A description the book already has, or one you edited yourself, is never replaced.
+  - KOReader marks a description saved this way with its pencil icon, like any customized property. To remove it from a book, long-press the description in **Book information** and tap **Reset custom**.
+  - Disabled: downloaded books are left as the server delivers them.
+
 ### Sync Actions & Settings (New in 1.2.0)
 
 - **Direct Sync Actions**:
