@@ -18,9 +18,10 @@ local function ensureDir(path)
 		return true
 	end
 
-	local current = ""
+	-- Relative paths must stay relative to the working directory, not become "/" paths.
+	local current = path:sub(1, 1) == "/" and "" or nil
 	for part in path:gmatch("[^/]+") do
-		current = current == "" and ("/" .. part) or (current .. "/" .. part)
+		current = current and (current .. "/" .. part) or part
 		if lfs.attributes(current, "mode") ~= "directory" then
 			local ok = lfs.mkdir(current)
 			if not ok then
