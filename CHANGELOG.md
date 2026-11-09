@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-11-09
+
 ### Changed
 - **One Request per Catalog Page**: Opening a catalog page asked the server for its headers first and then for the page, so a server that builds the whole feed for both, like Calibre-Web, did the work twice. Each page is now a single request: a server that tags or dates its feeds answers "not modified" when the copy kept on the device is still current, and any other server just sends the page.
 
@@ -165,6 +167,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 - Derivative of KOReader's built-in OPDS plugin with major UI/UX enhancements.
 - Licensed under AGPLv3 consistent with KOReader.
 
+[1.3.1]: https://github.com/greywolf1499/opds_plus.koplugin/releases/tag/v1.3.1
 [1.3.0]: https://github.com/greywolf1499/opds_plus.koplugin/releases/tag/v1.3.0
 [1.2.1]: https://github.com/greywolf1499/opds_plus.koplugin/releases/tag/v1.2.1
 [1.2.0]: https://github.com/greywolf1499/opds_plus.koplugin/releases/tag/v1.2.0
