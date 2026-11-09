@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Cover Cache on Kindle**: The cover cache directory now resolves to an absolute path, so covers are cached on devices where KOReader runs from a relative directory (Issue #86, PR #87 by @cardoso42).
+- **Cover Cache Keys**: Cache file names no longer change between LuaJIT's interpreter and compiled code, which made cached covers miss and download again (PR #97 by @demrom).
+- **Cover Cache Robustness**: Falls back to KOReader's standard data directory when `getFullDataDir()` is missing or returns nothing, creates relative cache directories in place, and writes cached covers atomically so an interrupted write can no longer leave a truncated cover.
+
+### Notes
+- Covers cached by earlier versions are downloaded once more after updating, because the cache file naming changed.
+
 ## [1.2.0] - 2026-03-19
 
 ### Added

@@ -4,16 +4,24 @@ local bit = require("bit")
 
 local CoverCache = {}
 
-local CACHE_DIR = DataStorage:getFullDataDir() .. "/cache/opds_plus/covers"
+-- getFullDataDir() makes a relative data dir absolute (Kindle runs from "."), but it is
+-- missing on older KOReader and returns nil for other relative data dirs.
+local function getBaseDir()
+	local dir = DataStorage.getFullDataDir and DataStorage:getFullDataDir()
+	return dir or DataStorage:getDataDir()
+end
+
+local CACHE_DIR = getBaseDir() .. "/cache/opds_plus/covers"
 
 local function ensureDir(path)
 	if lfs.attributes(path, "mode") == "directory" then
 		return true
 	end
 
-	local current = ""
+	-- Relative paths must stay relative to the working directory, not become "/" paths.
+	local current = path:sub(1, 1) == "/" and "" or nil
 	for part in path:gmatch("[^/]+") do
-		current = current == "" and ("/" .. part) or (current .. "/" .. part)
+		current = current and (current .. "/" .. part) or part
 		if lfs.attributes(current, "mode") ~= "directory" then
 			local ok = lfs.mkdir(current)
 			if not ok then
@@ -54,12 +62,18 @@ local function readFile(path)
 end
 
 local function writeFile(path, content)
-	local f = io.open(path, "wb")
+	-- Write beside the target and rename so a crash never leaves a truncated cover behind.
+	local tmp_path = path .. ".tmp"
+	local f = io.open(tmp_path, "wb")
 	if not f then
 		return false
 	end
-	f:write(content)
-	f:close()
+	local written = f:write(content)
+	local closed = f:close()
+	if not (written and closed and os.rename(tmp_path, path)) then
+		os.remove(tmp_path)
+		return false
+	end
 	return true
 end
 
@@ -156,7 +170,7 @@ function CoverCache.clear()
 	end
 
 	for name in lfs.dir(CACHE_DIR) do
-		if name ~= "." and name ~= ".." and name:sub(-4) == ".img" then
+		if name ~= "." and name ~= ".." and (name:sub(-4) == ".img" or name:sub(-4) == ".tmp") then
 			os.remove(CACHE_DIR .. "/" .. name)
 		end
 	end
