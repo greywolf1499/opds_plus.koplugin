@@ -13,6 +13,8 @@ local _ = require("gettext")
 local T = ffiUtil.template
 
 local Constants = require("models.constants")
+local HttpClient = require("services.http_client")
+local RequestHeaders = require("utils.request_headers")
 local StateManager = require("core.state_manager")
 
 local OPDSMenuBuilder = {}
@@ -229,6 +231,24 @@ function OPDSMenuBuilder.buildCatalogMenu(browser, catalog_url, has_covers)
 	return dialog
 end
 
+-- Explain why a line of custom headers was refused
+-- @param line_number number Line of the text that was refused
+-- @param reason string Reason given by RequestHeaders.parse
+-- @param name string|nil Header name on that line, when it is known
+-- @return string Message for the user
+local function headerErrorText(line_number, reason, name)
+	if reason == "name" then
+		return T(_("Line %1: invalid header name"), line_number)
+	elseif reason == "reserved" then
+		return T(_("Line %1: %2 cannot be set here"), line_number, name)
+	elseif reason == "value" then
+		return T(_("Line %1: missing or invalid header value"), line_number)
+	elseif reason == "duplicate" then
+		return T(_("Line %1: %2 is listed more than once"), line_number, name)
+	end
+	return T(_("Line %1: write the header as Name: value"), line_number)
+end
+
 -- Build the add/edit catalog dialog
 -- @param browser table OPDSBrowser instance
 -- @param item table|nil Catalog item to edit (nil for new catalog)
@@ -264,7 +284,62 @@ function OPDSMenuBuilder.buildCatalogEditDialog(browser, item)
 		title = _("Add OPDS catalog")
 	end
 
+	-- Edited here and only kept when the catalog is saved
+	local headers = RequestHeaders.copy(item and item.headers) or {}
+
 	local dialog, check_button_raw_names, check_button_sync_catalog
+
+	-- Kept short: it shares the row with Cancel and Save, and a longer label is cut off once a count is added
+	local function headersButtonText()
+		if #headers == 0 then
+			return _("Headers")
+		end
+		return T(_("Headers (%1)"), #headers)
+	end
+
+	local function editHeaders()
+		local headers_dialog
+		headers_dialog = InputDialog:new {
+			title = _("Custom HTTP headers"),
+			description = _("One header per line, as Name: value. They are only sent to this catalog's server."),
+			input = RequestHeaders.format(headers),
+			input_hint = _("Name: value"),
+			allow_newline = true,
+			use_available_height = true,
+			buttons = {
+				{
+					{
+						text = _("Cancel"),
+						id = "close",
+						callback = function()
+							UIManager:close(headers_dialog)
+						end,
+					},
+					{
+						text = _("OK"),
+						callback = function()
+							local list, line_number, reason, name = RequestHeaders.parse(headers_dialog:getInputText())
+							if not list then
+								UIManager:show(InfoMessage:new {
+									text = headerErrorText(line_number, reason, name),
+									timeout = 5,
+								})
+								return -- Don't close dialog, let user fix it
+							end
+							headers = list
+							UIManager:close(headers_dialog)
+							local button = dialog.button_table:getButtonById("headers")
+							button:setText(headersButtonText(), button.width)
+							UIManager:setDirty(dialog, "ui")
+						end,
+					},
+				},
+			},
+		}
+		UIManager:show(headers_dialog)
+		headers_dialog:onShowKeyboard()
+	end
+
 	dialog = MultiInputDialog:new {
 		title = title,
 		fields = fields,
@@ -276,6 +351,11 @@ function OPDSMenuBuilder.buildCatalogEditDialog(browser, item)
 					callback = function()
 						UIManager:close(dialog)
 					end,
+				},
+				{
+					text_func = headersButtonText, -- evaluated again whenever KOReader rebuilds the dialog
+					id = "headers",
+					callback = editHeaders,
 				},
 				{
 					text = _("Save"),
@@ -307,6 +387,7 @@ function OPDSMenuBuilder.buildCatalogEditDialog(browser, item)
 						new_fields[2] = validated_url_or_error
 						new_fields[5] = check_button_raw_names.checked or nil
 						new_fields[6] = check_button_sync_catalog.checked or nil
+						new_fields[7] = headers
 						browser:editCatalogFromInput(new_fields, item)
 						UIManager:close(dialog)
 					end,
@@ -360,7 +441,9 @@ function OPDSMenuBuilder.buildSubCatalogDialog(browser, item_url)
 								item_url,
 								browser.root_catalog_username,
 								browser.root_catalog_password,
-								browser.root_catalog_raw_names
+								browser.root_catalog_raw_names,
+								nil, -- sync
+								HttpClient.customHeadersFor(item_url),
 							}
 							browser:editCatalogFromInput(fields, nil, true)
 						end
