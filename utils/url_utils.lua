@@ -74,18 +74,15 @@ end
 --- Check if a link should be treated as a catalog navigation link
 -- @param link table Link object from OPDS feed
 -- @param catalog_type string Expected catalog MIME type pattern
+-- @param catalog_rel table Set of rel values that point to a sub-catalog
 -- @return boolean True if link is a navigation link
-function UrlUtils.isCatalogNavigationLink(link, catalog_type)
+function UrlUtils.isCatalogNavigationLink(link, catalog_type, catalog_rel)
 	if not link.type or not link.type:find(catalog_type) then
 		return false
 	end
 
-	-- Check if rel is not set or is a subsection/sort type
-	return not link.rel
-		or link.rel == "subsection"
-		or link.rel == "http://opds-spec.org/subsection"
-		or link.rel == "http://opds-spec.org/sort/popular"
-		or link.rel == "http://opds-spec.org/sort/new"
+	-- A link without a rel is treated as a sub-catalog link
+	return not link.rel or catalog_rel[link.rel] == true
 end
 
 --- Check if a link should be treated as an acquisition link

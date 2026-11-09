@@ -57,6 +57,7 @@ local OPDSBrowser = OPDSCoverMenu:extend {
     borrow_rel               = Constants.BORROW_REL,
     stream_rel               = Constants.STREAM_REL,
     facet_rel                = Constants.FACET_REL,
+    catalog_rel              = Constants.CATALOG_REL,
     image_rel                = Constants.IMAGE_REL,
     thumbnail_rel            = Constants.THUMBNAIL_REL,
 

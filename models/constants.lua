@@ -13,6 +13,15 @@ local Constants = {
 	STREAM_REL = "http://vaemendis.net/opds-pse/stream",
 	FACET_REL = "http://opds-spec.org/facet",
 
+	-- Link relations that point to a sub-catalog (a link without a rel is accepted too)
+	CATALOG_REL = {
+		["subsection"] = true,
+		["http://opds-spec.org/subsection"] = true,
+		["http://opds-spec.org/crawlable"] = true,
+		["http://opds-spec.org/sort/popular"] = true,
+		["http://opds-spec.org/sort/new"] = true,
+	},
+
 	-- Image Relationship Types
 	IMAGE_REL = {
 		["http://opds-spec.org/image"] = true,

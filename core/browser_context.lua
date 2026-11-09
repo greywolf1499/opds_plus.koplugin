@@ -22,6 +22,7 @@ function BrowserContext.fromBrowser(browser)
 		borrow_rel = browser.borrow_rel,
 		stream_rel = browser.stream_rel,
 		facet_rel = browser.facet_rel,
+		catalog_rel = browser.catalog_rel,
 
 		-- Image relationship types
 		thumbnail_rel = browser.thumbnail_rel,
@@ -83,6 +84,7 @@ function BrowserContext.validate(context)
 		"borrow_rel",
 		"stream_rel",
 		"facet_rel",
+		"catalog_rel",
 		"thumbnail_rel",
 		"image_rel",
 	}
