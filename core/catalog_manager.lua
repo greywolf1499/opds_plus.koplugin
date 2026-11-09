@@ -2,6 +2,7 @@
 -- Handles catalog configuration, CRUD operations, and sync settings
 
 local CatalogUtils = require("utils.catalog_utils")
+local RequestHeaders = require("utils.request_headers")
 
 local CatalogManager = {}
 
@@ -26,11 +27,13 @@ end
 -- Add or update a catalog from input fields
 -- @param servers table List of server configurations
 -- @param item_table table Current item table
--- @param fields table Input fields: [1]=title, [2]=url, [3]=username, [4]=password, [5]=raw_names, [6]=sync
+-- @param fields table Input fields: [1]=title, [2]=url, [3]=username, [4]=password, [5]=raw_names, [6]=sync,
+-- [7]=custom HTTP headers (a list of { name, value }, copied; none when empty or nil)
 -- @param item table|nil Existing item to update (nil for new)
 -- @param no_refresh boolean Don't refresh item table if true
 -- @return number, number New index, item number for refresh
 function CatalogManager.editCatalogFromInput(servers, item_table, fields, item, no_refresh)
+	local headers = RequestHeaders.copy(fields[7])
 	local new_server = {
 		title     = fields[1],
 		url       = fields[2]:match("^%a+://") and fields[2] or "http://" .. fields[2],
@@ -38,6 +41,7 @@ function CatalogManager.editCatalogFromInput(servers, item_table, fields, item, 
 		password  = fields[4] ~= "" and fields[4] or nil,
 		raw_names = fields[5],
 		sync      = fields[6],
+		headers   = headers and #headers > 0 and headers or nil,
 	}
 
 	local new_item = CatalogUtils.buildRootEntry(new_server)

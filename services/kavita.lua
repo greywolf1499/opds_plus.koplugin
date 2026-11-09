@@ -1,4 +1,5 @@
 local http = require("socket.http")
+local HttpClient = require("services.http_client")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
 local logger = require("logger")
@@ -33,10 +34,10 @@ function OPDSPSE:getLastPage(remote_url, username, password)
         auth_code, auth_headers, auth_status = socket.skip(1, http.request {
             method = "POST",
             url         = auth_url,
-            headers     = {
+            headers     = HttpClient.withCustomHeaders(auth_url, {
                 ["Accept-Encoding"] = "identity",
                 ["Authentication"] = api_key,
-            },
+            }),
             sink        = ltn12.sink.table(auth_data),
             user        = username,
             password    = password,
@@ -61,10 +62,10 @@ function OPDSPSE:getLastPage(remote_url, username, password)
             socketutil:set_timeout(socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT)
             progress_code, progress_headers, progress_status = socket.skip(1, http.request {
                 url         = progress_url,
-                headers     = {
+                headers     = HttpClient.withCustomHeaders(progress_url, {
                     ["Accept-Encoding"] = "identity",
                     ["Authorization"] = "Bearer "..bearer_token,
-                },
+                }),
                 sink        = ltn12.sink.table(progress_data),
                 user        = username,
                 password    = password,
@@ -121,9 +122,9 @@ function OPDSPSE:streamPages(remote_url, count, continue, username, password, la
                 socketutil:set_timeout(socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT)
                 code, headers, status = socket.skip(1, http.request {
                     url         = page_url,
-                    headers     = {
+                    headers     = HttpClient.withCustomHeaders(page_url, {
                         ["Accept-Encoding"] = "identity",
-                    },
+                    }),
                     sink        = ltn12.sink.table(page_data),
                     user        = username,
                     password    = password,
