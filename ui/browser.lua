@@ -134,11 +134,14 @@ function OPDSBrowser:toggleViewMode()
     end
 end
 
---- Number of the focused item within the whole catalog, 1 if nothing is focused.
+--- Number of the item that has to stay on screen when the view changes.
+-- Menu only refocuses on devices with a D-pad, and every plain (cover-less) page adds the title bar rows to
+-- self.selected. Without a D-pad that makes it point at an arbitrary item, so use the first item of the page.
 function OPDSBrowser:getFocusedItemNumber()
     local selected = self.selected
-    if not selected or not self.perpage then
-        return 1
+    local first_of_page = ((self.page or 1) - 1) * (self.perpage or 0) + 1
+    if not Device:hasDPad() or not selected or not self.perpage then
+        return first_of_page
     end
     local columns = (self.layout and self.layout[1]) and #self.layout[1] or 1
     local in_page = ((selected.y - 1) * columns) + selected.x
