@@ -2,9 +2,54 @@ local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
 local _ = require("gettext")
 local T = require("ffi/util").template
+local CatalogManager = require("core.catalog_manager")
 local Version = require("opds_plus_version")
 
 local SettingsMenu = {}
+
+-- One radio entry per catalog, plus "None", for choosing the catalog that opens on launch
+local function buildDefaultCatalogItems(plugin)
+	local function choose(server)
+		CatalogManager.setDefaultCatalog(plugin.servers, server)
+		plugin.opds_settings:flush()
+		UIManager:show(InfoMessage:new {
+			text = server
+				and T(_("%1 will open when you browse catalogs.\n\nPress Back to return to the list of catalogs."),
+					server.title)
+				or _("The list of catalogs will be shown when you browse catalogs."),
+			timeout = 2,
+		})
+	end
+
+	local items = {
+		{
+			text = _("None (show the list of catalogs)"),
+			radio = true,
+			checked_func = function()
+				return CatalogManager.findDefaultCatalog(plugin.servers) == nil
+			end,
+			callback = function()
+				choose(nil)
+			end,
+			separator = true,
+		},
+	}
+	local servers = plugin.servers
+	for i = 1, #servers do
+		local server = servers[i]
+		table.insert(items, {
+			text = server.title,
+			radio = true,
+			checked_func = function()
+				return server.is_default == true
+			end,
+			callback = function()
+				choose(server)
+			end,
+		})
+	end
+	return items
+end
 
 function SettingsMenu.create(plugin)
 	return {
@@ -17,6 +62,15 @@ function SettingsMenu.create(plugin)
 		{
 			text = _("Settings"),
 			sub_item_table = {
+				{
+					text_func = function()
+						local server = CatalogManager.findDefaultCatalog(plugin.servers)
+						return server and T(_("Default Catalog: %1"), server.title) or _("Default Catalog")
+					end,
+					sub_item_table_func = function()
+						return buildDefaultCatalogItems(plugin)
+					end,
+				},
 				{
 					text = _("Cover Settings"),
 					sub_item_table = {

@@ -34,6 +34,9 @@ local FeedFetcher = require("core.feed_fetcher")
 -- Import the catalog manager
 local CatalogManager = require("core.catalog_manager")
 
+-- Import the catalog utilities
+local CatalogUtils = require("utils.catalog_utils")
+
 -- Import the navigation handler
 local NavigationHandler = require("core.navigation_handler")
 
@@ -300,32 +303,48 @@ function OPDSBrowser:onMenuSelect(item)
         local book_info_dialog = BookInfoDialog.build(self, item)
         UIManager:show(book_info_dialog)
     else                         -- catalog or Search item
-        if #self.paths == 0 then -- root list
-            if item.idx == 1 then
-                if #self.downloads > 0 then
-                    self:showDownloadList()
-                end
-                return true
+        if #self.paths == 0 and item.idx == 1 then -- root list, Downloads item
+            if #self.downloads > 0 then
+                self:showDownloadList()
             end
-            self.root_catalog_title     = item.text
-            self.root_catalog_username  = item.username
-            self.root_catalog_password  = item.password
-            self.root_catalog_raw_names = item.raw_names
+            return true
         end
-        local connect_callback
-        if item.searchable then
-            connect_callback = function()
-                self:searchCatalog(item.url)
-            end
-        else
-            self.catalog_title = item.text or self.catalog_title or self.root_catalog_title
-            connect_callback = function()
-                self:updateCatalog(item.url)
-            end
-        end
-        NetworkMgr:runWhenConnected(connect_callback)
+        self:openCatalog(item)
     end
     return true
+end
+
+--- Show the entries of a catalog, or ask for the terms of a search item.
+-- An item of the root list also sets the credentials used for everything below it.
+function OPDSBrowser:openCatalog(item)
+    if #self.paths == 0 then -- root list
+        self.root_catalog_title     = item.text
+        self.root_catalog_username  = item.username
+        self.root_catalog_password  = item.password
+        self.root_catalog_raw_names = item.raw_names
+    end
+    local connect_callback
+    if item.searchable then
+        connect_callback = function()
+            self:searchCatalog(item.url)
+        end
+    else
+        self.catalog_title = item.text or self.catalog_title or self.root_catalog_title
+        connect_callback = function()
+            self:updateCatalog(item.url)
+        end
+    end
+    NetworkMgr:runWhenConnected(connect_callback)
+end
+
+--- Open the catalog chosen as default in the settings, if any.
+-- It opens on top of the root list, so Back returns to the list of catalogs.
+function OPDSBrowser:openDefaultCatalog()
+    if #self.paths > 0 then return end
+    local server = CatalogManager.findDefaultCatalog(self.servers)
+    if server then
+        self:openCatalog(CatalogUtils.buildRootEntry(server))
+    end
 end
 
 -- Menu action on item long-press (dialog Edit / Delete catalog)
