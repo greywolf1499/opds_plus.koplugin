@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ## [Unreleased]
 
+### Added
+- **Keyboard and D-pad Navigation**: Devices with hardware keys can browse without the touchscreen. Back walks up one catalog level, Home closes the browser, the D-pad moves the focus item by item (cell by cell in the grid) with an underline showing where it is, and Enter opens the focused item. List covers are slightly smaller on these devices to leave room for the underline (PR #93 by @iav).
+
+### Changed
+- **Switching Views**: Toggling between list and grid view keeps you on the same item instead of reloading the catalog and going back to the first page (PR #93 by @iav).
+- **Page Counter**: The page counter in the footer is KOReader's own button again instead of a plain label (PR #93 by @iav).
+- **Fetching Ahead**: Paging forward no longer asks the server for another page of the catalog on every tap. The next page is requested when you are one screen from the end of what has been loaded, so long catalogs page smoothly and you never reach the end of the list while more is available (PR #92 by @iav).
+
 ## [1.2.1] - 2026-11-09
 
 ### Changed
