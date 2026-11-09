@@ -161,6 +161,9 @@ Access settings from: **OPDS Plus Catalog → Settings**
 - **Enable Cover Cache**:
   - Enabled: reuses previously downloaded covers.
   - Disabled: fetches covers from the server each time.
+- **Parallel Cover Downloads**:
+  - Enabled (default): downloads several covers at once, in background processes, so pages of covers fill in faster and a slow server does not freeze the screen.
+  - Disabled: downloads covers one at a time. Turn this off if covers stop loading or the device runs low on memory.
 - **Advanced Cache Controls**:
   - Cache Size (MB)
   - Cache TTL (minutes)
