@@ -142,6 +142,9 @@ git clone https://github.com/greywolf1499/opds_plus.koplugin.git
 
 Access settings from: **OPDS Plus Catalog → Settings**
 
+#### Default Catalog (New in 1.3.0)
+- **Default Catalog**: Choose the catalog you use most and it opens as soon as you open **OPDS Plus Catalog → Browse Catalogs** (or its gesture), so you don't have to tap it every time. Press Back to return to the list of catalogs and pick another one. Choose **None** to always start from the list.
+
 #### Display Mode
 - **List View**: Traditional list with covers on the left
 - **Grid View**: Visual grid layout with larger covers
