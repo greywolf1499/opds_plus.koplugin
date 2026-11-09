@@ -78,9 +78,10 @@ local Constants = {
 		IMAGE_BATCH_DELAY = 0.2,
 	},
 
-	-- Cover downloads run in this many subprocesses at once; the UI polls them
+	-- Cover downloads run in this many subprocesses at once; the UI polls them.
+	-- Every subprocess is a fork of KOReader, so this stays low for e-readers with little memory.
 	IMAGE_LOADER = {
-		MAX_PARALLEL = 3,
+		MAX_PARALLEL = 2,
 		POLL_INTERVAL = 0.05,
 	},
 
