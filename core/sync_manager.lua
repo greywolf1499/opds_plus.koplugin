@@ -203,8 +203,8 @@ function SyncManager.fillPendingSyncs(browser, server)
 				sub_table = SyncManager.getSyncDownloadList(browser, entry.url) or {}
 			end
 			if #sub_table > 0 then
-				-- The first element seems to be most compatible. Second element has most options
-				item = sub_table[2]
+				-- Second element has most options, but a sub-feed may only have one entry
+				item = sub_table[2] or sub_table[1]
 			else
 				item = entry
 			end
@@ -265,8 +265,10 @@ function SyncManager.getSyncDownloadList(browser, url_arg)
 		local acquisitions_empty = false
 
 		-- Handle Project Gutenberg style entries
+		-- Entries without links (e.g. a notice at the top of the feed) have no url and no acquisitions
 		while #sub_table[count].acquisitions == 0 do
-			if util.stringEndsWith(sub_table[count].url, ".opds") then
+			local entry_url = sub_table[count].url
+			if entry_url and util.stringEndsWith(entry_url, ".opds") then
 				acquisitions_empty = true
 				break
 			end
@@ -282,7 +284,7 @@ function SyncManager.getSyncDownloadList(browser, url_arg)
 		if acquisitions_empty then
 			first_href = sub_table[count].url
 		else
-			first_href = sub_table[1].acquisitions[1].href
+			first_href = sub_table[count].acquisitions[1].href
 		end
 
 		if first_href == browser.sync_server.last_download and not browser.sync_force then
@@ -298,7 +300,7 @@ function SyncManager.getSyncDownloadList(browser, url_arg)
 					href = nil
 				end
 			else
-				href = entry.acquisitions[1].href
+				href = entry.acquisitions[1] and entry.acquisitions[1].href
 			end
 
 			if href then
