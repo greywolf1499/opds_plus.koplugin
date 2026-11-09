@@ -123,6 +123,22 @@ function SettingsMenu.create(plugin)
 							end,
 						},
 						{
+							text = _("Thumbnails on Navigation Entries"),
+							checked_func = function()
+								return plugin:getSetting("navigation_thumbnails") ~= false
+							end,
+							callback = function()
+								local current = plugin:getSetting("navigation_thumbnails") ~= false
+								plugin:saveSetting("navigation_thumbnails", not current)
+								UIManager:show(InfoMessage:new {
+									text = not current and
+										_("Thumbnails on navigation entries enabled.\n\nChanges apply on next catalog browse.") or
+										_("Thumbnails on navigation entries disabled.\n\nChanges apply on next catalog browse."),
+									timeout = 2,
+								})
+							end,
+						},
+						{
 							text = _("Advanced"),
 							sub_item_table = {
 								{

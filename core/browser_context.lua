@@ -31,6 +31,7 @@ function BrowserContext.fromBrowser(browser)
 		-- Runtime state
 		sync = browser.sync,
 		prefer_large_covers = browser.settings and browser.settings.prefer_large_covers == true,
+		navigation_thumbnails = not browser.settings or browser.settings.navigation_thumbnails ~= false,
 
 		-- Authentication
 		username = browser.root_catalog_username,
