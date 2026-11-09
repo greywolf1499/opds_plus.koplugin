@@ -45,8 +45,10 @@ local COVER_CONFIG = {
 
     -- Spacing and padding
     item_top_padding = 6,
-    -- Fits the focus underline plus clearance, so the last item's line stays off the footer.
-    item_bottom_padding = math.max(6, Size.line.focus_indicator + Size.padding.default + Size.padding.small),
+    -- Only devices with a D-pad draw the focus underline, so only they give up cover height for it.
+    item_bottom_padding = Device:hasDPad()
+        and math.max(6, Size.line.focus_indicator + Size.padding.default + Size.padding.small)
+        or 6,
     cover_left_margin = 6,
     cover_right_margin = 8,
 }
