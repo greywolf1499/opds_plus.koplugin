@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ## [Unreleased]
 
+### Fixed
+- **Duplicate PDF Download Buttons**: A PDF link whose address does not end in `.pdf` or `/pdf/` was added to the book a second time, with `.pdf` tacked on to an address the server never sent. When the link has a title, as in arXiv's feeds, the book info dialog listed the format twice ("EPUB, PDF, PDF"), the format chooser showed two PDF buttons, and a book with a single PDF asked which format to download. A link that is already a download is no longer added again. A catalog entry titled "pdf" also stays a catalog instead of turning into a book.
+
 ## [1.3.0] - 2026-11-09
 
 ### Added
