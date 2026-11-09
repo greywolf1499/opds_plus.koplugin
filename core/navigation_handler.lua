@@ -177,10 +177,13 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 			item.text = title .. " - " .. author
 		end
 
-		-- Add cover information for display
-		if (item.thumbnail or item.image) and item.acquisitions and #item.acquisitions > 0 then
+		-- Add cover information for display. An entry that only opens a sub-catalog, such as a series in a
+		-- comic server's feed, can carry artwork too.
+		local is_book = #item.acquisitions > 0
+		local show_cover = is_book or (item.url ~= nil and browser_context.navigation_thumbnails)
+		if (item.thumbnail or item.image) and show_cover then
 			if debug_callback then
-				debug_callback("Book entry with cover:", title)
+				debug_callback(is_book and "Book entry with cover:" or "Catalog entry with cover:", title)
 			end
 
 			-- Prefer larger images only when explicitly enabled.

@@ -96,6 +96,9 @@ function Settings:initializeDefaults()
 	if self.data.cover_parallel_downloads == nil then
 		self.data.cover_parallel_downloads = true
 	end
+	if self.data.navigation_thumbnails == nil then
+		self.data.navigation_thumbnails = true
+	end
 
 	-- Font settings
 	for key, default_value in pairs(Constants.DEFAULT_FONT_SETTINGS) do

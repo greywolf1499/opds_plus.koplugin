@@ -167,6 +167,9 @@ Access settings from: **OPDS Plus Catalog → Settings**
 - **Parallel Cover Downloads**:
   - Enabled (default): downloads several covers at once, in background processes, so pages of covers fill in faster and a slow server does not freeze the screen.
   - Disabled: downloads covers one at a time. Turn this off if covers stop loading or the device runs low on memory.
+- **Thumbnails on Navigation Entries**:
+  - Enabled (default): entries that open a list of books instead of being a book, such as a series or an author, show their thumbnail when the server provides one.
+  - Disabled: only books show covers.
 - **Advanced Cache Controls**:
   - Cache Size (MB)
   - Cache TTL (minutes)
