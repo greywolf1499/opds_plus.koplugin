@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 - **Fetching Ahead**: Paging forward no longer asks the server for another page of the catalog on every tap. The next page is requested when you are one screen from the end of what has been loaded, so long catalogs page smoothly and you never reach the end of the list while more is available (PR #92 by @iav).
 
 ### Fixed
+- **Covers After Switching Views**: Covers no longer turn into coloured noise after you switch between list and grid view and then page through or switch back. The views were freeing cover images that the catalog still needed.
 - **Books With Several Authors**: A book with more than one author now lists all of them, such as "Robert Louis Stevenson, Lloyd Osbourne", in the list, the book info dialog and the file name instead of only the last one, as KOReader's own OPDS browser does (koreader/koreader#16303). A Force sync downloads such books once more under their new file name.
 
 ## [1.2.1] - 2026-11-09

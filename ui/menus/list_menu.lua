@@ -130,6 +130,8 @@ function OPDSListMenuItem:init()
             width = self.cover_width,
             height = self.cover_height,
             alpha = true,
+            -- The entry keeps the bitmap for the next page or view; ImageWidget would free it when it rescales it
+            image_disposable = false,
         }
     elseif self.entry.cover_url and self.entry.lazy_load_cover then
         inner_cover_widget = UIUtils.createPlaceholderCover(self.cover_width, self.cover_height, "loading")
