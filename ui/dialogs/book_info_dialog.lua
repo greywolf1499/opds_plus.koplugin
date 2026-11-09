@@ -603,6 +603,15 @@ function BookInfoDialog.build(browser, item)
 		browser.book_info_dialog.movable,
 	}
 
+	-- The dialog did not exist yet where the table was built; FocusManager repaints show_parent.
+	button_table.show_parent = browser.book_info_dialog
+
+	if Device:hasKeys() then
+		browser.book_info_dialog.key_events = {
+			Close = { { Device.input.group.Back } },
+		}
+	end
+
 	-- Add close on tap outside
 	browser.book_info_dialog.ges_events = {
 		TapClose = {
