@@ -22,6 +22,7 @@
 - **Dual View Modes**: Switch between List View and Grid View layouts
 - **Multiple Display Options**: Customize how books are presented
 - **Book Info Dialog**: Open an at-a-glance details dialog with improved cover handling
+- **Series and Authors**: Every author of a book is listed. When the catalog provides it, the series and the book's number in it, such as ❖ Dune Chronicles #2, show in List View and in the Book Info Dialog (read from Calibre and Calibre-Web style descriptions, `dc:series` elements and Grimmory feeds)
 - **Sync Gesture Actions**: Trigger sync-related actions directly from configured gestures
 - **Cover Quality + Cache**: Improved cover rendering pipeline with disk-backed caching
 
