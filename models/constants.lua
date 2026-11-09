@@ -78,6 +78,12 @@ local Constants = {
 		IMAGE_BATCH_DELAY = 0.2,
 	},
 
+	-- Cover downloads run in this many subprocesses at once; the UI polls them
+	IMAGE_LOADER = {
+		MAX_PARALLEL = 3,
+		POLL_INTERVAL = 0.05,
+	},
+
 	-- Cache Configuration
 	CACHE_SLOTS = 20,
 
