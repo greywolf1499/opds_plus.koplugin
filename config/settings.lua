@@ -93,6 +93,9 @@ function Settings:initializeDefaults()
 	if self.data.cover_cache_ttl_minutes == nil then
 		self.data.cover_cache_ttl_minutes = Constants.COVER_CACHE.DEFAULT_TTL_MINUTES
 	end
+	if self.data.cover_parallel_downloads == nil then
+		self.data.cover_parallel_downloads = true
+	end
 
 	-- Font settings
 	for key, default_value in pairs(Constants.DEFAULT_FONT_SETTINGS) do

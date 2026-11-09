@@ -167,12 +167,13 @@ function Batch:loadImages(urls)
                     stale_content = cached.content
                 end
                 Debug.log("ImageLoader:", "Fetching cover with auth:", self.username and "yes" or "no")
-                local job = startFetch(url, self.username, self.password)
+                local job = self.parallel_downloads ~= false and startFetch(url, self.username, self.password)
                 if job then
                     job.stale_content = stale_content
                     table.insert(jobs, job)
                 else
-                    -- No subprocess available: fetch in this process, as before.
+                    -- Parallel downloads are off or no subprocess could be started:
+                    -- fetch in this process, as before.
                     local success, content = HttpClient.getUrlContent(
                         url,
                         Constants.TIMEOUTS.IMAGE_LOAD,
@@ -226,14 +227,25 @@ end
 -- @param cover_cache_enabled boolean|nil Whether to use in-memory cover cache (default: true)
 -- @param cache_max_mb number|nil Maximum cache size in MB
 -- @param cache_ttl_minutes number|nil Cache TTL in minutes
+-- @param parallel_downloads boolean|nil Download covers in subprocesses (default: true)
 -- @return table, function Batch instance and halt function
-function ImageLoader:loadImages(urls, callback, username, password, cover_cache_enabled, cache_max_mb, cache_ttl_minutes)
+function ImageLoader:loadImages(
+    urls,
+    callback,
+    username,
+    password,
+    cover_cache_enabled,
+    cache_max_mb,
+    cache_ttl_minutes,
+    parallel_downloads
+)
     local batch = Batch:new {
         username = username,
         password = password,
         cover_cache_enabled = cover_cache_enabled ~= false,
         cache_max_mb = cache_max_mb,
         cache_ttl_minutes = cache_ttl_minutes,
+        parallel_downloads = parallel_downloads ~= false,
     }
     batch.callback = callback
     local halt = batch:loadImages(urls)
