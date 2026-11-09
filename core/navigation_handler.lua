@@ -99,6 +99,7 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 				end
 
 				if link.rel or link.title then
+					local acquisitions_before = #item.acquisitions
 					-- Borrow links
 					if link.rel == browser_context.borrow_rel then
 						table.insert(item.acquisitions, {
@@ -137,8 +138,10 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 						})
 					end
 
-					-- Special handling for PDF links
-					if link.title == "pdf" or link.type == "application/pdf"
+					-- Special handling for PDF links that nothing above has taken. Adding them again would give the
+					-- book a second PDF button that points at an address the server never sent.
+					if #item.acquisitions == acquisitions_before
+						and (link.title == "pdf" or link.type == "application/pdf")
 						and link.rel ~= "subsection" then
 						local original_href = link.href
 						local parsed = socket_url.parse(original_href)
