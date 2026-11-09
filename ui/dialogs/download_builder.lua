@@ -15,6 +15,7 @@ local _ = require("gettext")
 
 local Constants = require("models.constants")
 local OPDSPSE = require("services.kavita")
+local CatalogUtils = require("utils.catalog_utils")
 
 local DownloadDialogBuilder = {}
 
@@ -89,7 +90,7 @@ function DownloadDialogBuilder.buildDownloadDialog(browser, item, filename, crea
 							browser, filename, filetype, acquisition.href)
 						DownloadManager.checkDownloadFile(browser, local_path, acquisition.href,
 							browser.root_catalog_username, browser.root_catalog_password,
-							browser.file_downloaded_callback)
+							browser.file_downloaded_callback, { description = CatalogUtils.getDescription(item) })
 					end,
 					hold_callback = function()
 						UIManager:close(browser.download_dialog)
@@ -98,7 +99,7 @@ function DownloadDialogBuilder.buildDownloadDialog(browser, item, filename, crea
 						DownloadManager.addToDownloadQueue(browser, {
 							file     = local_path,
 							url      = acquisition.href,
-							info     = type(item.content) == "string" and util.htmlToPlainTextIfHtml(item.content) or "",
+							info     = CatalogUtils.getDescription(item),
 							catalog  = browser.root_catalog_title,
 							username = browser.root_catalog_username,
 							password = browser.root_catalog_password,
@@ -280,7 +281,7 @@ function DownloadDialogBuilder.buildDownloadListItemDialog(download_list_browser
 					end
 					NetworkMgr:runWhenConnected(function()
 						DownloadManager.checkDownloadFile(download_list_browser._manager, dl_item.file, dl_item.url,
-							dl_item.username, dl_item.password, file_downloaded_callback)
+							dl_item.username, dl_item.password, file_downloaded_callback, { description = dl_item.info })
 					end)
 				end,
 			},

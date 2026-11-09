@@ -1,6 +1,8 @@
 -- Catalog utility functions for OPDS operations
 -- Handles catalog entry construction and formatting
 
+local util = require("util")
+
 local CatalogUtils = {}
 
 --- Build a catalog entry for the root menu
@@ -86,6 +88,16 @@ function CatalogUtils.extractPSEStreamInfo(link)
 	end
 
 	return count, (last_read and last_read > 0 and last_read or nil)
+end
+
+--- Get the description of an entry as plain text
+-- @param entry table Catalog entry whose content is plain text or HTML
+-- @return string Plain text description, empty if the entry has none
+function CatalogUtils.getDescription(entry)
+	if type(entry.content) ~= "string" then
+		return ""
+	end
+	return util.htmlToPlainTextIfHtml(entry.content)
 end
 
 return CatalogUtils

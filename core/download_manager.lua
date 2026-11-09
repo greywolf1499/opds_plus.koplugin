@@ -3,6 +3,7 @@
 
 local BD = require("ui/bidi")
 local ConfirmBox = require("ui/widget/confirmbox")
+local DocSettings = require("docsettings")
 local DocumentRegistry = require("document/documentregistry")
 local InfoMessage = require("ui/widget/infomessage")
 local Trapper = require("ui/trapper")
@@ -65,6 +66,59 @@ function DownloadManager.getLocalDownloadPath(browser, filename, filetype, remot
 	return util.fixUtf8(filename, "_")
 end
 
+-- Read the metadata KOReader shows for a book that has not been opened yet
+-- @param file string Path of the book
+-- @return table|nil Book properties, or nil if the book can't be read
+local function readBookProps(file)
+	local document = DocumentRegistry:hasProvider(file) and DocumentRegistry:openDocument(file)
+	if not document then
+		return nil
+	end
+	local ok, props = pcall(function()
+		local pages
+		if document.loadDocument then -- CreDocument: load only the metadata
+			if not document:loadDocument(false) then
+				return nil
+			end
+		else
+			pages = document:getPageCount()
+		end
+		local book_props = document:getProps()
+		book_props.pages = pages
+		return book_props
+	end)
+	document:close()
+	return ok and props or nil
+end
+
+-- Save the description a catalog gave for a book as KOReader custom book metadata, so that it shows in
+-- Book information. A description the book carries itself is kept, and so is any custom metadata.
+-- @param file string Path of the downloaded book
+-- @param description string|nil Plain text description
+-- @return boolean True if the description was saved
+function DownloadManager.saveDescription(file, description)
+	if type(description) ~= "string" or not description:find("%S") then
+		return false
+	end
+	local ok, saved = pcall(function()
+		if DocSettings:findCustomMetadataFile(file) then
+			return false
+		end
+		local props = readBookProps(file)
+		if not props or (type(props.description) == "string" and props.description:find("%S")) then
+			return false
+		end
+		local custom_settings = DocSettings.openSettingsFile()
+		custom_settings:saveSetting("doc_props", props) -- KOReader keeps a copy of the original properties
+		custom_settings:saveSetting("custom_props", { description = description })
+		return custom_settings:flushCustomMetadata(file) == true
+	end)
+	if not ok then
+		logger.warn("DownloadManager:saveDescription: could not save the description of", file, saved)
+	end
+	return ok and saved
+end
+
 -- Download a file from remote URL to local path
 -- @param browser table OPDSBrowser instance
 -- @param local_path string Local file path to save to
@@ -72,8 +126,9 @@ end
 -- @param username string|nil Optional HTTP auth username
 -- @param password string|nil Optional HTTP auth password
 -- @param caller_callback function|nil Callback function on success
+-- @param options table|nil Optional extras: description (plain text from the catalog entry, saved with the book)
 -- @return boolean True if download succeeded
-function DownloadManager.downloadFile(browser, local_path, remote_url, username, password, caller_callback)
+function DownloadManager.downloadFile(browser, local_path, remote_url, username, password, caller_callback, options)
 	logger.dbg("Downloading file", local_path, "from", remote_url)
 	local code, headers, status
 	local parsed = url.parse(remote_url)
@@ -99,6 +154,10 @@ function DownloadManager.downloadFile(browser, local_path, remote_url, username,
 
 	if code == 200 then
 		logger.dbg("File downloaded to", local_path)
+		local save_description = not browser.settings or browser.settings.save_book_description ~= false
+		if save_description and options and options.description then
+			DownloadManager.saveDescription(local_path, options.description)
+		end
 		if caller_callback then
 			caller_callback(local_path)
 		end
@@ -131,10 +190,11 @@ end
 -- @param username string|nil Optional HTTP auth username
 -- @param password string|nil Optional HTTP auth password
 -- @param caller_callback function|nil Callback function on success
-function DownloadManager.checkDownloadFile(browser, local_path, remote_url, username, password, caller_callback)
+-- @param options table|nil Optional extras, see downloadFile
+function DownloadManager.checkDownloadFile(browser, local_path, remote_url, username, password, caller_callback, options)
 	local function download()
 		UIManager:scheduleIn(Constants.UI_TIMING.DOWNLOAD_SCHEDULE_DELAY, function()
-			DownloadManager.downloadFile(browser, local_path, remote_url, username, password, caller_callback)
+			DownloadManager.downloadFile(browser, local_path, remote_url, username, password, caller_callback, options)
 		end)
 		UIManager:show(InfoMessage:new {
 			text = _("Downloading…"),
@@ -166,7 +226,8 @@ function DownloadManager.downloadDownloadList(browser)
 	local completed, downloaded = Trapper:dismissableRunInSubprocess(function()
 		local dl = {}
 		for _, item in ipairs(browser.downloads) do
-			if DownloadManager.downloadFile(browser, item.file, item.url, item.username, item.password) then
+			if DownloadManager.downloadFile(browser, item.file, item.url, item.username, item.password, nil,
+				{ description = item.info }) then
 				dl[item.file] = true
 			end
 		end
@@ -225,7 +286,8 @@ function DownloadManager.downloadPendingSyncs(browser, dl_list)
 					if lfs.attributes(item.file) and not browser.sync_force then
 						table.insert(dupe_list, item)
 					else
-						if DownloadManager.downloadFile(browser, item.file, item.url, item.username, item.password) then
+						if DownloadManager.downloadFile(browser, item.file, item.url, item.username, item.password, nil,
+							{ description = item.info }) then
 							dl[item.file] = true
 						end
 					end

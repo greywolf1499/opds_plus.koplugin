@@ -16,6 +16,7 @@ local T = require("ffi/util").template
 local Constants = require("models.constants")
 local DownloadManager = require("core.download_manager")
 local StateManager = require("core.state_manager")
+local CatalogUtils = require("utils.catalog_utils")
 
 local SyncManager = {}
 
@@ -226,6 +227,7 @@ function SyncManager.fillPendingSyncs(browser, server)
 								username = browser.root_catalog_username,
 								password = browser.root_catalog_password,
 								catalog = server.url,
+								info = CatalogUtils.getDescription(item),
 							})
 							dl_count = dl_count + 1
 						end

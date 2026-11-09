@@ -100,6 +100,11 @@ function Settings:initializeDefaults()
 		self.data.navigation_thumbnails = true
 	end
 
+	-- Download settings
+	if self.data.save_book_description == nil then
+		self.data.save_book_description = true
+	end
+
 	-- Font settings
 	for key, default_value in pairs(Constants.DEFAULT_FONT_SETTINGS) do
 		if self.data[key] == nil then
