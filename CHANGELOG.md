@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ## [Unreleased]
 
+### Changed
+- **One Request per Catalog Page**: Opening a catalog page asked the server for its headers first and then for the page, so a server that builds the whole feed for both, like Calibre-Web, did the work twice. Each page is now a single request: a server that tags or dates its feeds answers "not modified" when the copy kept on the device is still current, and any other server just sends the page.
+
 ### Fixed
 - **Rest of a Long Feed Unreachable**: Jumping to the last page with the end chevron or the page number dialog landed on the last page fetched so far and left the next page button greyed out, so the books after it, such as the rest of a Calibre-Web shelf, could only be reached with a swipe. The next part of the feed is now fetched when you land there, and the button stays usable to the end of the feed (Issue #100).
 - **Downloads Without a File Extension**: A book whose download address has no extension, such as `/download/7`, or ends in one KOReader cannot open, such as `get.php`, was saved under that name and could not be opened. The extension of the chosen format is now added.
