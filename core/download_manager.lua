@@ -139,13 +139,24 @@ function DownloadManager.downloadFile(browser, local_path, remote_url, username,
 	local parsed = url.parse(remote_url)
 
 	if parsed.scheme == "http" or parsed.scheme == "https" then
+		-- Create the file before asking the server, so that a place we can't write to fails at once, without a request
+		local file, open_error = io.open(local_path, "w")
+		if not file then
+			logger.warn("DownloadManager:downloadFile: could not open", local_path, open_error)
+			UIManager:show(InfoMessage:new {
+				text = T(_("Could not save file to:\n%1\n%2"),
+					BD.filepath(local_path),
+					open_error and open_error:match(": ([^:]+)$") or open_error),
+			})
+			return false
+		end
 		socketutil:set_timeout(socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT)
 		code, headers, status = socket.skip(1, http.request {
 			url      = remote_url,
 			headers  = HttpClient.withCustomHeaders(remote_url, {
 				["Accept-Encoding"] = "identity",
 			}),
-			sink     = ltn12.sink.file(io.open(local_path, "w")),
+			sink     = ltn12.sink.file(file),
 			user     = username,
 			password = password,
 		})
