@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  # release.yml runs this before it publishes anything
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag to check against opds_plus_version.lua and CHANGELOG.md"
+        type: string
+        default: ""
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run Luacheck
+        uses: lunarmodules/luacheck@v1
+        with:
+          args: . --config .luacheckrc
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Build the test toolchain
+        run: scripts/setup_test_env.sh
+
+      - name: Run the specs
+        run: scripts/test.sh
+
+  package:
+    name: Package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Build the release archive
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python3 scripts/build_release.py --tag "$RELEASE_TAG"
+
+      - name: Check the checksum
+        working-directory: dist
+        run: sha256sum --check opds_plus.koplugin.zip.sha256
+
+      - name: Build the test toolchain
+        run: scripts/setup_test_env.sh
+
+      # The specs load the plugin from PLUGIN_ROOT, so this runs them against what users would install
+      - name: Run the specs against the archive
+        run: |
+          python3 -m zipfile -e dist/opds_plus.koplugin.zip "$RUNNER_TEMP/package"
+          PLUGIN_ROOT="$RUNNER_TEMP/package/opds_plus.koplugin" scripts/test.sh
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: opds_plus.koplugin
+          path: |
+            dist/opds_plus.koplugin.zip
+            dist/opds_plus.koplugin.zip.sha256
+          if-no-files-found: error
