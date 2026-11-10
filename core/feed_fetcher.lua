@@ -234,10 +234,4 @@ function FeedFetcher.clearCache()
 	CatalogCache:clear()
 end
 
--- Get cache statistics
--- @return number, number Used slots, total slots
-function FeedFetcher.getCacheStats()
-	return CatalogCache:used_size(), CatalogCache.slots
-end
-
 return FeedFetcher
