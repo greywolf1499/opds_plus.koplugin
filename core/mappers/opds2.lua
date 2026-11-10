@@ -13,6 +13,7 @@ local DocumentRegistry = require("document/documentregistry")
 local _ = require("gettext")
 
 local Constants = require("models.constants")
+local CatalogUtils = require("utils.catalog_utils")
 local UrlUtils = require("utils.url_utils")
 local FileUtils = require("utils.file_utils")
 local UriTemplate = require("utils.uri_template")
@@ -140,6 +141,22 @@ local function authorOf(metadata, language)
 		return nil
 	end
 	return table.concat(names, ", ")
+end
+
+local function publisherOf(metadata, language)
+	local names = contributorNames(metadata.publisher, language, {})
+	return #names > 0 and table.concat(names, ", ") or nil
+end
+
+-- A BCP 47 tag or a list of them
+local function languageOf(metadata)
+	local tags = {}
+	for __, tag in ipairs(type(metadata.language) == "table" and metadata.language or { metadata.language }) do
+		if type(tag) == "string" and hasText(tag) then
+			tags[#tags + 1] = tag
+		end
+	end
+	return #tags > 0 and table.concat(tags, ", ") or nil
 end
 
 local function seriesIndex(position)
@@ -295,6 +312,9 @@ local function publicationItem(publication, build_href, context, language, debug
 	local author = authorOf(metadata, language)
 	item.text = author and (title .. " - " .. author) or title
 	item.series, item.series_index = seriesOf(metadata, language)
+	item.publisher = publisherOf(metadata, language)
+	item.published = CatalogUtils.formatDate(metadata.published)
+	item.language = languageOf(metadata)
 
 	local thumbnail, image = imagesOf(publication.images, context)
 	item.thumbnail = thumbnail and build_href(thumbnail)

@@ -194,6 +194,36 @@ local function normalizeSeriesIndex(index)
 	return index
 end
 
+-- Text of an element that is either plain text or, like <publisher>, holds a <name>
+local function elementText(value)
+	if type(value) == "table" then
+		value = value.name
+	end
+	return trimmed(value)
+end
+
+--- The date part of a timestamp ("1851-01-01T00:00:00Z" -> "1851-01-01"), other text unchanged
+-- @param value any Date as the catalog gives it
+-- @return string|nil
+function CatalogUtils.formatDate(value)
+	local text = trimmed(value)
+	if not text then
+		return nil
+	end
+	return text:match("^(%d%d%d%d%-%d%d%-%d%d)[T ]") or text
+end
+
+--- Publisher, publication date and language of an Atom entry, from Dublin Core elements
+-- @param entry table Entry from the parsed OPDS feed
+-- @return string|nil, string|nil, string|nil Publisher, date published, language
+function CatalogUtils.parseEntryDetails(entry)
+	local publisher = elementText(entry["dcterms:publisher"]) or elementText(entry["dc:publisher"])
+		or elementText(entry.publisher)
+	local published = CatalogUtils.formatDate(elementText(entry["dcterms:issued"]) or elementText(entry["dc:issued"]))
+	local language = elementText(entry["dcterms:language"]) or elementText(entry["dc:language"])
+	return publisher, published, language
+end
+
 --- Get the series of an entry and the position of the book in it
 -- @param entry table Entry from the parsed OPDS feed
 -- @return string|nil, string|nil Series name and index, nil when the entry has no series

@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 ### Added
 - **OPDS 2.0 Catalogs**: Catalogs that serve OPDS 2.0 (JSON) feeds open like any other: navigation, groups, books with their authors, series, covers and downloads, facets, pagination and search. OPDS Plus tells the two formats apart by the feed itself, so there is nothing to set.
 - **Shelves**: Groups of books that an OPDS 2.0 catalog shows on its start page without a link of their own (like the samples on test.opds.io) open as folders, next to the groups that have a link, with the number of books they hold. Search results that come only in such groups are still listed straight away.
+- **More Book Details**: The book details dialog shows the publisher, the publication date and the language when the catalog gives them, from OPDS 2.0 feeds and from the Dublin Core elements of OPDS 1 feeds (Calibre-Web sends the language).
 
 ### Changed
 - **Catalog Requests Ask for OPDS 2.0 First**: Catalog requests now say which formats OPDS Plus reads, OPDS 2.0 first and then OPDS 1, so a server that has both can send the newer one. A server that refuses such a request is asked again the old way, and a catalog's own **Accept** header (in its custom headers) still wins.

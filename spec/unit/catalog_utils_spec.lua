@@ -156,6 +156,26 @@ describe("CatalogUtils", function()
 		end)
 	end)
 
+	describe("parseEntryDetails", function()
+		it("reads publisher, issue date and language from Dublin Core elements", function()
+			assert.same({ "Allen & Unwin", "1937-09-21", "eng" }, { CatalogUtils.parseEntryDetails({
+				["dcterms:publisher"] = " Allen & Unwin ",
+				["dcterms:issued"] = "1937-09-21T00:00:00+00:00",
+				["dcterms:language"] = "eng",
+			}) })
+			assert.same({ "Penguin", "1813", "en" }, { CatalogUtils.parseEntryDetails({
+				["dc:publisher"] = "Penguin",
+				["dc:issued"] = "1813",
+				["dc:language"] = "en",
+			}) })
+		end)
+
+		it("reads a publisher that holds a name, and skips blank or odd values", function()
+			assert.same({ "Feedbooks" }, { CatalogUtils.parseEntryDetails({ publisher = { name = "Feedbooks" } }) })
+			assert.same({}, { CatalogUtils.parseEntryDetails({ ["dc:publisher"] = " ", ["dc:language"] = {} }) })
+		end)
+	end)
+
 	describe("parseEntrySeries", function()
 		it("returns nothing for an entry without a series", function()
 			assert.same({}, seriesOf({}))

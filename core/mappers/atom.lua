@@ -190,6 +190,7 @@ function AtomMapper.map(catalog, item_url, browser_context, debug_callback)
 			item.text = title .. " - " .. author
 		end
 		item.series, item.series_index = CatalogUtils.parseEntrySeries(entry)
+		item.publisher, item.published, item.language = CatalogUtils.parseEntryDetails(entry)
 
 		-- Add cover information for display. An entry that only opens a sub-catalog, such as a series in a
 		-- comic server's feed, can carry artwork too.

@@ -131,6 +131,24 @@ describe("OPDS 2.0 mapping", function()
 			assert.equals("Jules Verne, Second Author", items[3].author)
 		end)
 
+		it("reads publisher, publication date and language", function()
+			local items = generate("test_opds_home.json", "https://test.opds.io/2.0/home.json", { sync = true })
+			local moby = items[7]
+			assert.equals("Moby-Dick", moby.title)
+			assert.equals("Feedbooks", moby.publisher)
+			assert.equals("1851-01-01", moby.published)
+			assert.equals("en", moby.language)
+		end)
+
+		it("joins publisher and language lists and keeps the date of a timestamp", function()
+			local items = from_json([[{"publications":[{"metadata":{"title":"T",
+				"publisher":[{"name":{"en":"Ace"}},"Orbit"],"language":["en","fr",3],
+				"published":"2001-02-03T04:05:06Z"}}]}]])
+			assert.equals("Ace, Orbit", items[1].publisher)
+			assert.equals("en, fr", items[1].language)
+			assert.equals("2001-02-03", items[1].published)
+		end)
+
 		it("lists the acquisition link", function()
 			local items = generate("test_opds_publications.json", URL)
 			assert.same({ {

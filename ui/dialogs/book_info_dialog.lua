@@ -331,6 +331,16 @@ function BookInfoDialog.build(browser, item)
 		})
 	end
 
+	for __, detail in ipairs({
+		{ _("Publisher"), item.publisher },
+		{ _("Published"), item.published },
+		{ _("Language"), item.language },
+	}) do
+		if type(detail[2]) == "string" and detail[2] ~= "" then
+			table.insert(info_parts, { label = detail[1], value = detail[2] })
+		end
+	end
+
 	-- Available formats
 	table.insert(info_parts, {
 		label = _("Formats"),
