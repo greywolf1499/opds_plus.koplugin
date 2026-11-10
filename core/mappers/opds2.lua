@@ -3,8 +3,8 @@
 -- both against it).
 --
 -- Groups: a group with navigation links is flattened into "Group - link" entries, and a group with a
--- link of its own becomes a folder entry for it. A group of inline publications without a link is
--- skipped for now.
+-- link of its own becomes a folder entry for it. A group of inline publications without a link (the
+-- results of a Komga search, for one) lists its publications in place.
 
 local DocumentRegistry = require("document/documentregistry")
 local _ = require("gettext")
@@ -437,6 +437,13 @@ function Opds2Mapper.map(catalog, item_url, browser_context, debug_callback)
 				end
 				if title and target then
 					table.insert(item_table, folderItem(title, build_href(target.href)))
+				elseif type(group.publications) == "table" and #group.publications > 0 then
+					for __, publication in ipairs(group.publications) do
+						local item = publicationItem(publication, build_href, context, language, debug_callback)
+						if item then
+							table.insert(item_table, item)
+						end
+					end
 				elseif debug_callback then
 					debug_callback("Skipping OPDS 2.0 group without a link:", title or index)
 				end

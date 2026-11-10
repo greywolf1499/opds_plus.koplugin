@@ -61,6 +61,7 @@ describe("OPDS 2.0 mapping", function()
 				"French Classics",
 				"More Navigation - French Books",
 				"More Navigation - English Books",
+				"Moby-Dick - Herman Melville", -- from the "English Classics" group, which has no link
 				"Moby-Dick - Herman Melville",
 			}, texts(items))
 		end)
@@ -71,9 +72,10 @@ describe("OPDS 2.0 mapping", function()
 			assert.same({}, items[4].acquisitions)
 		end)
 
-		it("skips a group of inline publications that has no link, saying so in the debug log", function()
-			generate("test_opds_home.json", HOME)
-			assert.matches("Skipping OPDS 2.0 group without a link: English Classics", table.concat(debug_lines, "\n"))
+		it("lists the publications of a group without a link in place", function()
+			local items = generate("test_opds_home.json", HOME)
+			assert.is_truthy(items[7].acquisitions[1])
+			assert.is_nil(table.concat(debug_lines, "\n"):find("Skipping OPDS 2.0 group", 1, true))
 		end)
 
 		it("gives navigation entries a folder url and no acquisitions", function()
@@ -153,6 +155,13 @@ describe("OPDS 2.0 mapping", function()
 			assert.equals("https://demo.komga.org/opds/v2/search?query=%s", search_url)
 		end)
 
+		it("lists search results, which come in a group without a link", function()
+			local items = generate("komga_search.json", "https://demo.komga.org/opds/v2/search?query=the")
+			assert.same({ "Moby Dick; Or, The Whale - Herman Melville", "Moby Dick; Or, The Whale - Herman Melville" },
+				texts(items))
+			assert.equals("application/epub+zip", items[1].acquisitions[1].type)
+		end)
+
 		it("flattens navigation groups and makes linked groups folders", function()
 			local items = generate("komga_catalog.json", "https://demo.komga.org/opds/v2/catalog")
 			local list = texts(items)
@@ -185,22 +194,24 @@ describe("OPDS 2.0 mapping", function()
 			local items = generate("edge_cases.json")
 			assert.equals("New", items[1].text)
 			assert.equals("https://library.example.org/opds2/new", items[1].url)
-			assert.equals("Borrowed - Ann Author, Bob Writer", items[2].text)
+			assert.equals("Borrowed - Ann Author, Bob Writer", items[3].text)
 		end)
 
 		it("picks the UI language of a localized string when there is one", function()
 			local items = generate("edge_cases.json")
-			assert.equals("Ann Author, Bob Writer", items[2].author)
+			assert.equals("Ann Author, Bob Writer", items[3].author)
 			local catalog = OPDSParser:parse(helper.fixture("opds2/edge_cases.json"))
 			local context = make_context()
 			context.language = "fr_FR"
 			local french = NavigationHandler.genItemTableFromCatalog(catalog, BASE, context)
-			assert.equals("Anne Auteur, Bob Writer", french[2].author)
+			assert.equals("Anne Auteur, Bob Writer", french[3].author)
 		end)
 
-		it("skips empty groups and groups of inline publications without a link", function()
+		it("skips empty groups, and lists the publications of a group without a link in place", function()
 			local items = generate("edge_cases.json")
-			assert.same({ "New", "Borrowed - Ann Author, Bob Writer", "Unknown - Cee Contributor" }, texts(items))
+			assert.same({ "New", "Hidden", "Borrowed - Ann Author, Bob Writer", "Unknown - Cee Contributor" },
+				texts(items))
+			assert.matches("Skipping OPDS 2.0 group without a link: Empty", table.concat(debug_lines, "\n"))
 		end)
 
 		it("groups facets with their counts and marks the active one", function()
@@ -231,21 +242,21 @@ describe("OPDS 2.0 mapping", function()
 				{ type = "borrow" },
 				{ type = "application/epub+zip", href = "https://library.example.org/adept/1" },
 				{ type = "application/vnd.comicbook+zip", href = "https://library.example.org/files/1.cbz", title = "Comic" },
-			}, items[2].acquisitions)
+			}, items[3].acquisitions)
 		end)
 
 		it("prefers images by rel over their order", function()
 			local items = generate("edge_cases.json")
-			assert.equals("https://library.example.org/img/1-thumb.jpg", items[2].thumbnail)
-			assert.equals("https://library.example.org/img/1-cover.jpg", items[2].image)
+			assert.equals("https://library.example.org/img/1-thumb.jpg", items[3].thumbnail)
+			assert.equals("https://library.example.org/img/1-cover.jpg", items[3].image)
 		end)
 
 		it("keeps a fractional series position and reads a collection that has one", function()
 			local items = generate("edge_cases.json")
-			assert.equals("Saga", items[2].series)
-			assert.equals("2.5", items[2].series_index)
-			assert.equals("Box set", items[3].series)
-			assert.equals("3", items[3].series_index)
+			assert.equals("Saga", items[3].series)
+			assert.equals("2.5", items[3].series_index)
+			assert.equals("Box set", items[4].series)
+			assert.equals("3", items[4].series_index)
 		end)
 
 		it("ignores a collection without a position", function()
@@ -257,9 +268,9 @@ describe("OPDS 2.0 mapping", function()
 
 		it("falls back to the default title for a null one and keeps the HTML description", function()
 			local items = generate("edge_cases.json")
-			assert.equals("Unknown", items[3].title)
-			assert.equals("<p>A <b>borrowed</b> book.</p>", items[2].content)
-			assert.is_nil(items[3].cover_url)
+			assert.equals("Unknown", items[4].title)
+			assert.equals("<p>A <b>borrowed</b> book.</p>", items[3].content)
+			assert.is_nil(items[4].cover_url)
 		end)
 
 		it("expands the templated search link with only the search terms", function()

@@ -1,0 +1,186 @@
+{
+  "metadata": {
+    "title": "Search results",
+    "modified": "2026-11-11T00:44:01.623122872+08:00"
+  },
+  "links": [
+    {
+      "title": "Home",
+      "rel": "start",
+      "href": "https://demo.komga.org/opds/v2/catalog",
+      "type": "application/opds+json"
+    },
+    {
+      "title": "Search",
+      "rel": "search",
+      "href": "https://demo.komga.org/opds/v2/search{?query}",
+      "type": "application/opds+json",
+      "templated": true
+    }
+  ],
+  "groups": [
+    {
+      "metadata": {
+        "title": "Books"
+      },
+      "publications": [
+        {
+          "context": "https://readium.org/webpub-manifest/context.jsonld",
+          "metadata": {
+            "title": "Moby Dick; Or, The Whale",
+            "modified": "2026-03-27T09:45:58.425+08:00",
+            "published": "2001-07-01",
+            "contributor": [
+              "Herman Melville"
+            ],
+            "numberOfPages": 536,
+            "belongsTo": {
+              "series": [
+                {
+                  "name": "Moby Dick; Or, The Whale",
+                  "position": 1.0,
+                  "links": [
+                    {
+                      "href": "https://demo.komga.org/opds/v2/series/0EBEX4TZ8JXHF",
+                      "type": "application/opds+json"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "links": [
+            {
+              "rel": "self",
+              "href": "https://demo.komga.org/opds/v2/books/0EBEX4TZ0JSFS/manifest",
+              "type": "application/webpub+json",
+              "properties": {
+                "authenticate": {
+                  "href": "https://demo.komga.org/opds/v2/auth",
+                  "type": "application/opds-authentication+json"
+                }
+              }
+            },
+            {
+              "rel": "http://opds-spec.org/acquisition",
+              "href": "https://demo.komga.org/opds/v2/books/0EBEX4TZ0JSFS/file",
+              "type": "application/epub+zip",
+              "properties": {
+                "authenticate": {
+                  "href": "https://demo.komga.org/opds/v2/auth",
+                  "type": "application/opds-authentication+json"
+                }
+              }
+            },
+            {
+              "rel": "http://www.cantook.com/api/progression",
+              "href": "https://demo.komga.org/opds/v2/books/0EBEX4TZ0JSFS/progression",
+              "type": "application/vnd.readium.progression+json",
+              "properties": {
+                "authenticate": {
+                  "href": "https://demo.komga.org/opds/v2/auth",
+                  "type": "application/opds-authentication+json"
+                }
+              }
+            }
+          ],
+          "images": [
+            {
+              "href": "https://demo.komga.org/opds/v2/books/0EBEX4TZ0JSFS/thumbnail",
+              "type": "image/jpeg",
+              "properties": {
+                "authenticate": {
+                  "href": "https://demo.komga.org/opds/v2/auth",
+                  "type": "application/opds-authentication+json"
+                }
+              }
+            }
+          ],
+          "readingOrder": [],
+          "resources": [],
+          "toc": [],
+          "landmarks": [],
+          "pageList": []
+        },
+        {
+          "context": "https://readium.org/webpub-manifest/context.jsonld",
+          "metadata": {
+            "title": "Moby Dick; Or, The Whale",
+            "modified": "2026-03-27T09:45:58.403+08:00",
+            "published": "2001-07-01",
+            "contributor": [
+              "Herman Melville"
+            ],
+            "numberOfPages": 603,
+            "belongsTo": {
+              "series": [
+                {
+                  "name": "Moby Dick; Or, The Whale",
+                  "position": 1.0,
+                  "links": [
+                    {
+                      "href": "https://demo.komga.org/opds/v2/series/0NW37HGJZPDWR",
+                      "type": "application/opds+json"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "links": [
+            {
+              "rel": "self",
+              "href": "https://demo.komga.org/opds/v2/books/0NW37HGHFP62J/manifest",
+              "type": "application/webpub+json",
+              "properties": {
+                "authenticate": {
+                  "href": "https://demo.komga.org/opds/v2/auth",
+                  "type": "application/opds-authentication+json"
+                }
+              }
+            },
+            {
+              "rel": "http://opds-spec.org/acquisition",
+              "href": "https://demo.komga.org/opds/v2/books/0NW37HGHFP62J/file",
+              "type": "application/epub+zip",
+              "properties": {
+                "authenticate": {
+                  "href": "https://demo.komga.org/opds/v2/auth",
+                  "type": "application/opds-authentication+json"
+                }
+              }
+            },
+            {
+              "rel": "http://www.cantook.com/api/progression",
+              "href": "https://demo.komga.org/opds/v2/books/0NW37HGHFP62J/progression",
+              "type": "application/vnd.readium.progression+json",
+              "properties": {
+                "authenticate": {
+                  "href": "https://demo.komga.org/opds/v2/auth",
+                  "type": "application/opds-authentication+json"
+                }
+              }
+            }
+          ],
+          "images": [
+            {
+              "href": "https://demo.komga.org/opds/v2/books/0NW37HGHFP62J/thumbnail",
+              "type": "image/jpeg",
+              "properties": {
+                "authenticate": {
+                  "href": "https://demo.komga.org/opds/v2/auth",
+                  "type": "application/opds-authentication+json"
+                }
+              }
+            }
+          ],
+          "readingOrder": [],
+          "resources": [],
+          "toc": [],
+          "landmarks": [],
+          "pageList": []
+        }
+      ]
+    }
+  ]
+}
