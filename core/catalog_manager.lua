@@ -55,6 +55,10 @@ function CatalogManager.editCatalogFromInput(servers, item_table, fields, item, 
 		-- The edit dialog has no field for the default catalog, so carry it over
 		local old_server = servers[new_idx - 1]
 		new_server.is_default = old_server and old_server.is_default or nil
+		-- The sync checkpoint belongs to the feed it was taken from: keep it only for the same address
+		if old_server and old_server.url == new_server.url then
+			new_server.last_download = old_server.last_download
+		end
 	else
 		-- Adding new catalog
 		new_idx = #servers + 2 -- +1 for 0-based, +1 for "Downloads" entry
