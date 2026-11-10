@@ -357,7 +357,7 @@ end
 -- @param new_title string|nil Optional new title (defaults to "Copy of {title}")
 -- @return table New catalog configuration
 function CatalogManager.duplicateCatalog(server, new_title)
-	local _ = require("gettext")
+	local headers = RequestHeaders.copy(server.headers)
 	return {
 		title = new_title or _("Copy of ") .. server.title,
 		url = server.url,
@@ -365,6 +365,7 @@ function CatalogManager.duplicateCatalog(server, new_title)
 		password = server.password,
 		raw_names = server.raw_names,
 		sync = server.sync,
+		headers = headers and #headers > 0 and headers or nil,
 		last_download = nil, -- Don't copy sync state
 	}
 end
