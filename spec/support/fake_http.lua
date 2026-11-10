@@ -8,8 +8,9 @@
 --   helper.stub("socket.http", http)
 --
 -- Routes are tried in the order they were added. Every request is recorded in http.requests
--- (url, method, headers, user, password, body); requests no route matches are recorded in
--- http.unmatched and fail like an unreachable host.
+-- (url, method, headers, user, password, body, and raw: the table the code under test passed, for
+-- options such as verify or redirect); requests no route matches are recorded in http.unmatched
+-- and fail like an unreachable host.
 --
 -- Mimics the shapes LuaSocket returns: with a request table, `1, code, headers, status` (header
 -- names lower-cased) or `nil, err`; with a URL string, `body, code, headers, status`. The sink gets
@@ -71,6 +72,7 @@ function M.new()
 				headers = shallow_copy(reqt.headers),
 				user = reqt.user,
 				password = reqt.password,
+				raw = reqt,
 			}
 			if reqt.source then
 				local chunks = {}
