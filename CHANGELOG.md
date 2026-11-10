@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-10
+
+**Install this version by hand, as before.** From 1.4.0 on, OPDS Plus can update itself.
+
+### Added
+- **Updates from Within KOReader**: **OPDS Plus Catalog → Settings → Updates** has **Check for updates**, which shows the notes of a newer release and installs it after you tap **Install**. The download can be cancelled with a tap, and KOReader asks to restart once the new version is in place. **Skip this version** keeps the weekly check quiet about that release until a newer one comes out.
+- **Weekly Update Check**: Once a week, when OPDS Plus is opened and the device is already online, it asks GitHub whether there is a newer release, and says so once with a short notice. It never turns Wi-Fi on, never installs anything by itself, and stays quiet when the check fails. Turn it off with **Automatic update check (weekly)**.
+- **Roll Back**: The version an update replaced is kept, and **Roll back to previous version** puts it back. The newer one is kept in turn, so you can switch back.
+- **Security Policy**: `SECURITY.md` explains how to report a vulnerability privately, and what OPDS Plus does and doesn't protect: saved passwords, catalog connections, and how updates are checked.
+
+### Update Safety
+- Updates come only from this repository's releases on GitHub, over HTTPS. The certificate is checked against KOReader's certificate bundle and must name the server it came from.
+- The downloaded archive must match the size and SHA-256 checksum that GitHub publishes for it. Every file in it is checked before anything is unpacked, and the unpacked plugin must load and carry the version it claims before it replaces the installed one.
+- The new version is unpacked next to the installed one and swapped in with two renames, so a failed update leaves the installed version as it was. A plugin folder that is a link or has a `.git` folder is treated as a development install and is not updated, unless you allow it in **Settings → Updates**.
+- An update that needs a newer KOReader than yours is not installed.
+
 ### Changed
 - **Release Archive**: The `opds_plus.koplugin.zip` of a release now holds only the files the plugin runs on. It no longer carries the repository's own files (`.gitignore`, `.luacheckrc`, `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md`). It is built by `scripts/build_release.py`, and the tests run on the very archive that gets published.
 - **Automated Tests**: A test suite that runs without KOReader (`scripts/test.sh`), and a check of the release archive, now run next to luacheck on every pull request and every push to `main`. See CONTRIBUTING.md.
@@ -182,6 +198,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 - Derivative of KOReader's built-in OPDS plugin with major UI/UX enhancements.
 - Licensed under AGPLv3 consistent with KOReader.
 
+[1.4.0]: https://github.com/greywolf1499/opds_plus.koplugin/releases/tag/v1.4.0
 [1.3.1]: https://github.com/greywolf1499/opds_plus.koplugin/releases/tag/v1.3.1
 [1.3.0]: https://github.com/greywolf1499/opds_plus.koplugin/releases/tag/v1.3.0
 [1.2.1]: https://github.com/greywolf1499/opds_plus.koplugin/releases/tag/v1.2.1

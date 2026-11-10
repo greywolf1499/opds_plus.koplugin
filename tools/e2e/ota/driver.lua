@@ -1,0 +1,319 @@
+-- KOReader user patch for the OTA e2e run: tools/e2e/ota/run.sh installs it as patches/2-ota-e2e.lua.
+--
+-- It drives the real update UI of the installed plugin against tools/e2e/ota/mock_github.py and writes one
+-- line per check to $OTA_E2E_OUT: "PASS <name>" or "FAIL <name>: <why>", then "DONE".
+-- OTA_E2E_PHASE picks the checks: "update" (first start), "rollback" (after the update), "rolled_back".
+--
+-- Only updater requests are sent to the mock: they are the ones made with OtaUpdater.isAllowedHost as the
+-- host policy. Nothing here deletes anything; the launcher owns the work directory.
+local UIManager = require("ui/uimanager")
+local lfs = require("libs/libkoreader-lfs")
+local logger = require("logger")
+
+local PHASE = os.getenv("OTA_E2E_PHASE")
+local BASE = os.getenv("OTA_E2E_BASE")
+local OUT = os.getenv("OTA_E2E_OUT")
+local WORK = os.getenv("OTA_E2E_WORK")
+local OLD = os.getenv("OTA_E2E_OLD_VERSION")
+local NEW = os.getenv("OTA_E2E_NEW_VERSION")
+if not (PHASE and BASE and OUT and WORK and OLD and NEW) then
+	return
+end
+-- The launcher's work dir is the only place this patch may touch
+assert(WORK:match("^/tmp/opds_plus_test_e2e%.[%w]+$"), "unexpected work dir " .. WORK)
+
+local out = assert(io.open(OUT, "a"))
+local function report(line)
+	out:write(line, "\n")
+	out:flush()
+	logger.info("OTA e2e:", line)
+end
+
+local failures = 0
+local function check(name, ok, why)
+	if ok then
+		report("PASS " .. name)
+	else
+		failures = failures + 1
+		report("FAIL " .. name .. ": " .. tostring(why))
+	end
+end
+
+local function finish()
+	report(failures == 0 and "DONE" or ("DONE with " .. failures .. " failures"))
+	out:close()
+	UIManager:quit(0)
+end
+
+local function setMode(mode)
+	local http = require("socket.http")
+	local body, code = http.request(BASE .. "/__mode?m=" .. mode)
+	assert(code == 200, "mock did not take mode " .. mode .. ": " .. tostring(body))
+end
+
+local function versionIn(dir)
+	local chunk = loadfile(dir .. "/opds_plus_version.lua")
+	if not chunk then
+		return nil
+	end
+	local ok, value = pcall(chunk)
+	return ok and type(value) == "table" and value.VERSION or nil
+end
+
+local function exists(path)
+	return lfs.symlinkattributes(path, "mode") ~= nil
+end
+
+-- Runs the steps in order; a step may return a function, which is polled every 200 ms until it returns
+-- true (or for `limit` seconds), before the next step starts
+local function sequence(steps)
+	local index = 0
+	local function nextStep()
+		index = index + 1
+		local step = steps[index]
+		if not step then
+			return finish()
+		end
+		local ok, wait, limit = pcall(step.run)
+		if not ok then
+			check(step.name, false, "raised: " .. tostring(wait))
+			return UIManager:scheduleIn(0.2, nextStep)
+		end
+		if type(wait) ~= "function" then
+			return UIManager:scheduleIn(0.2, nextStep)
+		end
+		local deadline = os.time() + (limit or 60)
+		local function poll()
+			local done_ok, done = pcall(wait)
+			if done_ok and done then
+				return UIManager:scheduleIn(0.2, nextStep)
+			end
+			if not done_ok or os.time() > deadline then
+				check(step.name, false, done_ok and "timed out" or ("raised: " .. tostring(done)))
+				return UIManager:scheduleIn(0.2, nextStep)
+			end
+			UIManager:scheduleIn(0.2, poll)
+		end
+		UIManager:scheduleIn(0.2, poll)
+	end
+	nextStep()
+end
+
+local function start()
+	local FileManager = require("apps/filemanager/filemanager")
+	local plugin = FileManager.instance and FileManager.instance.opds_plus
+	if not plugin then
+		check("plugin loaded", false, "FileManager.instance.opds_plus is missing")
+		return finish()
+	end
+	local UpdateDialog = package.loaded["ui.dialogs.update_dialog"]
+	local OtaUpdater = package.loaded["services.ota_updater"]
+	local HttpClient = package.loaded["services.http_client"]
+	if not (UpdateDialog and OtaUpdater and HttpClient) then
+		check("plugin modules", false, "update modules are not loaded")
+		return finish()
+	end
+
+	local plugin_dir = plugin.path
+	local backup_dir = plugin_dir .. ".bak"
+	local staging_dir = plugin_dir .. ".new"
+	assert(plugin_dir:sub(1, #WORK + 1) == WORK .. "/", "plugin is not inside the work dir: " .. plugin_dir)
+
+	-- Loopback instead of GitHub, for updater requests only
+	local real_request = HttpClient.request
+	local updater_requests = 0
+	HttpClient.request = function(request, options)
+		if options and options.allow_host == OtaUpdater.isAllowedHost then
+			updater_requests = updater_requests + 1
+			request.url = request.url:gsub("^https://api%.github%.com/", BASE .. "/api/")
+				:gsub("^https://github%.com/", BASE .. "/gh/")
+			request.create, request.verify, request.cafile = nil, nil, nil
+			options.https_only = false
+			options.allow_host = function(host)
+				return host == "127.0.0.1"
+			end
+		end
+		return real_request(request, options)
+	end
+
+	-- The emulator has no Wi-Fi to ask about
+	local NetworkMgr = require("ui/network/manager")
+	NetworkMgr.isConnected = function()
+		return true
+	end
+	NetworkMgr.isOnline = function()
+		return true
+	end
+	NetworkMgr.runWhenOnline = function(_, callback)
+		callback()
+	end
+
+	-- Record what the user would see; a restart prompt is recorded, never shown (it would restart KOReader)
+	local shown, restarts = {}, {}
+	local real_show = UIManager.show
+	UIManager.show = function(self, widget, ...)
+		shown[#shown + 1] = widget
+		return real_show(self, widget, ...)
+	end
+	UIManager.askForRestart = function(_, message)
+		restarts[#restarts + 1] = message
+	end
+	local function lastText(pattern)
+		for index = #shown, 1, -1 do
+			local text = shown[index].text
+			if type(text) == "string" and text:find(pattern) then
+				return text
+			end
+		end
+	end
+	local function topmost(kind_field)
+		for index = #shown, 1, -1 do
+			if shown[index][kind_field] then
+				return shown[index]
+			end
+		end
+	end
+	local function press(viewer, label)
+		for _, row in ipairs(viewer.buttons_table or {}) do
+			for _, button in ipairs(row) do
+				if button.text == label then
+					return button.callback()
+				end
+			end
+		end
+		error("no button " .. label)
+	end
+	local function noLeftovers()
+		local cache = require("datastorage"):getDataDir() .. "/cache/opds_plus.koplugin.zip"
+		return not exists(staging_dir) and not exists(cache)
+	end
+
+	local steps = {}
+	local function step(name, run)
+		steps[#steps + 1] = { name = name, run = run }
+	end
+
+	if PHASE == "update" then
+		step("installed version", function()
+			check("installed version", versionIn(plugin_dir) == OLD, versionIn(plugin_dir))
+		end)
+
+		step("up to date", function()
+			setMode("same")
+			UpdateDialog.checkNow(plugin)
+			check("up to date", lastText("is up to date"), "no up-to-date message")
+		end)
+
+		step("auto check toast", function()
+			setMode("good")
+			plugin:saveSetting(UpdateDialog.LAST_CHECK, 0)
+			local checked = UpdateDialog.autoCheck(plugin)
+			check("auto check toast", checked and lastText(NEW .. " is available"), "no toast")
+			check("auto check notified once", plugin:getSetting(UpdateDialog.NOTIFIED) == NEW)
+			check("auto check keeps etag", type(plugin:getSetting(UpdateDialog.ETAG)) == "string")
+			check("auto check waits a week", UpdateDialog.autoCheck(plugin) == false)
+		end)
+
+		step("read-only install", function()
+			-- chmod changes permissions only; the path was checked to be inside the work dir above
+			local parent = plugin_dir:match("^(.*)/[^/]+$")
+			assert(os.execute("chmod 555 '" .. parent .. "'") == 0)
+			local updater = UpdateDialog.newUpdater(plugin)
+			local result = updater:check({})
+			UpdateDialog.install(plugin, updater, result.release)
+			os.execute("chmod 755 '" .. parent .. "'")
+			check("read-only install", lastText("can't be written") or lastText("read%-only"), shown[#shown].text)
+			check("read-only changes nothing", versionIn(plugin_dir) == OLD and not exists(backup_dir))
+		end)
+
+		step("development install", function()
+			assert(lfs.mkdir(plugin_dir .. "/.git"))
+			local updater = UpdateDialog.newUpdater(plugin)
+			local result = updater:check({})
+			UpdateDialog.install(plugin, updater, result.release)
+			lfs.rmdir(plugin_dir .. "/.git")
+			check("development install", lastText("development"), shown[#shown].text)
+			check("development changes nothing", versionIn(plugin_dir) == OLD and not exists(backup_dir))
+		end)
+
+		step("bad digest", function()
+			setMode("bad_digest")
+			UpdateDialog.checkNow(plugin)
+			local viewer = topmost("buttons_table")
+			press(viewer, "Install")
+			local before = #shown
+			return function()
+				for index = before + 1, #shown do
+					local text = shown[index].text
+					if type(text) == "string" and text:find("checksum") then
+						check("bad digest", true)
+						check("bad digest changes nothing", versionIn(plugin_dir) == OLD and not exists(backup_dir))
+						check("bad digest cleans up", noLeftovers())
+						check("bad digest needs no restart", #restarts == 0)
+						return true
+					end
+				end
+			end
+		end)
+
+		step("update", function()
+			setMode("good")
+			UpdateDialog.checkNow(plugin)
+			local viewer = topmost("buttons_table")
+			check("release notes shown", viewer and viewer.text:find("e2e release " .. NEW, 1, true), viewer and viewer.text)
+			press(viewer, "Install")
+			return function()
+				if #restarts == 0 then
+					return false
+				end
+				check("update", versionIn(plugin_dir) == NEW, versionIn(plugin_dir))
+				check("update keeps backup", versionIn(backup_dir) == OLD, versionIn(backup_dir))
+				check("update cleans up", noLeftovers())
+				check("update asks for restart", restarts[1]:find(NEW, 1, true), restarts[1])
+				return true
+			end, 90
+		end)
+
+		step("restart gate", function()
+			local before = #restarts
+			plugin:onShowOPDSPlusCatalog()
+			check("restart gate", #restarts == before + 1 and not plugin.opds_browser, "catalog opened after update")
+		end)
+	elseif PHASE == "rollback" then
+		step("runs the new version", function()
+			check("runs the new version", package.loaded["opds_plus_version"].VERSION == NEW,
+				package.loaded["opds_plus_version"].VERSION)
+			check("settings kept", plugin:getSetting(UpdateDialog.NOTIFIED) == NEW)
+			check("backup offered", UpdateDialog.hasBackup(plugin))
+		end)
+
+		step("rollback", function()
+			UpdateDialog.rollback(plugin)
+			local confirm = topmost("ok_callback")
+			confirm.ok_callback()
+			check("rollback", versionIn(plugin_dir) == OLD, versionIn(plugin_dir))
+			check("rollback keeps the newer as backup", versionIn(backup_dir) == NEW, versionIn(backup_dir))
+			check("rollback asks for restart", #restarts == 1)
+		end)
+	elseif PHASE == "rolled_back" then
+		step("runs the old version", function()
+			check("runs the old version", package.loaded["opds_plus_version"].VERSION == OLD,
+				package.loaded["opds_plus_version"].VERSION)
+			check("cleanup kept the backup", UpdateDialog.hasBackup(plugin))
+		end)
+	end
+
+	step("only updater requests went to the mock", function()
+		check("updater requests", PHASE ~= "update" or updater_requests > 0, updater_requests)
+	end)
+
+	sequence(steps)
+end
+
+UIManager:scheduleIn(3, function()
+	local ok, err = pcall(start)
+	if not ok then
+		check("driver", false, err)
+		finish()
+	end
+end)

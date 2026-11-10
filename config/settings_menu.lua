@@ -3,6 +3,7 @@ local UIManager = require("ui/uimanager")
 local _ = require("gettext")
 local T = require("ffi/util").template
 local CatalogManager = require("core.catalog_manager")
+local UpdateDialog = require("ui.dialogs.update_dialog")
 local Version = require("opds_plus_version")
 
 local SettingsMenu = {}
@@ -366,6 +367,50 @@ function SettingsMenu.create(plugin)
 					end,
 				},
 				{
+					text = _("Updates"),
+					sub_item_table = {
+						{
+							text = _("Check for updates"),
+							callback = function()
+								UpdateDialog.checkNow(plugin)
+							end,
+						},
+						{
+							text = _("Automatic update check (weekly)"),
+							checked_func = function()
+								return plugin:getSetting(UpdateDialog.AUTO_CHECK) ~= false
+							end,
+							callback = function()
+								plugin:saveSetting(UpdateDialog.AUTO_CHECK, plugin:getSetting(UpdateDialog.AUTO_CHECK) == false)
+							end,
+						},
+						{
+							text = _("Roll back to previous version"),
+							enabled_func = function()
+								return UpdateDialog.hasBackup(plugin)
+							end,
+							callback = function()
+								UpdateDialog.rollback(plugin)
+							end,
+						},
+						{
+							text = _("Allow updating a development install"),
+							checked_func = function()
+								return plugin:getSetting(UpdateDialog.ALLOW_DEV) == true
+							end,
+							callback = function()
+								local allow = plugin:getSetting(UpdateDialog.ALLOW_DEV) ~= true
+								plugin:saveSetting(UpdateDialog.ALLOW_DEV, allow)
+								if allow then
+									UIManager:show(InfoMessage:new {
+										text = _("Updates will now replace a development install. A linked plugin folder is moved aside as the backup; the folder it points to is not changed."),
+									})
+								end
+							end,
+						},
+					},
+				},
+				{
 					text = _("Developer"),
 					sub_item_table = {
 						{
@@ -391,7 +436,8 @@ function SettingsMenu.create(plugin)
 					text = T(_("About OPDS Plus v%1"), Version.VERSION),
 					callback = function()
 						UIManager:show(InfoMessage:new {
-							text = T(_("OPDS Plus Plugin\nVersion: %1\n\nAn enhanced OPDS catalog browser with cover display support.\n\nFeatures:\n• List and Grid view modes\n• Customizable covers and fonts\n• Grid border options\n\nBased on KOReader's OPDS plugin"), Version.VERSION),
+							text = T(_("OPDS Plus Plugin\nVersion: %1\n\nAn enhanced OPDS catalog browser with cover display support.\n\nFeatures:\n• List and Grid view modes\n• Customizable covers and fonts\n• Grid border options\n\nBased on KOReader's OPDS plugin"), Version.VERSION)
+								.. "\n\n" .. UpdateDialog.lastCheckedText(plugin),
 							timeout = 5,
 						})
 					end,
