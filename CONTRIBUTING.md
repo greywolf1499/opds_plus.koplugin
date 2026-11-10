@@ -22,7 +22,10 @@ First off, thank you for considering contributing to OPDS Plus! It's people like
 		- [Setting Up Development Environment](#setting-up-development-environment)
 		- [File Structure Understanding](#file-structure-understanding)
 		- [Key Components](#key-components)
+		- [Release Archive](#release-archive)
 	- [Testing](#testing)
+		- [Automated Tests](#automated-tests)
+		- [Continuous Integration](#continuous-integration)
 		- [Manual Testing Checklist](#manual-testing-checklist)
 		- [Test on Multiple Catalogs](#test-on-multiple-catalogs)
 		- [Device Testing](#device-testing)
@@ -73,7 +76,7 @@ Unsure where to begin? Look for issues labeled:
 
 1. **Fork the repository** and create your branch from `main`
 2. **Make your changes** following our style guidelines
-3. **Test your changes** on a real KOReader device or emulator
+3. **Test your changes**: run `luacheck .` and `scripts/test.sh` (see [Testing](#testing)), then try them in KOReader on a device or emulator
 4. **Update documentation** if you've changed functionality
 5. **Write clear commit messages** following our guidelines
 6. **Submit a pull request** with a clear description
@@ -81,12 +84,14 @@ Unsure where to begin? Look for issues labeled:
 #### Pull Request Process
 
 1. Ensure your code follows the [Lua style guidelines](#lua-code-style)
-2. Update the README.md with details of changes if applicable
-3. Update the CHANGELOG.md following the existing format
-4. Increment version numbers in `opds_plus_version.lua` and `_meta.lua` if appropriate
-5. Your PR will be reviewed by maintainers
-6. Address any requested changes
-7. Once approved, your PR will be merged
+2. Run `luacheck .` (it must report 0 warnings and 0 errors) and `scripts/test.sh`
+3. Add or update tests for the behavior you changed. For a bug fix, write the test that fails first
+4. Update the README.md with details of changes if applicable
+5. Add a line under `## [Unreleased]` in CHANGELOG.md following the existing format. Leave the version in `opds_plus_version.lua` alone (`_meta.lua` reads it from there): maintainers raise it when they cut a release
+6. Fill in the pull request template. CI runs luacheck, the tests and a build of the release archive, and all of them must pass
+7. Your PR will be reviewed by maintainers
+8. Address any requested changes
+9. Once approved, your PR will be merged
 
 ## Style Guidelines
 
@@ -95,7 +100,7 @@ Unsure where to begin? Look for issues labeled:
 Follow KOReader's Lua coding conventions:
 
 ```lua
--- Use 4 spaces for indentation (no tabs)
+-- Indent like the rest of the file you are editing
 function MyModule:myFunction(param1, param2)
     local result = self:someHelper(param1)
     if result then
@@ -132,40 +137,36 @@ return MyModule
 ```
 
 **Key conventions:**
-- 4 spaces for indentation
+- Indent like the file you are editing: most files use tabs, some use 4 spaces. Don't mix the two in one file, and don't re-indent lines you aren't changing
 - `snake_case` for variables and functions
 - `PascalCase` for class/module names
 - Descriptive names over abbreviations
 - Comment complex logic
 - Use `local` keyword when possible
 - Group related functions together
+- Wrap every string the user sees in `_("...")` (`local _ = require("gettext")`)
+- Keep `utils/` to pure helpers without UI or network code, so they are easy to test
+- `luacheck .` must report 0 warnings and 0 errors (the settings are in `.luacheckrc`)
 
 ### Git Commit Messages
 
-- Use the present tense ("Add feature" not "Added feature")
-- Use the imperative mood ("Move cursor to..." not "Moves cursor to...")
-- Limit the first line to 72 characters or less
-- Reference issues and pull requests liberally after the first line
-- Consider starting the commit message with an applicable emoji:
-  - 🎨 `:art:` - Improving structure/format of the code
-  - 🐛 `:bug:` - Fixing a bug
-  - ✨ `:sparkles:` - New feature
-  - 📝 `:memo:` - Documentation changes
-  - 🚀 `:rocket:` - Performance improvements
-  - ♻️ `:recycle:` - Refactoring code
-  - 🔧 `:wrench:` - Configuration changes
-  - ✅ `:white_check_mark:` - Adding tests
+Commits follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+- Start the subject with a type: `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `perf:`, `ci:` or `chore:`
+- Use the present tense and the imperative mood ("fix: keep the sync point", not "fixed" or "fixes")
+- Keep the subject line to 50 characters or less
+- Wrap the body at 72 characters, and use it to say what was wrong and why the change fixes it
+- Reference issues and pull requests after the first line
 
 **Example:**
 ```
-✨ Add custom border color option for grid view
+fix: keep the sync point when editing a catalog
 
-- Implement border color selection (light gray, dark gray, black)
-- Add color picker UI in grid settings menu
-- Update grid rendering to use selected color
-- Add border_color to default settings
+Saving the edit dialog dropped last_download, so the next sync went
+through the whole feed again instead of reporting "Up to date!". Keep
+it unless the address changed.
 
-Closes #42
+Fixes #123
 ```
 
 ### Documentation Style
@@ -185,6 +186,8 @@ Closes #42
 - Basic understanding of Lua programming
 - Text editor (VS Code, Sublime, vim, etc.)
 - Git for version control
+- For the automated tests: `python3`, `git`, `make`, a C compiler and `curl`
+- [luacheck](https://github.com/lunarmodules/luacheck) for linting
 
 ### Setting Up Development Environment
 
@@ -212,9 +215,16 @@ Closes #42
    - In KOReader: OPDS Plus → Settings → Developer → Debug Mode
    - This enables detailed logging for development
 
-5. **Make your changes** and test in KOReader
+5. **Set up the test tools** (once; see [Automated Tests](#automated-tests)):
+   ```bash
+   scripts/setup_test_env.sh
+   ```
 
-6. **View logs:**
+6. **Make your changes** together with a test for them, and run `scripts/test.sh` and `luacheck .`
+
+7. **Try it in KOReader**
+
+8. **View logs:**
    - Check KOReader's crash.log for errors
    - Debug output appears in the log when debug mode is enabled
 
@@ -222,34 +232,98 @@ Closes #42
 
 ```
 opds_plus.koplugin/
-├── _meta.lua                 # Plugin metadata (name, version, description)
-├── main.lua                  # Plugin initialization, settings UI, main entry point
-├── opdsbrowserplus.lua       # Catalog browser logic, OPDS feed handling
-├── opdslistmenuplus.lua      # List view rendering and layout
-├── opdsgridmenuplus.lua      # Grid view rendering and layout
-├── opdscovermenuplus.lua     # Cover display coordination between views
-├── opdsparser.lua            # OPDS XML feed parsing
-├── opdspse.lua               # Page streaming engine (Kavita support)
-├── image_loader.lua          # Cover image downloading and caching
-├── url_content.lua           # HTTP network operations
-├── debug_helper.lua          # Debug logging utilities
-└── opds_plus_version.lua     # Version number (single source of truth)
+├── _meta.lua                 # Plugin metadata; the version comes from opds_plus_version.lua
+├── main.lua                  # Plugin entry point and KOReader menu registration
+├── opds_plus_version.lua     # Version number (single source of truth)
+├── config/                   # Persistent settings (settings.lua) and the settings menu (settings_menu.lua)
+├── core/                     # Catalogs, feeds, parsing, navigation, downloads, sync and shared state
+├── models/                   # Constants
+├── services/                 # HTTP client, cover cache and loaders, Kavita progress
+├── ui/                       # The browser (browser.lua), dialogs/ and the list, grid and cover menus/
+├── utils/                    # Pure helpers: URLs, files, catalogs, headers, results, debug logging
+├── spec/                     # Automated tests (not part of the release archive)
+├── scripts/                  # Test tooling and the release build (not part of the release archive)
+└── .github/workflows/        # CI and release workflows
 ```
 
 ### Key Components
 
-- **main.lua**: Settings management, menu structure, plugin lifecycle
-- **opdsbrowserplus.lua**: OPDS feed navigation, download management
-- **List/Grid Menu**: View-specific rendering logic
-- **Cover Menu**: Coordinates between list and grid views
-- **Parser**: Converts OPDS XML to usable data structures
-- **Image Loader**: Asynchronous image loading with caching
+- **main.lua**: Plugin lifecycle and menu registration
+- **core/parser.lua**: Converts OPDS Atom/XML into Lua tables
+- **core/navigation_handler.lua**: Turns a parsed feed into menu items (entries, links, search)
+- **core/feed_fetcher.lua**: Fetches feeds and OpenSearch descriptions, and keeps a cache of pages
+- **core/download_manager.lua** and **core/sync_manager.lua**: Downloads and catalog sync
+- **core/catalog_manager.lua** and **core/state_manager.lua**: The list of catalogs and the shared state behind the settings
+- **services/http_client.lua**: HTTP requests, including a catalog's custom headers
+- **services/cover_cache.lua**, **cover_loader.lua** and **image_loader.lua**: Cover downloading and caching
+- **ui/menus/**: List, grid and cover rendering
+- **ui/dialogs/**: Book info, download, search and settings dialogs
+
+### Release Archive
+
+`scripts/build_release.py` builds `dist/opds_plus.koplugin.zip` (and a `.sha256` file) from an allow-list: the plugin files at the top level and the `config/`, `core/`, `models/`, `services/`, `ui/` and `utils/` directories. Tests, scripts and docs are left out. The script refuses to build when it finds Lua code outside its lists, so a new file can't be forgotten by accident:
+
+- New plugin code in a new top-level file or directory: add it to `SHIPPED` in `scripts/build_release.py`
+- A new top-level directory that is not plugin code, such as a tools directory: add it to `NON_RUNTIME` in `scripts/build_release.py` and in `spec/helper.lua`
+
+```bash
+python3 scripts/build_release.py        # writes dist/opds_plus.koplugin.zip
+```
 
 ## Testing
 
+### Automated Tests
+
+The tests are written for [busted](https://lunarmodules.github.io/busted/) and run under LuaJIT, the Lua that KOReader uses. They need neither KOReader nor a network connection: `spec/helper.lua` and `spec/support/` stand in for the parts of KOReader that the plugin calls (`UIManager`, `socket.http`, `DataStorage` and so on).
+
+**Set up once.** This builds a toolchain inside the repository (`.lua_env/` and `.tools/`, both ignored by git). Nothing is installed globally.
+
+```bash
+scripts/setup_test_env.sh
+```
+
+**Run:**
+
+```bash
+scripts/test.sh                              # unit and integration specs, what CI runs
+scripts/test.sh spec/unit/url_utils_spec.lua # one file
+scripts/test.sh --filter="parseFiletypes"    # tests whose name matches
+scripts/test.sh --contract                   # only the contract specs, see below
+scripts/test.sh --all                        # luacheck, then every spec
+```
+
+**Layout:**
+
+```
+spec/
+├── unit/          one spec per module, with its dependencies replaced
+├── integration/   several modules together, against fixture feeds and a fake HTTP layer
+├── contract/      opt-in checks of the stand-ins against a real KOReader
+├── fixtures/      sample OPDS feeds
+├── support/       stand-ins for KOReader modules (UIManager, socketutil, DataStorage, ...)
+├── vendor/        unmodified copies of KOReader's socket/url.lua and its XML parser (luxl)
+└── helper.lua     helper.load(), helper.stub(), helper.reset() and friends
+```
+
+**Writing a test.** A spec loads the module under test through `helper.load`, which gives it a fresh copy and lets you replace what it requires. Call `helper.reset()` before and after each test. `spec/unit/url_utils_spec.lua` is a small example, and `spec/integration/download_manager_spec.lua` shows stand-ins and the fake HTTP layer. For a bug fix, write the test that fails first. Use tabs, like most of the plugin. Give fixture accounts obviously fake credentials made of plain words, such as `secret`: GitGuardian scans pull requests, and its generic password detector flags other `password = "..."` values (`s3cret` was one). Never put a real credential in a spec.
+
+**Contract tests.** The stand-ins are small, so they could drift from what KOReader really does. `scripts/test.sh --contract` checks them against a real KOReader in `KOREADER_DIR` (default `/usr/lib/koreader`). CI does not run these, because KOReader is not installed there, and they skip themselves when it is not found.
+
+### Continuous Integration
+
+`.github/workflows/ci.yml` runs on every pull request and every push to `main`:
+
+| Job | What it does |
+|-----|--------------|
+| `lint` | `luacheck . --config .luacheckrc` |
+| `test` | `scripts/setup_test_env.sh`, then `scripts/test.sh` |
+| `package` | Builds the release archive with `scripts/build_release.py`, extracts it and runs the specs against the extracted copy, so a file missing from the archive fails the build |
+
+All three must pass. `release.yml` runs the same workflow for a `v*` tag and publishes the archive that passed.
+
 ### Manual Testing Checklist
 
-Before submitting a PR, test the following:
+Before submitting a PR, and once the automated tests pass, check the following in KOReader:
 
 - [ ] List view displays correctly
 - [ ] Grid view displays correctly
