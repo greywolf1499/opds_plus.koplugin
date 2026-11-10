@@ -6,9 +6,7 @@ local Cache = require("cache")
 local DocumentRegistry = require("document/documentregistry")
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
-local http = require("socket.http")
 local logger = require("logger")
-local ltn12 = require("ltn12")
 local socket = require("socket")
 local socketutil = require("socketutil")
 local _ = require("gettext")
@@ -37,22 +35,21 @@ local CatalogCache = Cache:new {
 -- @return string|table XML content or headers, nil on error
 -- @return table|nil Response headers of a GET
 function FeedFetcher.fetchFeed(item_url, headers_only, username, password, cached)
-	local sink = {}
 	socketutil:set_timeout(socketutil.LARGE_BLOCK_TIMEOUT, socketutil.LARGE_TOTAL_TIMEOUT)
 	local own_headers = { ["Accept-Encoding"] = "identity" }
 	if cached and not headers_only then
 		own_headers["If-None-Match"] = cached.etag
 		own_headers["If-Modified-Since"] = cached.last_modified
 	end
-	local request = {
+	-- Redirects are followed by the client rather than by LuaSocket, which drops the credentials of a
+	-- redirect to the same server and sends the custom headers of the catalog to any other
+	local code, headers, status, info = socket.skip(1, HttpClient.request({
 		url      = item_url,
 		method   = headers_only and "HEAD" or "GET",
-		headers  = HttpClient.withCustomHeaders(item_url, own_headers),
-		sink     = ltn12.sink.table(sink),
+		headers  = own_headers,
 		user     = username,
 		password = password,
-	}
-	local code, headers, status = socket.skip(1, http.request(request))
+	}))
 	socketutil:reset_timeout()
 
 	if headers_only then
@@ -64,7 +61,7 @@ function FeedFetcher.fetchFeed(item_url, headers_only, username, password, cache
 	end
 
 	if code == Constants.HTTP_STATUS.OK then
-		local xml = table.concat(sink)
+		local xml = info.body
 		return xml ~= "" and xml, headers
 	end
 
@@ -74,12 +71,12 @@ function FeedFetcher.fetchFeed(item_url, headers_only, username, password, cache
 		text = T(_("The catalog has been permanently moved. Please update catalog URL to '%1'."),
 			BD.url(headers.location))
 	elseif headers and headers.location and code == Constants.HTTP_STATUS.FOUND
-		and item_url:match("^https")
+		and info.url:match("^https")
 		and headers.location:match("^http[^s]") then
 		text = T(
 			_(
 				"Insecure HTTPS → HTTP downgrade attempted by redirect from:\n\n'%1'\n\nto\n\n'%2'.\n\nPlease inform the server administrator that many clients disallow this because it could be a downgrade attack."),
-			BD.url(item_url), BD.url(headers.location))
+			BD.url(info.url), BD.url(headers.location))
 		icon = "notice-warning"
 	else
 		local error_message = {
