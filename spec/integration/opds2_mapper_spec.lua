@@ -61,21 +61,46 @@ describe("OPDS 2.0 mapping", function()
 				"French Classics",
 				"More Navigation - French Books",
 				"More Navigation - English Books",
-				"Moby-Dick - Herman Melville", -- from the "English Classics" group, which has no link
+				"English Classics",
 				"Moby-Dick - Herman Melville",
 			}, texts(items))
 		end)
 
-		it("makes a group with a link a folder for that link", function()
+		it("makes a group with a link a folder for that link, with its size", function()
 			local items = generate("test_opds_home.json", HOME)
 			assert.equals("https://test.opds.io/2.0/publications.json", items[4].url)
 			assert.same({}, items[4].acquisitions)
+			assert.equals("5", items[4].mandatory)
 		end)
 
-		it("lists the publications of a group without a link in place", function()
+		it("makes a group of publications without a link a shelf of the same feed", function()
 			local items = generate("test_opds_home.json", HOME)
-			assert.is_truthy(items[7].acquisitions[1])
+			assert.equals(HOME .. "#opdsplus-group=3", items[7].url)
+			assert.same({}, items[7].acquisitions)
+			assert.equals("1", items[7].mandatory)
 			assert.is_nil(table.concat(debug_lines, "\n"):find("Skipping OPDS 2.0 group", 1, true))
+		end)
+
+		it("lists only the shelf's publications when its address is opened", function()
+			local items, facets = generate("test_opds_home.json", HOME .. "#opdsplus-group=3")
+			assert.same({ "Moby-Dick - Herman Melville" }, texts(items))
+			assert.equals("https://test.opds.io/assets/moby/file.epub", items[1].acquisitions[1].href)
+			assert.same({}, items.hrefs)
+			assert.is_nil(facets)
+		end)
+
+		it("lists nothing for a shelf address the feed no longer has", function()
+			local linked = generate("test_opds_home.json", HOME .. "#opdsplus-group=1")
+			local missing = generate("test_opds_home.json", HOME .. "#opdsplus-group=9")
+			assert.same({}, texts(linked))
+			assert.same({}, texts(missing))
+			assert.matches("The feed has no OPDS 2.0 shelf 9", table.concat(debug_lines, "\n"))
+		end)
+
+		it("lists the shelf's publications in place while syncing, which opens no folders", function()
+			local items = generate("test_opds_home.json", HOME, { sync = true })
+			assert.equals("Moby-Dick - Herman Melville", items[7].text)
+			assert.is_truthy(items[7].acquisitions[1])
 		end)
 
 		it("gives navigation entries a folder url and no acquisitions", function()
@@ -104,6 +129,24 @@ describe("OPDS 2.0 mapping", function()
 			assert.equals("5", items[1].series_index)
 			assert.matches("^Le professeur Lidenbrock", items[1].content)
 			assert.equals("Jules Verne, Second Author", items[3].author)
+		end)
+
+		it("reads publisher, publication date and language", function()
+			local items = generate("test_opds_home.json", "https://test.opds.io/2.0/home.json", { sync = true })
+			local moby = items[7]
+			assert.equals("Moby-Dick", moby.title)
+			assert.equals("Feedbooks", moby.publisher)
+			assert.equals("1851-01-01", moby.published)
+			assert.equals("en", moby.language)
+		end)
+
+		it("joins publisher and language lists and keeps the date of a timestamp", function()
+			local items = from_json([[{"publications":[{"metadata":{"title":"T",
+				"publisher":[{"name":{"en":"Ace"}},"Orbit"],"language":["en","fr",3],
+				"published":"2001-02-03T04:05:06Z"}}]}]])
+			assert.equals("Ace, Orbit", items[1].publisher)
+			assert.equals("en, fr", items[1].language)
+			assert.equals("2001-02-03", items[1].published)
 		end)
 
 		it("lists the acquisition link", function()
@@ -169,6 +212,12 @@ describe("OPDS 2.0 mapping", function()
 			assert.truthy(table.concat(list, "|"):find("Libraries - ", 1, true))
 			assert.truthy(table.concat(list, "|"):find("Keep Reading", 1, true))
 			assert.truthy(table.concat(list, "|"):find("Latest Series - ", 1, true))
+			for __, item in ipairs(items) do
+				if item.text == "Keep Reading" then
+					assert.equals("https://demo.komga.org/opds/v2/libraries/keep-reading", item.url)
+					assert.equals("13", item.mandatory)
+				end
+			end
 		end)
 	end)
 
@@ -207,11 +256,27 @@ describe("OPDS 2.0 mapping", function()
 			assert.equals("Anne Auteur, Bob Writer", french[3].author)
 		end)
 
-		it("skips empty groups, and lists the publications of a group without a link in place", function()
+		it("skips empty groups, and makes a group of publications without a link a shelf", function()
 			local items = generate("edge_cases.json")
-			assert.same({ "New", "Hidden", "Borrowed - Ann Author, Bob Writer", "Unknown - Cee Contributor" },
+			assert.same({ "New", "Inline only", "Borrowed - Ann Author, Bob Writer", "Unknown - Cee Contributor" },
 				texts(items))
+			assert.equals(BASE .. "#opdsplus-group=2", items[2].url)
 			assert.matches("Skipping OPDS 2.0 group without a link: Empty", table.concat(debug_lines, "\n"))
+		end)
+
+		it("keeps the feed's search but not its paging or facets in a shelf", function()
+			local items, facets, search_url = generate("edge_cases.json", BASE .. "#opdsplus-group=2")
+			assert.same({ "Hidden" }, texts(items))
+			assert.same({}, items.hrefs)
+			assert.is_nil(facets)
+			assert.equals("https://library.example.org/opds2/search?query=%s", search_url)
+		end)
+
+		it("names a shelf without a title", function()
+			local items = from_json([[{"navigation":[{"href":"/n","title":"N"}],
+				"groups":[{"publications":[{"metadata":{"title":"T"}}]}]}]])
+			assert.same({ "N", "Unknown" }, texts(items))
+			assert.equals(BASE .. "#opdsplus-group=1", items[2].url)
 		end)
 
 		it("groups facets with their counts and marks the active one", function()

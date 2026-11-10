@@ -148,6 +148,11 @@ describe("NavigationHandler.genItemTableFromCatalog", function()
 			assert.equals("https://cw.example.org/opds", hrefs.up)
 		end)
 
+		it("reads the language of each book", function()
+			assert.equals("eng", items[1].language)
+			assert.is_nil(items[1].publisher)
+		end)
+
 		it("prefers the OpenSearch description over an inline search template", function()
 			assert.equals("https://cw.example.org/opds/search?q=%s", search)
 			assert.equals("https://cw.example.org/opds/osd", search_calls[1][1])

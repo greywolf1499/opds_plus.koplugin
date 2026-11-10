@@ -3,13 +3,17 @@
 -- both against it).
 --
 -- Groups: a group with navigation links is flattened into "Group - link" entries, and a group with a
--- link of its own becomes a folder entry for it. A group of inline publications without a link (the
--- results of a Komga search, for one) lists its publications in place.
+-- link of its own becomes a folder entry for it. A group of inline publications without a link becomes
+-- a shelf: a folder whose address is the feed's own with "#opdsplus-group=<n>" added. The fetcher strips
+-- the fragment, so opening a shelf maps the cached feed again and lists only that group. A feed made of
+-- nothing but such groups (the results of a Komga search, for one) lists their publications in place,
+-- and so does a sync, which never opens folders.
 
 local DocumentRegistry = require("document/documentregistry")
 local _ = require("gettext")
 
 local Constants = require("models.constants")
+local CatalogUtils = require("utils.catalog_utils")
 local UrlUtils = require("utils.url_utils")
 local FileUtils = require("utils.file_utils")
 local UriTemplate = require("utils.uri_template")
@@ -137,6 +141,22 @@ local function authorOf(metadata, language)
 		return nil
 	end
 	return table.concat(names, ", ")
+end
+
+local function publisherOf(metadata, language)
+	local names = contributorNames(metadata.publisher, language, {})
+	return #names > 0 and table.concat(names, ", ") or nil
+end
+
+-- A BCP 47 tag or a list of them
+local function languageOf(metadata)
+	local tags = {}
+	for __, tag in ipairs(type(metadata.language) == "table" and metadata.language or { metadata.language }) do
+		if type(tag) == "string" and hasText(tag) then
+			tags[#tags + 1] = tag
+		end
+	end
+	return #tags > 0 and table.concat(tags, ", ") or nil
 end
 
 local function seriesIndex(position)
@@ -292,6 +312,9 @@ local function publicationItem(publication, build_href, context, language, debug
 	local author = authorOf(metadata, language)
 	item.text = author and (title .. " - " .. author) or title
 	item.series, item.series_index = seriesOf(metadata, language)
+	item.publisher = publisherOf(metadata, language)
+	item.published = CatalogUtils.formatDate(metadata.published)
+	item.language = languageOf(metadata)
 
 	local thumbnail, image = imagesOf(publication.images, context)
 	item.thumbnail = thumbnail and build_href(thumbnail)
@@ -307,8 +330,70 @@ local function publicationItem(publication, build_href, context, language, debug
 	return item
 end
 
-local function folderItem(title, href)
-	return { text = title, title = title, url = href, acquisitions = {} }
+local SHELF_FRAGMENT = "#opdsplus-group="
+
+local function folderItem(title, href, count)
+	return {
+		text = title,
+		title = title,
+		url = href,
+		acquisitions = {},
+		mandatory = count and string.format("%d", count) or nil,
+	}
+end
+
+local function groupTitle(group, language)
+	return localized(type(group.metadata) == "table" and group.metadata.title, language)
+end
+
+local function hasPublications(group)
+	return type(group.publications) == "table" and #group.publications > 0
+end
+
+local function hasNavigation(group)
+	return type(group.navigation) == "table" and #group.navigation > 0
+end
+
+-- The link a group's folder opens: its self link, else its first plain link
+local function groupLink(group)
+	local target
+	for __, link in ipairs(list(group.links)) do
+		if isLink(link) and not isTemplated(link) then
+			if relSet(link.rel).self then
+				return link
+			end
+			target = target or link
+		end
+	end
+	return target
+end
+
+local function isShelf(group, language)
+	return type(group) == "table" and not hasNavigation(group) and hasPublications(group)
+		and not (groupTitle(group, language) and groupLink(group))
+end
+
+-- True when the feed has nothing to show but groups that would become shelves
+local function onlyShelves(catalog, language)
+	if #list(catalog.navigation) > 0 or #list(catalog.publications) > 0 then
+		return false
+	end
+	local shelves = 0
+	for __, group in ipairs(list(catalog.groups)) do
+		if isShelf(group, language) then
+			shelves = shelves + 1
+		elseif type(group) == "table" and (hasNavigation(group) or groupLink(group)) then
+			return false
+		end
+	end
+	return shelves > 0
+end
+
+--- The group a shelf address points at
+-- @param item_url string|nil Address of a feed or of one of its shelves
+-- @return number|nil Index of the group in the feed's groups
+function Opds2Mapper.shelfIndex(item_url)
+	return type(item_url) == "string" and tonumber(item_url:match("#opdsplus%-group=(%d+)$")) or nil
 end
 
 local function facetLink(link, item_url, build_href, language)
@@ -348,6 +433,8 @@ function Opds2Mapper.map(catalog, item_url, browser_context, debug_callback)
 
 	local context = browser_context
 	local language = context.language or uiLanguage()
+	local shelf = Opds2Mapper.shelfIndex(item_url)
+	item_url = UrlUtils.stripFragment(item_url)
 	local base = baseUrl(catalog, item_url)
 	local function build_href(href)
 		return UrlUtils.buildAbsolute(base, href)
@@ -392,6 +479,27 @@ function Opds2Mapper.map(catalog, item_url, browser_context, debug_callback)
 	end
 	item_table.hrefs = hrefs
 
+	local function addPublications(publications)
+		for __, publication in ipairs(list(publications)) do
+			local item = publicationItem(publication, build_href, context, language, debug_callback)
+			if item then
+				table.insert(item_table, item)
+			end
+		end
+	end
+
+	if shelf then
+		-- The feed's paging and facets are not the shelf's
+		item_table.hrefs = {}
+		local group = list(catalog.groups)[shelf]
+		if isShelf(group, language) then
+			addPublications(group.publications)
+		elseif debug_callback then
+			debug_callback("The feed has no OPDS 2.0 shelf", shelf)
+		end
+		return item_table, nil, search_url
+	end
+
 	local function addFacet(group_name, link)
 		group_name = group_name or _("Filters")
 		facet_groups[group_name] = facet_groups[group_name] or {}
@@ -419,31 +527,25 @@ function Opds2Mapper.map(catalog, item_url, browser_context, debug_callback)
 
 	addNavigation(catalog.navigation)
 
+	local shelves_in_place = context.sync or onlyShelves(catalog, language)
 	for index, group in ipairs(list(catalog.groups)) do
 		if type(group) == "table" then
-			local title = localized(type(group.metadata) == "table" and group.metadata.title, language)
-			if type(group.navigation) == "table" and #group.navigation > 0 then
+			local title = groupTitle(group, language)
+			local metadata = type(group.metadata) == "table" and group.metadata or {}
+			if hasNavigation(group) then
 				addNavigation(group.navigation, title)
-			else
-				local target
-				for __, link in ipairs(list(group.links)) do
-					if isLink(link) and not isTemplated(link) then
-						if relSet(link.rel).self then
-							target = link
-							break
-						end
-						target = target or link
-					end
+			elseif isShelf(group, language) then
+				if shelves_in_place then
+					addPublications(group.publications)
+				else
+					table.insert(item_table, folderItem(title or _(Constants.DEFAULT_TITLE),
+						item_url .. SHELF_FRAGMENT .. index, #group.publications))
 				end
+			else
+				local target = groupLink(group)
 				if title and target then
-					table.insert(item_table, folderItem(title, build_href(target.href)))
-				elseif type(group.publications) == "table" and #group.publications > 0 then
-					for __, publication in ipairs(group.publications) do
-						local item = publicationItem(publication, build_href, context, language, debug_callback)
-						if item then
-							table.insert(item_table, item)
-						end
-					end
+					table.insert(item_table, folderItem(title, build_href(target.href),
+						tonumber(metadata.numberOfItems)))
 				elseif debug_callback then
 					debug_callback("Skipping OPDS 2.0 group without a link:", title or index)
 				end
@@ -464,12 +566,7 @@ function Opds2Mapper.map(catalog, item_url, browser_context, debug_callback)
 		end
 	end
 
-	for __, publication in ipairs(list(catalog.publications)) do
-		local item = publicationItem(publication, build_href, context, language, debug_callback)
-		if item then
-			table.insert(item_table, item)
-		end
-	end
+	addPublications(catalog.publications)
 
 	if next(facet_groups) == nil then
 		facet_groups = nil

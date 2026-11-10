@@ -40,7 +40,7 @@ local function check_model(item_table, facet_groups, search_url)
 		assert.is_true(item.text:find("%S") ~= nil, where .. " has text")
 		assert.is_table(item.acquisitions, where)
 		assert.is_true(item.url == nil or is_absolute(item.url), where .. " url")
-		for _, field in ipairs({ "author", "series", "series_index", "content" }) do
+		for _, field in ipairs({ "author", "series", "series_index", "content", "publisher", "published", "language" }) do
 			assert.is_true(optional_string(item[field]), where .. " " .. field)
 		end
 		for j, acquisition in ipairs(item.acquisitions) do
