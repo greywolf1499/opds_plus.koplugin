@@ -164,7 +164,11 @@ function FeedFetcher.getServerFileName(item_url, filetype, username, password)
 		filename = UrlUtils.parseContentDisposition(headers["content-disposition"])
 
 		if not filename and headers["location"] then
-			filename = headers["location"]:gsub(".*/", "")
+			-- Same rules as for the address itself: no query string, and percent-escapes decoded
+			local from_location = UrlUtils.extractFilename(headers["location"])
+			if from_location ~= "" then
+				filename = from_location
+			end
 		end
 	end
 
