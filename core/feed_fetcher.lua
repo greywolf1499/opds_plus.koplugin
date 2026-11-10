@@ -70,10 +70,10 @@ function FeedFetcher.fetchFeed(item_url, headers_only, username, password, cache
 
 	-- Handle errors
 	local text, icon
-	if headers and code == Constants.HTTP_STATUS.MOVED_PERMANENTLY then
+	if headers and headers.location and code == Constants.HTTP_STATUS.MOVED_PERMANENTLY then
 		text = T(_("The catalog has been permanently moved. Please update catalog URL to '%1'."),
 			BD.url(headers.location))
-	elseif headers and code == Constants.HTTP_STATUS.FOUND
+	elseif headers and headers.location and code == Constants.HTTP_STATUS.FOUND
 		and item_url:match("^https")
 		and headers.location:match("^http[^s]") then
 		text = T(

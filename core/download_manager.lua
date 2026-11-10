@@ -167,7 +167,8 @@ function DownloadManager.downloadFile(browser, local_path, remote_url, username,
 			caller_callback(local_path)
 		end
 		return true
-	elseif code == Constants.HTTP_STATUS.FOUND and remote_url:match("^https") and headers.location:match("^http[^s]") then
+	elseif code == Constants.HTTP_STATUS.FOUND and remote_url:match("^https")
+		and headers and headers.location and headers.location:match("^http[^s]") then
 		util.removeFile(local_path)
 		UIManager:show(InfoMessage:new {
 			text = T(_("Insecure HTTPS → HTTP downgrade attempted by redirect from:\n\n'%1'\n\nto\n\n'%2'.\n\nPlease inform the server administrator that many clients disallow this because it could be a downgrade attack."),
