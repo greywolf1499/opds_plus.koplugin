@@ -1,0 +1,184 @@
+{
+  "metadata": {
+    "title": "OPDS 2.0 Test Publications",
+    "numberOfItems": 14
+  },
+  "links": [
+    {
+      "rel": "self",
+      "href": "https://test.opds.io/2.0/publications.json",
+      "type": "application/opds+json"
+    }
+  ],
+  "publications": [
+    {
+      "metadata": {
+        "@type": "http://schema.org/Book",
+        "title": "Voyage au centre de la Terre",
+        "subtitle": "Un super sous-titre",
+        "author": "Jules Verne",
+        "identifier": "http://fr.feedbooks.com/book/1474/voyage-au-centre-de-la-terre",
+        "language": "fr",
+        "modified": "2018-04-23T22:15:00Z",
+        "published": "1864-01-01",
+        "publisher": "Feedbooks",
+        "imprint": "Feedbooks Classics",
+        "numberOfPages": 251,
+        "subject": [
+          {
+            "name": "Science Fiction",
+            "code": "FBFIC028000"
+          },
+          {
+            "name": "Action & Aventure",
+            "code": "FBFIC002000"
+          }
+        ],
+        "belongsTo": {
+          "series": {
+            "name": "Les classiques SF de Verne",
+            "position": 5
+          },
+          "collection": "Domaine Public"
+        },
+        "description": "Le professeur Lidenbrock trouve un document dans lequel il apprend l'existence d'un vol..."
+      },
+      "links": [
+        {
+          "rel": "http://opds-spec.org/acquisition/open-access",
+          "href": "https://test.opds.io/assets/centredelaterre/file.epub",
+          "type": "application/epub+zip"
+        }
+      ],
+      "images": [
+        {
+          "href": "https://test.opds.io/assets/centredelaterre/small.jpg",
+          "type": "image/jpeg",
+          "height": 110,
+          "width": 146
+        },
+        {
+          "href": "https://test.opds.io/assets/centredelaterre/normal.jpg",
+          "type": "image/jpeg",
+          "height": 346,
+          "width": 260
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "@type": "http://schema.org/Book",
+        "title": {
+          "en": "Title in multiple languages",
+          "fr": "Titre en plusieurs langues"
+        },
+        "author": "Jules Verne",
+        "identifier": "http://fr.feedbooks.com/book/1474/voyage-au-centre-de-la-terre",
+        "language": [
+          "fr",
+          "en"
+        ],
+        "modified": "2018-04-23T22:15:00Z",
+        "published": "1864-01-01",
+        "publisher": "Feedbooks",
+        "imprint": "Feedbooks Classics",
+        "numberOfPages": 251,
+        "subject": [
+          {
+            "name": "Science Fiction",
+            "code": "FBFIC028000"
+          },
+          {
+            "name": "Action & Aventure",
+            "code": "FBFIC002000"
+          }
+        ],
+        "belongsTo": {
+          "series": {
+            "name": "Les classiques SF de Verne",
+            "position": 5
+          },
+          "collection": "Domaine Public"
+        },
+        "description": "Le professeur Lidenbrock trouve un document dans lequel il apprend l'existence d'un vol..."
+      },
+      "links": [
+        {
+          "rel": "http://opds-spec.org/acquisition/open-access",
+          "href": "https://test.opds.io/assets/centredelaterre/file.epub",
+          "type": "application/epub+zip"
+        }
+      ],
+      "images": [
+        {
+          "href": "https://test.opds.io/centredelaterre/small.jpg",
+          "type": "image/jpeg",
+          "height": 110,
+          "width": 146
+        },
+        {
+          "href": "https://test.opds.io/assets/centredelaterre/normal.jpg",
+          "type": "image/jpeg",
+          "height": 346,
+          "width": 260
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "@type": "http://schema.org/Book",
+        "title": "Multiple Authors",
+        "author": [
+          "Jules Verne",
+          "Second Author"
+        ],
+        "identifier": "http://fr.feedbooks.com/book/1474/voyage-au-centre-de-la-terre",
+        "language": "fr",
+        "modified": "2018-04-23T22:15:00Z",
+        "published": "1864-01-01",
+        "publisher": "Feedbooks",
+        "imprint": "Feedbooks Classics",
+        "numberOfPages": 251,
+        "subject": [
+          {
+            "name": "Science Fiction",
+            "code": "FBFIC028000"
+          },
+          {
+            "name": "Action & Aventure",
+            "code": "FBFIC002000"
+          }
+        ],
+        "belongsTo": {
+          "series": {
+            "name": "Les classiques SF de Verne",
+            "position": 5
+          },
+          "collection": "Domaine Public"
+        },
+        "description": "Le professeur Lidenbrock trouve un document dans lequel il apprend l'existence d'un vol..."
+      },
+      "links": [
+        {
+          "rel": "http://opds-spec.org/acquisition/open-access",
+          "href": "https://test.opds.io/assets/centredelaterre/file.epub",
+          "type": "application/epub+zip"
+        }
+      ],
+      "images": [
+        {
+          "href": "https://test.opds.io/assets/centredelaterre/small.jpg",
+          "type": "image/jpeg",
+          "height": 110,
+          "width": 146
+        },
+        {
+          "href": "https://test.opds.io/assets/centredelaterre/normal.jpg",
+          "type": "image/jpeg",
+          "height": 346,
+          "width": 260
+        }
+      ]
+    }
+  ]
+}

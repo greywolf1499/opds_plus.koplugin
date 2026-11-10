@@ -48,6 +48,13 @@ local SAMPLES = {
 	'[{"href":"/x"},null,{"href":"/y"}]',
 }
 
+-- The OPDS 2.0 fixtures, captured from real servers or written to their shapes
+for name in lfs.dir(helper.spec_root .. "/fixtures/opds2") do
+	if name:sub(-5) == ".json" then
+		SAMPLES[#SAMPLES + 1] = helper.fixture("opds2/" .. name)
+	end
+end
+
 local BAD = { "{bad", "null", "", '{"a":1', "\239\187\191" }
 
 describe("JSON real libraries", function()

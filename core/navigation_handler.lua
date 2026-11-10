@@ -3,17 +3,22 @@
 
 local Constants = require("models.constants")
 local AtomMapper = require("core.mappers.atom")
+local Opds2Mapper = require("core.mappers.opds2")
+local OPDSParser = require("core.parser")
 local BrowserContext = require("core.browser_context")
 
 local NavigationHandler = {}
 
 -- Parse OPDS catalog into item table for menu display
--- @param catalog table Parsed OPDS feed
+-- @param catalog table Parsed OPDS feed, Atom or OPDS 2.0 (see core/parser.lua)
 -- @param item_url string Base URL for building absolute URLs
 -- @param browser_context table Browser context with catalog_type, acquisition_rel, etc.
 -- @param debug_callback function Optional debug logging callback
 -- @return table Item table suitable for menu display
 function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_context, debug_callback)
+	if OPDSParser.isOpds2(catalog) then
+		return Opds2Mapper.map(catalog, item_url, browser_context, debug_callback)
+	end
 	return AtomMapper.map(catalog, item_url, browser_context, debug_callback)
 end
 
