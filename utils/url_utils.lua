@@ -64,9 +64,15 @@ end
 function UrlUtils.buildSearchUrl(template, search_query)
 	if not template or not search_query then return nil end
 
+	-- Function replacements: a string replacement would read the %XX escapes of an
+	-- encoded query as capture references.
+	local function query()
+		return search_query
+	end
+
 	-- Handle both {searchTerms} and %s patterns
-	local search_url = template:gsub("{searchTerms}", search_query)
-	search_url = search_url:gsub("%%s", search_query)
+	local search_url = template:gsub("{searchTerms}", query)
+	search_url = search_url:gsub("%%s", query)
 
 	return search_url
 end
