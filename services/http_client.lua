@@ -247,8 +247,6 @@ end
 -- @param password string|nil HTTP auth password
 -- @return Result Result object with content on success, error on failure
 function HttpClient.fetch(url, timeout, maxtime, username, password)
-    local http = require("socket.http")
-    local ltn12 = require("ltn12")
     local socket = require("socket")
     local socketutil = require("socketutil")
     local socket_url = require("socket.url")
@@ -260,20 +258,15 @@ function HttpClient.fetch(url, timeout, maxtime, username, password)
 
     if not timeout then timeout = Constants.TIMEOUTS.DEFAULT end
 
-    local sink = {}
     socketutil:set_timeout(timeout, maxtime or Constants.TIMEOUTS.MAX_TIME)
-    local request = {
+    local code, headers, status, info = socket.skip(1, HttpClient.request({
         url      = url,
         method   = "GET",
-        headers  = HttpClient.withCustomHeaders(url),
-        sink     = maxtime and socketutil.table_sink(sink) or ltn12.sink.table(sink),
         user     = username,
         password = password,
-    }
-
-    local code, headers, status = socket.skip(1, http.request(request))
+    }, { total_timeout = maxtime ~= nil }))
     socketutil:reset_timeout()
-    local content = table.concat(sink)
+    local content = info.body or ""
 
     -- Handle timeout errors
     if code == socketutil.TIMEOUT_CODE or
