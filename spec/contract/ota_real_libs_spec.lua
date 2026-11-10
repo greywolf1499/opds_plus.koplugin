@@ -94,3 +94,34 @@ describe("OTA real libraries", function()
 		end
 	end)
 end)
+
+describe("OTA real LuaSec", function()
+	-- spec/fixtures/tls/san_example.pem: a self-signed certificate (no key kept) for example.org and
+	-- *.example.net
+	it("exposes certificate names the way services/tls_hostname.lua reads them", function()
+		-- ssl.so needs KOReader's own OpenSSL, which is not on the loader's path
+		local ffi = require("ffi")
+		for _, prefix in ipairs({ "libcrypto.so.", "libssl.so." }) do
+			for name in lfs.dir(KOREADER .. "/libs") do
+				if name:sub(1, #prefix) == prefix then
+					ffi.load(KOREADER .. "/libs/" .. name, true)
+				end
+			end
+		end
+		local saved_path, saved_cpath = package.path, package.cpath
+		package.path = table.concat({ KOREADER .. "/common/?.lua", package.path }, ";")
+		package.cpath = table.concat({ KOREADER .. "/common/?.so", package.cpath }, ";")
+		local ok, ssl = pcall(require, "ssl")
+		local x509 = ok and require("ssl.x509")
+		package.path, package.cpath = saved_path, saved_cpath
+		assert(ok, ssl)
+		assert.is_function(ssl.wrap)
+
+		local TlsHostname = require("services.tls_hostname")
+		local cert = assert(x509.load(helper.fixture("tls/san_example.pem")))
+		assert.same({ "example.org", "*.example.net" }, cert:extensions()[TlsHostname.SAN_OID].dNSName)
+		assert.is_true(TlsHostname.certificateMatches(cert, "example.org"))
+		assert.is_true(TlsHostname.certificateMatches(cert, "cdn.example.net"))
+		assert.is_false(TlsHostname.certificateMatches(cert, "example.com"))
+	end)
+end)

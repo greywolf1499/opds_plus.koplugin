@@ -1,10 +1,11 @@
 -- In-app updater: finds the latest stable GitHub release, downloads and verifies its zip, stages it next
 -- to the installed plugin and swaps it in with two renames, keeping the old version as a backup.
 --
--- Trust model: TLS with verify="peer" against KOReader's CA bundle (no hostname check, see SECURITY.md),
--- HTTPS only with manual redirects restricted to GitHub hosts, and the asset's SHA-256 from the release API
--- (or the .sha256 sidecar). Nothing from the archive reaches the plugins folder before every entry name has
--- been checked and the staged tree has been validated.
+-- Trust model: TLS with verify="peer" against KOReader's CA bundle and a check of the certificate's names
+-- against the host (services/tls_hostname.lua), HTTPS only with manual redirects restricted to GitHub
+-- hosts, and the asset's SHA-256 from the release API (or the .sha256 sidecar). Nothing from the archive
+-- reaches the plugins folder before every entry name has been checked and the staged tree has been
+-- validated.
 --
 -- Every outside dependency can be injected through OtaUpdater.new(deps), so specs run it against temp dirs.
 -- Deletion is limited to three exact paths: the staging folder, the backup folder (both siblings of the
@@ -16,6 +17,7 @@ local ArchivePaths = require("utils.archive_paths")
 local FileUtils = require("utils.file_utils")
 local HttpClient = require("services.http_client")
 local Semver = require("utils.semver")
+local TlsHostname = require("services.tls_hostname")
 
 local OtaUpdater = {}
 
@@ -200,9 +202,12 @@ function OtaUpdater:cleanup()
 	end
 end
 
--- TLS settings for every request: verify the chain against the CA bundle
+-- TLS settings for every request: verify the chain against the CA bundle, and the host against the
+-- certificate
 function OtaUpdater:tlsOptions()
-	return { verify = "peer", cafile = self.ca_file, protocol = "any", options = "all" }
+	local tls = { verify = "peer", cafile = self.ca_file }
+	tls.create = TlsHostname.create(tls)
+	return tls
 end
 
 local function classifyNetworkError(err)

@@ -165,6 +165,7 @@ describe("OTA updater", function()
 			assert.equal("OPDSPlus/1.3.1", request.headers["User-Agent"])
 			assert.equal("peer", request.raw.verify)
 			assert.equal(ca_file, request.raw.cafile)
+			assert.is_function(request.raw.create)
 		end)
 
 		it("sends the ETag it was given and reports a 304", function()
