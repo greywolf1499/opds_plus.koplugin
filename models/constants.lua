@@ -208,6 +208,15 @@ local Constants = {
 			url = "https://gallica.bnf.fr/opds",
 		},
 	},
+
+	-- In-app updater (services/ota_updater.lua, ui/dialogs/update_dialog.lua)
+	OTA = {
+		CHECK_INTERVAL_SECONDS = 7 * 24 * 60 * 60,
+		-- Wait this long after the catalog opens before the automatic check, so the UI is drawn first
+		AUTO_CHECK_DELAY_SECONDS = 2,
+		CHECK_BLOCK_TIMEOUT = 10,
+		CHECK_TOTAL_TIMEOUT = 20,
+	},
 }
 
 return Constants

@@ -100,6 +100,14 @@ function Settings:initializeDefaults()
 		self.data.navigation_thumbnails = true
 	end
 
+	-- Update settings
+	if self.data.ota_auto_check == nil then
+		self.data.ota_auto_check = true
+	end
+	if self.data.ota_allow_dev == nil then
+		self.data.ota_allow_dev = false
+	end
+
 	-- Download settings
 	if self.data.save_book_description == nil then
 		self.data.save_book_description = true

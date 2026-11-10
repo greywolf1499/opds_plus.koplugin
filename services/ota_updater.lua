@@ -131,6 +131,7 @@ end
 --   koreader_supports function  min_version -> boolean (default: version module)
 --   rename function          os.rename, injectable to test the rollback paths
 --   ca_file string           CA bundle for verify="peer" (default: KOReader's data/ca-bundle.crt)
+--   total_timeout boolean    Stop API answers that outlast socketutil's total timeout
 -- @return table|nil updater, or nil and E.BAD_INSTALL_PATH
 function OtaUpdater.new(deps)
 	deps = deps or {}
@@ -160,6 +161,7 @@ function OtaUpdater.new(deps)
 	self.koreader_supports = deps.koreader_supports or defaultKoreaderSupports
 	self.rename = deps.rename or os.rename
 	self.ca_file = deps.ca_file or OtaUpdater.CA_FILE
+	self.total_timeout = deps.total_timeout
 	return self
 end
 
@@ -334,7 +336,10 @@ function OtaUpdater:check(state)
 	if type(state.etag) == "string" and state.etag ~= "" then
 		headers["If-None-Match"] = state.etag
 	end
-	local code, response, info = self:request(OtaUpdater.LATEST_URL, headers, { max_bytes = OtaUpdater.MAX_API_BYTES })
+	local code, response, info = self:request(OtaUpdater.LATEST_URL, headers, {
+		max_bytes = OtaUpdater.MAX_API_BYTES,
+		total_timeout = self.total_timeout,
+	})
 	if not code then
 		warn("check failed", response, info)
 		return nil, response, info
@@ -603,7 +608,56 @@ function OtaUpdater:preflight(release, options)
 	return true
 end
 
---- Downloads, verifies, stages and installs a release
+--- Finds the digest the download must match: GitHub's, else the .sha256 file attached to the release
+-- @return string|nil Lowercase hex
+-- @return string|nil error code
+function OtaUpdater:resolveDigest(release)
+	local digest = release.digest
+	if not digest and release.sidecar_url then
+		digest = self:sidecarDigest(release)
+	end
+	if not digest then
+		return nil, E.NO_DIGEST
+	end
+	return digest
+end
+
+--- Downloads the release's zip; safe to run in a subprocess that may be killed, as it writes nothing but
+-- the zip in the cache folder
+-- @param progress function|nil function(bytes, total) -> false to cancel
+-- @return string|nil digest
+-- @return number|string size, or error code
+-- @return any detail
+function OtaUpdater:fetch(release, progress)
+	local digest, err = self:resolveDigest(release)
+	if not digest then
+		return nil, err
+	end
+	local size, download_err, detail = self:download(release, progress)
+	if not size then
+		return nil, download_err, detail
+	end
+	return digest, size
+end
+
+--- Verifies a downloaded zip, stages it and swaps it in; removes the staging folder and the zip whatever
+-- happens
+-- @return boolean|nil true when installed; the update takes effect after a restart
+-- @return string|nil error code
+-- @return any detail
+function OtaUpdater:apply(release, digest, size)
+	local ok, err, detail = self:applyStaged(release, digest, size)
+	self:cleanup()
+	if not ok then
+		warn("install failed", err, detail)
+		return nil, err, detail
+	end
+	OtaUpdater.restart_pending = true
+	log("installed", release.version)
+	return true
+end
+
+--- Downloads, verifies, stages and installs a release, in one go
 -- @param release table From check()
 -- @param options table|nil { allow_dev = boolean, progress = function(bytes, total) -> false to cancel }
 -- @return boolean|nil true when installed; the update takes effect after a restart
@@ -615,34 +669,17 @@ function OtaUpdater:install(release, options)
 	if not ok then
 		return nil, err, detail
 	end
-	ok, err, detail = self:installStaged(release, options)
-	if exists(self.staging_dir) then
-		self:removeOwned(self.staging_dir)
+	local digest, size
+	digest, size, detail = self:fetch(release, options.progress)
+	if not digest then
+		self:cleanup()
+		warn("download failed", size, detail)
+		return nil, size, detail
 	end
-	if exists(self.download_path) then
-		self:removeOwned(self.download_path)
-	end
-	if not ok then
-		warn("install failed", err, detail)
-		return nil, err, detail
-	end
-	OtaUpdater.restart_pending = true
-	log("installed", release.version)
-	return true
+	return self:apply(release, digest, size)
 end
 
-function OtaUpdater:installStaged(release, options)
-	local digest = release.digest
-	if not digest and release.sidecar_url then
-		digest = self:sidecarDigest(release)
-	end
-	if not digest then
-		return nil, E.NO_DIGEST
-	end
-	local size, err, detail = self:download(release, options.progress)
-	if not size then
-		return nil, err, detail
-	end
+function OtaUpdater:applyStaged(release, digest, size)
 	if release.asset_size and size ~= release.asset_size then
 		return nil, E.DIGEST_MISMATCH, "size"
 	end
@@ -651,8 +688,7 @@ function OtaUpdater:installStaged(release, options)
 		return nil, E.DIGEST_MISMATCH
 	end
 	data = nil -- luacheck: ignore 311
-	local checked
-	checked, err, detail = self:listArchive()
+	local checked, err, detail = self:listArchive()
 	if not checked then
 		return nil, err, detail
 	end

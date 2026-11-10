@@ -8,6 +8,7 @@ local OPDSBrowser = require("ui.browser")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local lfs = require("libs/libkoreader-lfs")
+local logger = require("logger")
 local util = require("util")
 local _ = require("gettext")
 local T = require("ffi/util").template
@@ -24,6 +25,9 @@ local SettingsDialogs = require("ui.dialogs.settings_dialogs")
 
 -- Import state manager
 local StateManager = require("core.state_manager")
+
+-- Loaded now, so an update that replaces the files on disk never mixes them into this process
+local UpdateDialog = require("ui.dialogs.update_dialog")
 
 local OPDS = WidgetContainer:extend {
     name = "opdsplus",
@@ -57,6 +61,11 @@ function OPDS:init()
 
     self:onDispatcherRegisterActions()
     self.ui.menu:registerToMainMenu(self)
+
+    local ok, err = pcall(UpdateDialog.cleanupLeftovers, self)
+    if not ok then
+        logger.warn("OPDS+ OTA: cleanup raised", err)
+    end
 end
 
 function OPDS:getCoverHeightRatio()
@@ -221,6 +230,9 @@ function OPDS:_createBrowserInstance()
 end
 
 function OPDS:_startSyncFromDispatcher(force_sync)
+    if UpdateDialog.restartGate() then
+        return
+    end
     NetworkMgr:runWhenConnected(function()
         -- Syncing overwrites the browser's catalog credentials, so never reuse the browser the user may have open.
         -- This one is not shown and is not kept in self.opds_browser, which is only for the visible browser.
@@ -296,9 +308,13 @@ function OPDS:clearCoverCache()
 end
 
 function OPDS:onShowOPDSPlusCatalog()
+    if UpdateDialog.restartGate() then
+        return
+    end
     self.opds_browser = self:_createBrowserInstance()
     UIManager:show(self.opds_browser)
     self.opds_browser:openDefaultCatalog()
+    UpdateDialog.scheduleAutoCheck(self)
 end
 
 function OPDS:showFileDownloadedDialog(file)
