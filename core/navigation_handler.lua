@@ -58,14 +58,19 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 					if link.type:find(browser_context.search_type) then
 						if link.href then
 							local FeedFetcher = require("core.feed_fetcher")
-							search_url = build_href(FeedFetcher.getSearchTemplate(
+							local template = FeedFetcher.getSearchTemplate(
 								build_href(link.href),
 								browser_context.search_template_type,
 								browser_context.username,
 								browser_context.password,
 								debug_callback
-							))
-							has_opensearch = true
+							)
+							-- Without a template there is nothing to search with: resolving a nil href would
+							-- give the address of this very catalog, and searching would only reload it.
+							if template then
+								search_url = build_href(template)
+								has_opensearch = true
+							end
 						end
 					end
 
