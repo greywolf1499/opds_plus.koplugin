@@ -1,0 +1,41 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:dc="http://purl.org/dc/terms/" xmlns:opds="http://opds-spec.org/2010/catalog" xmlns="http://www.w3.org/2005/Atom">
+  <title>Newest</title>
+  <id>urn:calibre:main</id>
+  <updated>2025-03-09T17:25:12+00:00</updated>
+  <link type="application/atom+xml;profile=opds-catalog" href="/opds/navcatalog/4f6e6577657374" rel="self"/>
+  <link type="application/atom+xml;profile=opds-catalog" href="/opds" rel="start"/>
+  <link type="application/atom+xml;profile=opds-catalog" href="/opds" rel="up"/>
+  <link type="application/atom+xml" href="/opds/search/{searchTerms}" rel="search" title="Search"/>
+  <entry>
+    <title>The Count of Monte Cristo</title>
+    <id>urn:uuid:7d4e2a30-3f19-4a8a-b1b0-2a3c6c0e55a1</id>
+    <updated>2025-03-09T17:25:12+00:00</updated>
+    <author>
+      <name>Alexandre Dumas</name>
+    </author>
+    <author>
+      <name>Auguste Maquet</name>
+    </author>
+    <link rel="http://opds-spec.org/acquisition" href="/get/EPUB/17/Library" length="1203456" mtime="2025-03-09T17:25:12+00:00" type="application/epub+zip"/>
+    <link rel="http://opds-spec.org/image" href="/get/cover/17/Library" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/image/thumbnail" href="/get/thumb/17/Library" type="image/jpeg"/>
+    <content type="xhtml">
+      <div xmlns="http://www.w3.org/1999/xhtml">RATING: &#9733;&#9733;&#9733;&#9733;<br />TAGS: Adventure, Classics<br />SERIES: Dumas Romances [2.0]<br /><p>Edmond Dant&#232;s is wrongly imprisoned...</p><p>A tale of <b>revenge</b> &amp; redemption.</p></div>
+    </content>
+  </entry>
+  <entry>
+    <title>Short Stories</title>
+    <id>urn:uuid:11c2a9d1-0a9b-4b8e-8d52-6b1f9a0a7b77</id>
+    <updated>2025-03-08T09:00:00+00:00</updated>
+    <author>
+      <name>Anton Chekhov</name>
+    </author>
+    <link rel="http://opds-spec.org/acquisition" href="/get/EPUB/16/Library" length="88000" mtime="2025-03-08T09:00:00+00:00" type="application/epub+zip"/>
+    <content type="xhtml">
+      <div xmlns="http://www.w3.org/1999/xhtml">
+        <p>Plain description without any of the optional lines.</p>
+      </div>
+    </content>
+  </entry>
+</feed>

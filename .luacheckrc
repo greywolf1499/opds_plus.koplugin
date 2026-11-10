@@ -34,7 +34,16 @@ read_globals = {
 exclude_files = {
     "**/*.zip",
     "**/*.png",
-    ".github/*"
+    ".github/*",
+    "spec/vendor/**", -- third-party copies, kept unmodified
+    ".lua_env/**",    -- local test toolchain, see scripts/setup_test_env.sh
+    ".tools/**",
+    "dist/**",
+}
+
+-- Specs run under busted
+files["spec/**/*.lua"] = {
+    std = "+busted",
 }
 
 ignore = {

@@ -1,0 +1,15 @@
+-- busted configuration. Run through scripts/test.sh (it sets up the project-local toolchain).
+return {
+	_all = {
+		helper = "spec/helper.lua",
+		pattern = "_spec",
+	},
+	-- `busted`: what CI runs. Hermetic: no KOReader install, no network.
+	default = {
+		ROOT = { "spec/unit", "spec/integration" },
+	},
+	-- `busted --run=contract`: opt-in checks of our stand-ins against a real KOReader (KOREADER_DIR).
+	contract = {
+		ROOT = { "spec/contract" },
+	},
+}
