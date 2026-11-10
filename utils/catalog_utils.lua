@@ -39,7 +39,9 @@ function CatalogUtils.parseEntryTitle(entry_title, default)
 	if type(entry_title) == "string" then
 		return entry_title
 	elseif type(entry_title) == "table" then
-		if type(entry_title.type) == "string" and entry_title.div ~= "" then
+		-- The parser gives an XHTML title as { type = "xhtml", div = <text> }. An empty div can come as a
+		-- table or as nothing at all, and neither is a title.
+		if type(entry_title.type) == "string" and type(entry_title.div) == "string" and entry_title.div ~= "" then
 			return entry_title.div
 		end
 	end
