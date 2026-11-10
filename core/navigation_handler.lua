@@ -13,6 +13,11 @@ local BrowserContext = require("core.browser_context")
 
 local NavigationHandler = {}
 
+-- An empty <content/> parses to a table, which must not hide a summary that has text
+local function hasText(value)
+	return type(value) == "string" and value:find("%S") ~= nil
+end
+
 -- Parse OPDS catalog into item table for menu display
 -- @param catalog table Parsed OPDS feed
 -- @param item_url string Base URL for building absolute URLs
@@ -205,7 +210,11 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 
 		item.title = title
 		item.author = author
-		item.content = entry.content or entry.summary
+		if hasText(entry.content) then
+			item.content = entry.content
+		elseif hasText(entry.summary) then
+			item.content = entry.summary
+		end
 		table.insert(item_table, item)
 	end
 
