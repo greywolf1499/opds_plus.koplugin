@@ -11,7 +11,7 @@
 
 # OPDS Plus - Enhanced OPDS Browser for KOReader
 
-**Version:** 1.3.1
+**Version:** 1.4.0
 
 **OPDS Plus** is a feature-rich enhancement of KOReader's built-in OPDS catalog browser, providing visual book cover displays, multiple viewing modes, and extensive customization options for browsing online book catalogs.
 
@@ -115,6 +115,12 @@ git clone https://github.com/greywolf1499/opds_plus.koplugin.git
 # Restart KOReader
 ```
 
+### Updating (New in 1.4.0)
+
+From 1.4.0 on, OPDS Plus updates itself: open **OPDS Plus Catalog → Settings → Updates** and tap **Check for updates**. It shows what is new and installs it when you tap **Install**; restart KOReader when asked. **Roll back to previous version** puts the version before the update back. Versions before 1.4.0 can't update themselves, so install 1.4.0 by hand once, as above.
+
+A plugin folder that is a link, or has a `.git` folder in it (Method 2), is a development install: update it with `git pull` instead.
+
 ### Troubleshooting Installation
 - Ensure the directory is named exactly `opds_plus.koplugin`
 - Verify all `.lua` files are present in the plugin directory
@@ -209,6 +215,14 @@ Access settings from: **OPDS Plus Catalog → Settings**
   - Bold/regular weight
   - Color: Dark Gray or Black
 
+#### Updates (New in 1.4.0)
+- **Check for updates**: asks GitHub for the latest release, and offers **Install**, **Skip this version** (the weekly check then stays quiet about it) or **Later**.
+- **Automatic update check (weekly)**: enabled by default. At most once a week, when you open OPDS Plus and the device is already online, it checks for a new release and tells you once with a short notice. It never installs anything by itself.
+- **Roll back to previous version**: available after an update. Puts the previous version back and keeps the newer one, so you can switch again.
+- **Allow updating a development install**: for a plugin folder that is a link or a git checkout. A linked folder is moved aside as the backup; the folder it points to is not changed.
+- **About** shows when the last check was made.
+- What a check sends: an update check is a request to `api.github.com` for the latest release of this repository, with the plugin version in the `User-Agent`. GitHub sees your IP address, as with any request. Nothing else is sent, and OPDS Plus has no server of its own. See [SECURITY.md](SECURITY.md).
+
 #### Downloads (New in 1.3.0)
 - **Save Description with Downloads**:
   - Enabled (default): the description a catalog gives for a book is saved with the downloaded file, so it shows in KOReader's **Book information**. A description the book already has, or one you edited yourself, is never replaced.
@@ -298,7 +312,9 @@ opds_plus.koplugin/
 │   ├── cover_loader.lua
 │   ├── http_client.lua
 │   ├── image_loader.lua
-│   └── kavita.lua
+│   ├── kavita.lua
+│   ├── ota_updater.lua
+│   └── tls_hostname.lua
 ├── ui/
 │   ├── browser.lua
 │   ├── utils.lua
@@ -306,22 +322,25 @@ opds_plus.koplugin/
 │   │   ├── book_info_dialog.lua
 │   │   ├── download_builder.lua
 │   │   ├── menu_builder.lua
-│   │   └── settings_dialogs.lua
+│   │   ├── settings_dialogs.lua
+│   │   └── update_dialog.lua
 │   └── menus/
 │       ├── cover_menu.lua
 │       ├── grid_menu.lua
 │       └── list_menu.lua
 └── utils/
+    ├── archive_paths.lua
     ├── button_dialog_builder.lua
     ├── catalog_utils.lua
     ├── debug.lua
     ├── file_utils.lua
     ├── request_headers.lua
     ├── result.lua
+    ├── semver.lua
     └── url_utils.lua
 ```
 
-The release archive holds exactly these files. The repository also has `spec/` (automated tests), `scripts/` (test tooling and the release build) and `.github/` (CI), which are not part of the archive.
+The release archive holds exactly these files. The repository also has `spec/` (automated tests), `scripts/` (test tooling and the release build), `tools/` (end-to-end checks in a real KOReader) and `.github/` (CI), which are not part of the archive.
 
 ### Settings Storage
 Settings are stored in: `<KOReader data dir>/settings/opdsplus.lua`
@@ -332,6 +351,7 @@ This file contains:
 - Display preferences
 - Font settings
 - Grid layout configuration
+- Update settings: whether to check weekly, when the last check was, and a skipped version
 
 Cached covers are stored in `<KOReader data dir>/cache/opds_plus/`. To remove both, use KOReader's plugin manager and choose **Disable plugin and delete settings** or **Delete plugin and settings**. Downloaded books are never deleted.
 
