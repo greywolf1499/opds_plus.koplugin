@@ -305,6 +305,12 @@ function DownloadManager.downloadPendingSyncs(browser, dl_list)
 			UIManager:close(info)
 		end
 
+		-- A book that was already on the device is not one this run downloaded, however recent its file is
+		local is_duplicate = {}
+		for _, item in ipairs(duplicate_list or {}) do
+			is_duplicate[item.file] = true
+		end
+
 		local dl_count = 0
 		local dl_size = #dl_list
 		for i = dl_size, 1, -1 do
@@ -318,7 +324,8 @@ function DownloadManager.downloadPendingSyncs(browser, dl_list)
 					if attr.size > 0 then
 						table.remove(dl_list, i)
 						-- Only count files touched within the freshness window
-						if attr.modification > os.time() - Constants.SYNC.DOWNLOAD_FRESHNESS_SECONDS then
+						if not is_duplicate[item.file]
+							and attr.modification > os.time() - Constants.SYNC.DOWNLOAD_FRESHNESS_SECONDS then
 							dl_count = dl_count + 1
 						end
 					else -- incomplete download
@@ -329,8 +336,6 @@ function DownloadManager.downloadPendingSyncs(browser, dl_list)
 		end
 
 		local duplicate_count = duplicate_list and #duplicate_list or 0
-		dl_count = dl_count - duplicate_count
-
 		-- Make downloaded count timeout if there's a duplicate file prompt
 		local timeout = nil
 		if duplicate_count > 0 then
