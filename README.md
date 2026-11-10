@@ -263,10 +263,9 @@ CF-Access-Client-Secret: <your client secret>
 The button shows how many headers the catalog has, such as **Headers (2)**.
 
 - The headers go with everything the plugin asks that server for: catalog pages, covers, downloads, sync and Kavita page streaming.
-- They are only sent to the catalog's own server, meaning the same scheme, host and port. `http` and `https`, or two different ports, count as different servers. Catalogs on the same server share their headers: the first catalog in the list that has headers decides what is sent to that server.
+- They are only sent to the catalog's own server, meaning the same scheme, host and port. `http` and `https`, or two different ports, count as different servers. A request that is redirected to another server is followed without them. Catalogs on the same server share their headers: the first catalog in the list that has headers decides what is sent to that server.
 - Headers the plugin has to control itself, such as `Host`, `Content-Length`, `Connection` and `Accept-Encoding`, can't be set. A custom `Authorization` header replaces the catalog's username and password.
 - Treat headers like a password. They are saved as plain text in `opdsplus.lua`, so anyone who can read that file can read them.
-- If a server redirects a request to another address, KOReader's HTTP library repeats the request there with the same headers, so only use headers with servers you trust.
 
 ## 🔧 Technical Details
 
