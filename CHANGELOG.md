@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ## [Unreleased]
 
+### Added
+
+- **User Guide**: The [wiki](https://github.com/greywolf1499/opds_plus.koplugin/wiki) explains installing and updating OPDS Plus, its views and settings, setting up Calibre-Web, Kavita and Komga, OPDS 2.0 catalogs, and what to do about each error message.
+
+### Changed
+
+- **Screenshots**: The README shows the book details, the update dialog and an OPDS 2.0 catalog's shelves and facets, all taken from a mock catalog of public-domain classics.
+
 ## [1.5.0] - 2026-11-10
 
 **Update from within KOReader**: **OPDS Plus Catalog → Settings → Updates → Check for updates**, or install by hand as before.

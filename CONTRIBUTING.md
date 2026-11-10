@@ -245,25 +245,31 @@ opds_plus.koplugin/
 ├── main.lua                  # Plugin entry point and KOReader menu registration
 ├── opds_plus_version.lua     # Version number (single source of truth)
 ├── config/                   # Persistent settings (settings.lua) and the settings menu (settings_menu.lua)
-├── core/                     # Catalogs, feeds, parsing, navigation, downloads, sync and shared state
+├── core/                     # Catalogs, feeds, navigation, downloads, sync and shared state
+│   ├── parsers/              # Feed parsers: Atom (OPDS 1) and JSON (OPDS 2.0)
+│   └── mappers/              # Turn either parsed feed into the same menu items
 ├── models/                   # Constants
-├── services/                 # HTTP client, cover cache and loaders, Kavita progress
+├── services/                 # HTTP client, cover cache and loaders, Kavita streaming, the self-updater
 ├── ui/                       # The browser (browser.lua), dialogs/ and the list, grid and cover menus/
-├── utils/                    # Pure helpers: URLs, files, catalogs, headers, results, debug logging
+├── utils/                    # Pure helpers: URLs, files, catalogs, headers, JSON, URI templates, versions
 ├── spec/                     # Automated tests (not part of the release archive)
 ├── scripts/                  # Test tooling and the release build (not part of the release archive)
-└── .github/workflows/        # CI and release workflows
+├── tools/e2e/                # End-to-end kits in a headless KOReader (not part of the release archive)
+├── docs/wiki/                # Source of the GitHub wiki (not part of the release archive)
+└── .github/workflows/        # CI, release and wiki sync workflows
 ```
 
 ### Key Components
 
 - **main.lua**: Plugin lifecycle and menu registration
-- **core/parser.lua**: Converts OPDS Atom/XML into Lua tables
-- **core/navigation_handler.lua**: Turns a parsed feed into menu items (entries, links, search)
+- **core/parser.lua**: Tells Atom (OPDS 1) and JSON (OPDS 2.0) feeds apart by their content and hands them to `core/parsers/`
+- **core/mappers/**: Turn a parsed Atom or OPDS 2.0 feed into the same menu items; `spec/integration/mapper_contract_spec.lua` holds both to one model
+- **core/navigation_handler.lua**: Builds the menu from a feed's items, links, facets and search
 - **core/feed_fetcher.lua**: Fetches feeds and OpenSearch descriptions, and keeps a cache of pages
 - **core/download_manager.lua** and **core/sync_manager.lua**: Downloads and catalog sync
 - **core/catalog_manager.lua** and **core/state_manager.lua**: The list of catalogs and the shared state behind the settings
-- **services/http_client.lua**: HTTP requests, including a catalog's custom headers
+- **services/http_client.lua**: HTTP requests and their redirects, including a catalog's custom headers
+- **services/ota_updater.lua** and **ui/dialogs/update_dialog.lua**: The self-updater and its menu (see [SECURITY.md](SECURITY.md) for its trust model)
 - **services/cover_cache.lua**, **cover_loader.lua** and **image_loader.lua**: Cover downloading and caching
 - **ui/menus/**: List, grid and cover rendering
 - **ui/dialogs/**: Book info, download, search and settings dialogs
@@ -334,7 +340,7 @@ spec/
 | `test` | `scripts/setup_test_env.sh`, then `scripts/test.sh` |
 | `package` | Tests `scripts/build_release.py`, builds the release archive with it, extracts it and runs the specs against the extracted copy, so a file missing from the archive fails the build |
 
-All three must pass. `release.yml` runs the same workflow for a `v*` tag and publishes the archive that passed.
+All three must pass. `release.yml` runs the same workflow for a `v*` tag and publishes the archive that passed. `wiki-sync.yml` mirrors `docs/wiki/` to the wiki after a push to `main` (see [Wiki](#wiki)).
 
 ### Manual Testing Checklist
 
