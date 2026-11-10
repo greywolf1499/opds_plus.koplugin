@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"
+      xmlns:dcterms="http://purl.org/dc/terms/"
+      xmlns:opds="http://opds-spec.org/2010/catalog">
+  <title>Recent additions</title>
+  <id>cops:recent</id>
+  <updated>2025-06-10T09:15:00Z</updated>
+  <link rel="start" href="./feed.php" type="application/atom+xml;profile=opds-catalog;kind=navigation" title="Home"/>
+  <link rel="self" href="./feed.php?page=5" type="application/atom+xml;profile=opds-catalog;kind=acquisition" title="Recent additions"/>
+  <link rel="up" href="./feed.php" type="application/atom+xml;profile=opds-catalog;kind=navigation" title="Home"/>
+  <link rel="search" href="feed.php?query={searchTerms}" type="application/atom+xml" title="Search here"/>
+  <link rel="next" href="feed.php?page=5&amp;n=2" type="application/atom+xml;profile=opds-catalog;kind=acquisition" title="Next page"/>
+  <entry>
+    <title>L'&#201;tranger</title>
+    <id>cops:book:12</id>
+    <updated>2025-06-10T09:15:00Z</updated>
+    <author>
+      <name>Albert Camus</name>
+      <uri>feed.php?page=3&amp;id=4</uri>
+    </author>
+    <content type="text/html">&lt;p class="description"&gt;Aujourd'hui, maman est morte.&lt;/p&gt;</content>
+    <link rel="http://opds-spec.org/acquisition" href="fetch.php?data=12&amp;type=epub&amp;id=12" type="application/epub+zip" title="EPUB"/>
+    <link rel="http://opds-spec.org/acquisition" href="fetch.php?data=13&amp;type=pdf&amp;id=12" type="application/pdf" title="PDF"/>
+    <link rel="http://opds-spec.org/image" href="fetch.php?id=12" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/image/thumbnail" href="fetch.php?height=225&amp;id=12" type="image/jpeg"/>
+  </entry>
+  <entry>
+    <title>Authors starting with C</title>
+    <id>cops:authors:C</id>
+    <updated>2025-06-10T09:15:00Z</updated>
+    <content type="text">12 authors</content>
+    <link rel="subsection" href="feed.php?page=2&amp;id=C" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+</feed>

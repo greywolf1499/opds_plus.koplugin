@@ -322,6 +322,8 @@ opds_plus.koplugin/
     └── url_utils.lua
 ```
 
+The release archive holds exactly these files. The repository also has `spec/` (automated tests), `scripts/` (test tooling and the release build) and `.github/` (CI), which are not part of the archive.
+
 ### Settings Storage
 Settings are stored in: `<KOReader data dir>/settings/opdsplus.lua`
 
@@ -351,6 +353,7 @@ Contributions are welcome! Here's how you can help:
 - Test on multiple screen sizes if possible
 - Ensure compatibility with existing OPDS catalogs
 - Document new features in the README
+- Run `luacheck .` and `scripts/test.sh` before opening a pull request. [CONTRIBUTING.md](CONTRIBUTING.md) explains the test setup and the rest of the workflow
 
 ## 📝 Known Issues & Limitations
 

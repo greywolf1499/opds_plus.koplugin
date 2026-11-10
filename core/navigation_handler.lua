@@ -13,6 +13,11 @@ local BrowserContext = require("core.browser_context")
 
 local NavigationHandler = {}
 
+-- An empty <content/> parses to a table, which must not hide a summary that has text
+local function hasText(value)
+	return type(value) == "string" and value:find("%S") ~= nil
+end
+
 -- Parse OPDS catalog into item table for menu display
 -- @param catalog table Parsed OPDS feed
 -- @param item_url string Base URL for building absolute URLs
@@ -53,14 +58,19 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 					if link.type:find(browser_context.search_type) then
 						if link.href then
 							local FeedFetcher = require("core.feed_fetcher")
-							search_url = build_href(FeedFetcher.getSearchTemplate(
+							local template = FeedFetcher.getSearchTemplate(
 								build_href(link.href),
 								browser_context.search_template_type,
 								browser_context.username,
 								browser_context.password,
 								debug_callback
-							))
-							has_opensearch = true
+							)
+							-- Without a template there is nothing to search with: resolving a nil href would
+							-- give the address of this very catalog, and searching would only reload it.
+							if template then
+								search_url = build_href(template)
+								has_opensearch = true
+							end
 						end
 					end
 
@@ -205,7 +215,11 @@ function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_co
 
 		item.title = title
 		item.author = author
-		item.content = entry.content or entry.summary
+		if hasText(entry.content) then
+			item.content = entry.content
+		elseif hasText(entry.summary) then
+			item.content = entry.summary
+		end
 		table.insert(item_table, item)
 	end
 

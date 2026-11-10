@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<feed xmlns="http://www.w3.org/2005/Atom"
+      xmlns:opds="http://opds-spec.org/2010/catalog"
+      xmlns:pse="http://vaemendis.net/opds-pse/ns"
+      xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">
+  <id>series-42</id>
+  <title>Example Series</title>
+  <updated>2025-05-01T00:00:00Z</updated>
+  <link rel="self" href="/opds/v1.2/series/42" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <link rel="start" href="/opds/v1.2/catalog" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="search" href="/opds/v1.2/search" type="application/opensearchdescription+xml"/>
+  <entry>
+    <id>book-1</id>
+    <title>Volume 1</title>
+    <updated>2025-05-01T00:00:00Z</updated>
+    <author><name>Some Author</name></author>
+    <summary>The first volume, read up to page 12.</summary>
+    <link rel="http://opds-spec.org/image" href="/api/v1/books/1/thumbnail" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/image/thumbnail" href="/api/v1/books/1/thumbnail" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/acquisition" href="/api/v1/books/1/file/Volume%201.cbz" type="application/zip" title="Volume 1.cbz"/>
+    <link rel="http://vaemendis.net/opds-pse/stream" href="/api/v1/books/1/pages/{pageNumber}?zero_based=true" type="image/jpeg" pse:count="180" pse:lastRead="12"/>
+  </entry>
+  <entry>
+    <id>book-2</id>
+    <title>Volume 2</title>
+    <updated>2025-05-01T00:00:00Z</updated>
+    <author><name>Some Author</name></author>
+    <link rel="http://opds-spec.org/image/thumbnail" href="/api/v1/books/2/thumbnail" type="image/jpeg"/>
+    <link rel="http://vaemendis.net/opds-pse/stream" href="/api/v1/books/2/pages/{pageNumber}?zero_based=true" type="image/jpeg" pse:count="176"/>
+  </entry>
+  <entry>
+    <id>book-3</id>
+    <title>Volume 3 (page count unknown)</title>
+    <updated>2025-05-01T00:00:00Z</updated>
+    <author><name>Some Author</name></author>
+    <link rel="http://opds-spec.org/image/thumbnail" href="/api/v1/books/3/thumbnail" type="image/jpeg"/>
+    <link rel="http://vaemendis.net/opds-pse/stream" href="/api/v1/books/3/pages/{pageNumber}?zero_based=true" type="image/jpeg"/>
+  </entry>
+  <entry>
+    <id>series-43</id>
+    <title>Another Series</title>
+    <updated>2025-05-01T00:00:00Z</updated>
+    <link rel="subsection" href="/opds/v1.2/series/43" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+    <link rel="http://opds-spec.org/image/thumbnail" href="/api/v1/series/43/thumbnail" type="image/jpeg"/>
+  </entry>
+</feed>

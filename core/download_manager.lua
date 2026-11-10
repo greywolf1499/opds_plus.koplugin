@@ -139,13 +139,24 @@ function DownloadManager.downloadFile(browser, local_path, remote_url, username,
 	local parsed = url.parse(remote_url)
 
 	if parsed.scheme == "http" or parsed.scheme == "https" then
+		-- Create the file before asking the server, so that a place we can't write to fails at once, without a request
+		local file, open_error = io.open(local_path, "w")
+		if not file then
+			logger.warn("DownloadManager:downloadFile: could not open", local_path, open_error)
+			UIManager:show(InfoMessage:new {
+				text = T(_("Could not save file to:\n%1\n%2"),
+					BD.filepath(local_path),
+					open_error and open_error:match(": ([^:]+)$") or open_error),
+			})
+			return false
+		end
 		socketutil:set_timeout(socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT)
 		code, headers, status = socket.skip(1, http.request {
 			url      = remote_url,
 			headers  = HttpClient.withCustomHeaders(remote_url, {
 				["Accept-Encoding"] = "identity",
 			}),
-			sink     = ltn12.sink.file(io.open(local_path, "w")),
+			sink     = ltn12.sink.file(file),
 			user     = username,
 			password = password,
 		})
@@ -167,7 +178,8 @@ function DownloadManager.downloadFile(browser, local_path, remote_url, username,
 			caller_callback(local_path)
 		end
 		return true
-	elseif code == Constants.HTTP_STATUS.FOUND and remote_url:match("^https") and headers.location:match("^http[^s]") then
+	elseif code == Constants.HTTP_STATUS.FOUND and remote_url:match("^https")
+		and headers and headers.location and headers.location:match("^http[^s]") then
 		util.removeFile(local_path)
 		UIManager:show(InfoMessage:new {
 			text = T(_("Insecure HTTPS → HTTP downgrade attempted by redirect from:\n\n'%1'\n\nto\n\n'%2'.\n\nPlease inform the server administrator that many clients disallow this because it could be a downgrade attack."),
@@ -305,6 +317,12 @@ function DownloadManager.downloadPendingSyncs(browser, dl_list)
 			UIManager:close(info)
 		end
 
+		-- A book that was already on the device is not one this run downloaded, however recent its file is
+		local is_duplicate = {}
+		for _, item in ipairs(duplicate_list or {}) do
+			is_duplicate[item.file] = true
+		end
+
 		local dl_count = 0
 		local dl_size = #dl_list
 		for i = dl_size, 1, -1 do
@@ -318,7 +336,8 @@ function DownloadManager.downloadPendingSyncs(browser, dl_list)
 					if attr.size > 0 then
 						table.remove(dl_list, i)
 						-- Only count files touched within the freshness window
-						if attr.modification > os.time() - Constants.SYNC.DOWNLOAD_FRESHNESS_SECONDS then
+						if not is_duplicate[item.file]
+							and attr.modification > os.time() - Constants.SYNC.DOWNLOAD_FRESHNESS_SECONDS then
 							dl_count = dl_count + 1
 						end
 					else -- incomplete download
@@ -329,8 +348,6 @@ function DownloadManager.downloadPendingSyncs(browser, dl_list)
 		end
 
 		local duplicate_count = duplicate_list and #duplicate_list or 0
-		dl_count = dl_count - duplicate_count
-
 		-- Make downloaded count timeout if there's a duplicate file prompt
 		local timeout = nil
 		if duplicate_count > 0 then

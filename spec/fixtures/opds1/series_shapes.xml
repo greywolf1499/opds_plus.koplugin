@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"
+      xmlns:dc="http://purl.org/dc/terms/"
+      xmlns:opds="http://opds-spec.org/2010/catalog">
+  <id>https://library.example.org/opds/series/12</id>
+  <title>Series shapes</title>
+  <updated>2025-04-01T12:00:00Z</updated>
+  <link rel="self" href="/opds/series/12" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <link rel="start" href="/opds" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <entry>
+    <title>Calibre-Web-Automated style</title>
+    <id>urn:uuid:aaaaaaaa-0000-4000-8000-000000000001</id>
+    <updated>2025-04-01T12:00:00Z</updated>
+    <author><name>Frank Herbert</name></author>
+    <dc:series>Dune</dc:series>
+    <dc:series_index>1.0</dc:series_index>
+    <link rel="http://opds-spec.org/acquisition" href="/dl/1.epub" type="application/epub+zip"/>
+  </entry>
+  <entry>
+    <title>dir2opds style</title>
+    <id>urn:uuid:aaaaaaaa-0000-4000-8000-000000000002</id>
+    <updated>2025-04-01T12:00:00Z</updated>
+    <author><name>Frank Herbert</name></author>
+    <dc:series>Dune</dc:series>
+    <dc:seriesPosition>2</dc:seriesPosition>
+    <link rel="http://opds-spec.org/acquisition" href="/dl/2.epub" type="application/epub+zip"/>
+  </entry>
+  <entry>
+    <title>EPUB3 collection metadata style</title>
+    <id>urn:uuid:aaaaaaaa-0000-4000-8000-000000000003</id>
+    <updated>2025-04-01T12:00:00Z</updated>
+    <author><name>Frank Herbert</name></author>
+    <meta property="belongs-to-collection" id="series">Dune</meta>
+    <meta property="group-position" refines="#series">3</meta>
+    <link rel="http://opds-spec.org/acquisition" href="/dl/3.epub" type="application/epub+zip"/>
+  </entry>
+  <entry>
+    <title>Calibre-Web summary style</title>
+    <id>urn:uuid:aaaaaaaa-0000-4000-8000-000000000004</id>
+    <updated>2025-04-01T12:00:00Z</updated>
+    <author><name>Frank Herbert</name></author>
+    <summary>SERIES: Dune [4]&lt;br /&gt;Arrakis, again.</summary>
+    <link rel="http://opds-spec.org/acquisition" href="/dl/4.epub" type="application/epub+zip"/>
+  </entry>
+  <entry>
+    <title>A standalone book</title>
+    <id>urn:uuid:aaaaaaaa-0000-4000-8000-000000000005</id>
+    <updated>2025-04-01T12:00:00Z</updated>
+    <author><name>Frank Herbert</name></author>
+    <summary>No series here.</summary>
+    <link rel="http://opds-spec.org/acquisition" href="/dl/5.epub" type="application/epub+zip"/>
+  </entry>
+</feed>

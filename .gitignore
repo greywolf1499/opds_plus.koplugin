@@ -15,6 +15,10 @@ opds_plus.koplugin.zip
 /dist/
 /tmp/
 
+# Local test toolchain (see scripts/setup_test_env.sh)
+/.lua_env/
+/.tools/
+
 # KOReader runtime data (not part of the plugin source)
 settings/
 cache/

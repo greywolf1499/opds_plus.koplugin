@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ## [Unreleased]
 
+### Changed
+- **Release Archive**: The `opds_plus.koplugin.zip` of a release now holds only the files the plugin runs on. It no longer carries the repository's own files (`.gitignore`, `.luacheckrc`, `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md`). It is built by `scripts/build_release.py`, and the tests run on the very archive that gets published.
+- **Automated Tests**: A test suite that runs without KOReader (`scripts/test.sh`), and a check of the release archive, now run next to luacheck on every pull request and every push to `main`. See CONTRIBUTING.md.
+
+### Fixed
+- **Catalog Address Checks**: Adding or editing a catalog no longer turns down an address that is fine: one typed with an upper-case protocol such as `HTTPS://`, one whose host name has an underscore (common for Docker and NAS names), or one with an IPv6 address in brackets, though some servers may still turn away the request KOReader sends to an IPv6 address. Spaces around the address are dropped, since a pasted address often comes with one. A port that is not a number from 1 to 65535 is reported on the spot instead of failing later.
+- **Editing a Catalog Keeps Its Sync Point**: Saving the edit dialog forgot where the last sync had stopped, so the next sync no longer said "Up to date!". It went through the whole feed again and ran into the books it had already downloaded. The sync point is kept now, unless you changed the address.
+- **Sync File Types**: The file types to sync are matched without regard to case, so `EPUB, PDF` works, and so does a server whose links end in `.EPUB`. A field holding only spaces or commas filters nothing, instead of blocking every download.
+- **Books Counted After a Sync**: When a sync came across books that were already on the device, the "books downloaded" message came out too low, by one for each of them.
+- **Description Next to an Empty Content Tag**: A book entry with an empty `<content/>` tag as well as a `<summary>` showed no description. The summary is used now.
+- **Search Without a Usable Description**: A catalog whose OpenSearch description can't be fetched or read no longer offers a search that only reloads the catalog.
+- **Odd Feeds and Servers**: A character reference that is not a number, such as `&#xZZ;`, no longer fails the whole feed, and neither does a title that is an empty XHTML `<div/>`. A redirect without a `Location` header, from a faulty server or proxy, is reported like any other failed request instead of causing an error while opening a catalog or downloading a book. With "Use server filenames", a file name taken from a redirect no longer keeps the query string or the percent-escapes of the address, and a redirect to an address with no file name no longer gives a file called `.epub`. Downloading to a folder that can't be written to fails at once, with the reason, instead of after asking the server for the book.
+
 ## [1.3.1] - 2026-11-09
 
 ### Changed

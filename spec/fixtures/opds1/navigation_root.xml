@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"
+      xmlns:dcterms="http://purl.org/dc/terms/"
+      xmlns:opds="http://opds-spec.org/2010/catalog"
+      xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">
+  <id>https://catalog.example.org/opds/</id>
+  <title>Example Library &amp; Archive</title>
+  <subtitle>Free ebooks</subtitle>
+  <updated>2025-01-15T08:30:00Z</updated>
+  <icon>https://catalog.example.org/favicon.ico</icon>
+  <link rel="self" href="/opds/" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="start" href="/opds/" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="search" href="/opds/search.xml" type="application/opensearchdescription+xml"/>
+  <entry>
+    <title>Popular</title>
+    <id>https://catalog.example.org/opds/popular</id>
+    <updated>2025-01-15T08:30:00Z</updated>
+    <content type="text">The most downloaded books of the week</content>
+    <link rel="http://opds-spec.org/sort/popular" href="/opds/popular" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  </entry>
+  <entry>
+    <title>Latest</title>
+    <id>https://catalog.example.org/opds/new</id>
+    <updated>2025-01-15T08:30:00Z</updated>
+    <content type="text"/>
+    <link rel="http://opds-spec.org/sort/new" href="/opds/new" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  </entry>
+  <entry>
+    <title>Authors</title>
+    <id>https://catalog.example.org/opds/authors</id>
+    <updated>2025-01-15T08:30:00Z</updated>
+    <content type="text">Browse by author</content>
+    <link rel="subsection" href="/opds/authors/" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+  <entry>
+    <title>Subjects</title>
+    <id>https://catalog.example.org/opds/subjects</id>
+    <updated>2025-01-15T08:30:00Z</updated>
+    <content type="text">Browse by subject</content>
+    <link href="subjects/" type="application/atom+xml;profile=opds-catalog"/>
+  </entry>
+  <entry>
+    <title>About this library</title>
+    <id>https://catalog.example.org/opds/about</id>
+    <updated>2025-01-15T08:30:00Z</updated>
+    <content type="text">Opening hours and contact details</content>
+    <link rel="alternate" href="/about.html" type="text/html"/>
+  </entry>
+</feed>

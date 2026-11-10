@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"
+      xmlns:dcterms="http://purl.org/dc/terms/"
+      xmlns:opds="http://opds-spec.org/2010/catalog"
+      xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">
+  <id>urn:uuid:2853dacf-ed79-42f5-8e8a-a7bb3d1ae6a2</id>
+  <updated>2025-02-03T10:00:00+00:00</updated>
+  <link rel="self" href="/opds/new" type="application/atom+xml;profile=opds-catalog;type=feed;kind=acquisition"/>
+  <link rel="start" href="/opds" type="application/atom+xml;profile=opds-catalog;type=feed;kind=navigation"/>
+  <link rel="up" href="/opds" type="application/atom+xml;profile=opds-catalog;type=feed;kind=navigation"/>
+  <link rel="search" href="/opds/osd" type="application/opensearchdescription+xml"/>
+  <link title="Search" type="application/atom+xml" href="/opds/search/{searchTerms}" rel="search"/>
+  <link rel="next" href="/opds/new?offset=2" type="application/atom+xml;profile=opds-catalog;type=feed;kind=acquisition"/>
+  <link rel="previous" href="/opds/new?offset=0" type="application/atom+xml;profile=opds-catalog;type=feed;kind=acquisition"/>
+  <link rel="first" href="/opds/new" type="application/atom+xml;profile=opds-catalog;type=feed;kind=acquisition"/>
+  <link rel="last" href="/opds/new?offset=4" type="application/atom+xml;profile=opds-catalog;type=feed;kind=acquisition"/>
+  <title>Calibre-Web</title>
+  <author>
+    <name>Calibre-Web</name>
+    <uri>https://github.com/janeczku/calibre-web</uri>
+  </author>
+  <opensearch:totalResults>5</opensearch:totalResults>
+  <opensearch:itemsPerPage>2</opensearch:itemsPerPage>
+  <opensearch:startIndex>1</opensearch:startIndex>
+  <entry>
+    <title>The Hobbit, or There and Back Again</title>
+    <id>urn:uuid:8d5c0b8c-6ea5-4d3e-8b4d-1e7f0f6b6a11</id>
+    <updated>2024-11-02T10:11:12+00:00</updated>
+    <author>
+      <name>J. R. R. Tolkien</name>
+      <uri>/opds/author/3</uri>
+    </author>
+    <dcterms:language>eng</dcterms:language>
+    <category scheme="http://www.bisg.org/standards/bisac_subject/index.html" term="Fantasy" label="Fantasy"/>
+    <summary>Bilbo Baggins is a hobbit who enjoys a comfortable, unambitious life. His quiet world is upset when the wizard Gandalf brings a company of dwarves to his door.</summary>
+    <link type="image/jpeg" href="/opds/cover/1" rel="http://opds-spec.org/image"/>
+    <link type="image/jpeg" href="/opds/cover/1" rel="http://opds-spec.org/image/thumbnail"/>
+    <link rel="http://opds-spec.org/acquisition" href="/opds/download/1/epub/" length="412044" title="EPUB" mtime="2024-11-02T10:11:12+00:00" type="application/epub+zip"/>
+    <link rel="http://opds-spec.org/acquisition" href="/opds/download/1/mobi/" length="590112" title="MOBI" mtime="2024-11-02T10:11:12+00:00" type="application/x-mobipocket-ebook"/>
+    <link rel="http://opds-spec.org/acquisition" href="/opds/download/1/pdf/" length="1840022" title="PDF" mtime="2024-11-02T10:11:12+00:00" type="application/pdf"/>
+    <link href="/opds/author/3" rel="related" title="Other books by J. R. R. Tolkien" type="application/atom+xml;profile=opds-catalog"/>
+  </entry>
+  <entry>
+    <title>Pride &amp; Prejudice</title>
+    <id>urn:uuid:0f6a1a52-4a44-4d5c-9f21-5a6c3a7b9d02</id>
+    <updated>2024-10-20T08:00:00+00:00</updated>
+    <author>
+      <name>Jane Austen</name>
+      <uri>/opds/author/7</uri>
+    </author>
+    <dcterms:language>eng</dcterms:language>
+    <summary>It is a truth universally acknowledged...</summary>
+    <link type="image/jpeg" href="/opds/cover/2" rel="http://opds-spec.org/image"/>
+    <link type="image/jpeg" href="/opds/cover/2" rel="http://opds-spec.org/image/thumbnail"/>
+    <link rel="http://opds-spec.org/acquisition" href="/opds/download/2/epub/" length="301120" title="EPUB" mtime="2024-10-20T08:00:00+00:00" type="application/epub+zip"/>
+  </entry>
+</feed>

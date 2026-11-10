@@ -1,39 +1,28 @@
 name: Build & Publish Release Archive
 
-permissions:
-  contents: write
-
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  build-release:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          path: 'opds_plus.koplugin'
-
-      - name: Create zip archive
-        run: |
-          zip -r opds_plus.koplugin.zip opds_plus.koplugin \
-            -x '**/.git/*' \
-            -x '**/.github/*' \
-            -x '**/*.zip'
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: opds_plus.koplugin
-          path: opds_plus.koplugin.zip
+  # CI lints and tests the plugin, then builds the archive from the tagged commit and runs the specs against
+  # it, so a tag cannot publish a build that fails its checks, and what is published is what was tested.
+  ci:
+    uses: ./.github/workflows/ci.yml
+    with:
+      tag: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
 
   publish-release:
-    needs: build-release
+    needs: ci
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v8
@@ -42,10 +31,10 @@ jobs:
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
-        if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: opds_plus.koplugin.zip
+          files: |
+            opds_plus.koplugin.zip
+            opds_plus.koplugin.zip.sha256
+          fail_on_unmatched_files: true
           draft: false
           prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

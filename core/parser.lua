@@ -30,6 +30,10 @@ local function unescape(str)
             else
                 codepoint = tonumber(s)
             end
+            if not codepoint then
+                -- Not a number (for example &#xZZ;): keep the text rather than failing the whole feed
+                return orig
+            end
             return util.unicodeCodepointToUtf8(codepoint)
         else
             return orig

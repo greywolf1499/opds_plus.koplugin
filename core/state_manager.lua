@@ -17,6 +17,7 @@ function StateManager.getInstance(plugin)
 			_plugin = plugin,
 			_dirty = false,
 			_change_listeners = {},
+			_last_listener_id = 0,
 		}, StateManager)
 	elseif plugin then
 		instance._plugin = plugin
@@ -188,10 +189,11 @@ end
 -- Change Listeners
 -- ============================================
 -- @param listener function Callback function(event_type)
--- @return number Listener ID for removal
+-- @return number Listener ID for removal. IDs are never handed out twice
 function StateManager:addChangeListener(listener)
-	table.insert(self._change_listeners, listener)
-	return #self._change_listeners
+	self._last_listener_id = self._last_listener_id + 1
+	self._change_listeners[self._last_listener_id] = listener
+	return self._last_listener_id
 end
 
 --- Remove a change listener
