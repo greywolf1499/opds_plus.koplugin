@@ -3,6 +3,7 @@
 
 local CatalogUtils = require("utils.catalog_utils")
 local RequestHeaders = require("utils.request_headers")
+local _ = require("gettext")
 
 local CatalogManager = {}
 
@@ -133,15 +134,20 @@ function CatalogManager.setDefaultCatalog(servers, default_server)
 end
 
 -- Validate catalog URL
+-- Surrounding whitespace is dropped, a missing protocol becomes http:// and the protocol is lower-cased, because
+-- the HTTP client only knows "http" and "https" in lower case.
 -- @param catalog_url string URL to validate
--- @return boolean, string|nil True if valid, false + error message if invalid
+-- @return boolean, string True and the normalised URL if valid, false and an error message if invalid
 function CatalogManager.validateCatalogUrl(catalog_url)
-	if not catalog_url or catalog_url == "" then
-		return false, "URL cannot be empty"
+	catalog_url = type(catalog_url) == "string" and catalog_url:match("^%s*(.-)%s*$") or ""
+	if catalog_url == "" then
+		return false, _("URL cannot be empty")
 	end
 
-	-- Add protocol if missing
-	if not catalog_url:match("^%a+://") then
+	local scheme = catalog_url:match("^(%a+)://")
+	if scheme then
+		catalog_url = scheme:lower() .. catalog_url:sub(#scheme + 1)
+	else
 		catalog_url = "http://" .. catalog_url
 	end
 
@@ -150,24 +156,36 @@ function CatalogManager.validateCatalogUrl(catalog_url)
 	local parsed = url.parse(catalog_url)
 
 	if not parsed then
-		return false, "Invalid URL format"
+		return false, _("Invalid URL format")
 	end
 
 	if not parsed.scheme then
-		return false, "Missing protocol (http:// or https://)"
+		return false, _("Missing protocol (http:// or https://)")
 	end
 
 	if parsed.scheme ~= "http" and parsed.scheme ~= "https" then
-		return false, "Only HTTP and HTTPS protocols are supported"
+		return false, _("Only HTTP and HTTPS protocols are supported")
 	end
 
 	if not parsed.host or parsed.host == "" then
-		return false, "Missing hostname"
+		return false, _("Missing hostname")
 	end
 
-	-- Validate hostname format (basic check for valid characters)
-	if not parsed.host:match("^[%w%.%-]+$") then
-		return false, "Invalid hostname format"
+	-- Host names may use letters, digits, dots, hyphens and underscores (Docker and NAS names do). The parser
+	-- takes the brackets off an IPv6 address, so look for them in the authority.
+	local is_name = parsed.host:match("^[%w%._%-]+$")
+	local is_ipv6 = parsed.host:match("^[%x:%.]+$") and parsed.host:find(":", 1, true)
+		and parsed.authority and parsed.authority:find("[" .. parsed.host .. "]", 1, true)
+	if not (is_name or is_ipv6) then
+		return false, _("Invalid hostname format")
+	end
+
+	-- An empty port is fine (the default port is used)
+	if parsed.port and parsed.port ~= "" then
+		local port = parsed.port:match("^%d+$") and tonumber(parsed.port)
+		if not port or port < 1 or port > 65535 then
+			return false, _("Invalid port")
+		end
 	end
 
 	return true, catalog_url
