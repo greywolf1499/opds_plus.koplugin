@@ -11,17 +11,18 @@
 
 # OPDS Plus - Enhanced OPDS Browser for KOReader
 
-**Version:** 1.4.0
+**Version:** 1.5.0
 
 **OPDS Plus** is a feature-rich enhancement of KOReader's built-in OPDS catalog browser, providing visual book cover displays, multiple viewing modes, and extensive customization options for browsing online book catalogs.
 
 ## ✨ Features
 
 ### 📚 Enhanced Catalog Browsing
+- **OPDS 2.0 and OPDS 1 Catalogs**: Reads both the Atom (OPDS 1) and the JSON (OPDS 2.0) feeds, such as Komga's, with nothing to set. OPDS 2.0 groups of books open as shelves, with their book count
 - **Visual Book Covers**: Browse catalogs with book cover images displayed alongside titles
 - **Dual View Modes**: Switch between List View and Grid View layouts
 - **Multiple Display Options**: Customize how books are presented
-- **Book Info Dialog**: Open an at-a-glance details dialog with improved cover handling
+- **Book Info Dialog**: Open an at-a-glance details dialog with improved cover handling, showing the publisher, publication date and language when the catalog gives them
 - **Series and Authors**: Every author of a book is listed. When the catalog provides it, the series and the book's number in it, such as ❖ Dune Chronicles #2, show in List View and in the Book Info Dialog (read from Calibre and Calibre-Web style descriptions, `dc:series` elements and Grimmory feeds)
 - **Sync Gesture Actions**: Trigger sync-related actions directly from configured gestures
 - **Keyboard and D-pad Navigation**: Browse catalogs on devices with hardware keys, without the touchscreen

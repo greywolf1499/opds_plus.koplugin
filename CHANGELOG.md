@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-10
+
+**Update from within KOReader**: **OPDS Plus Catalog → Settings → Updates → Check for updates**, or install by hand as before.
+
 ### Added
 - **OPDS 2.0 Catalogs**: Catalogs that serve OPDS 2.0 (JSON) feeds open like any other: navigation, groups, books with their authors, series, covers and downloads, facets, pagination and search. OPDS Plus tells the two formats apart by the feed itself, so there is nothing to set.
 - **Shelves**: Groups of books that an OPDS 2.0 catalog shows on its start page without a link of their own (like the samples on test.opds.io) open as folders, next to the groups that have a link, with the number of books they hold. Search results that come only in such groups are still listed straight away.
@@ -210,6 +214,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 - Derivative of KOReader's built-in OPDS plugin with major UI/UX enhancements.
 - Licensed under AGPLv3 consistent with KOReader.
 
+[1.5.0]: https://github.com/greywolf1499/opds_plus.koplugin/releases/tag/v1.5.0
 [1.4.0]: https://github.com/greywolf1499/opds_plus.koplugin/releases/tag/v1.4.0
 [1.3.1]: https://github.com/greywolf1499/opds_plus.koplugin/releases/tag/v1.3.1
 [1.3.0]: https://github.com/greywolf1499/opds_plus.koplugin/releases/tag/v1.3.0
