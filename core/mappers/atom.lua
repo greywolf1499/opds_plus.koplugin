@@ -8,6 +8,7 @@ local _ = require("gettext")
 
 local Constants = require("models.constants")
 local UrlUtils = require("utils.url_utils")
+local FileUtils = require("utils.file_utils")
 local CatalogUtils = require("utils.catalog_utils")
 
 local AtomMapper = {}
@@ -139,7 +140,7 @@ function AtomMapper.map(catalog, item_url, browser_context, debug_callback)
 					elseif browser_context.image_rel[link.rel] then
 						item.image = link_href
 						-- Other downloadable types
-					elseif link.rel ~= "alternate" and DocumentRegistry:hasProvider(nil, link.type) then
+					elseif link.rel ~= "alternate" and FileUtils.mimeExtension(link.type, DocumentRegistry) then
 						table.insert(item.acquisitions, {
 							type  = link.type,
 							href  = link_href,

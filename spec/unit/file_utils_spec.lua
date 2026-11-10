@@ -63,6 +63,39 @@ describe("FileUtils", function()
 		end)
 	end)
 
+	describe("mimeExtension", function()
+		local registry
+
+		before_each(function()
+			registry = require("support.documentregistry").new()
+			registry:add_extension("cbr")
+		end)
+
+		it("gives the extension KOReader registers for a type", function()
+			assert.equals("epub", FileUtils.mimeExtension("application/epub+zip", registry))
+			assert.equals("cbz", FileUtils.mimeExtension("application/x-cbz", registry))
+		end)
+
+		it("ignores parameters and letter case", function()
+			assert.equals("epub", FileUtils.mimeExtension("Application/EPUB+zip; charset=utf-8", registry))
+		end)
+
+		it("maps the comic book types servers send but KOReader does not register", function()
+			assert.equals("cbr", FileUtils.mimeExtension("application/x-cbr", registry))
+			assert.equals("cbr", FileUtils.mimeExtension("application/x-rar-compressed", registry))
+		end)
+
+		it("gives nothing for a mapped type KOReader cannot open", function()
+			assert.is_nil(FileUtils.mimeExtension("application/x-cb7", registry))
+		end)
+
+		it("gives nothing for unknown types and for no type", function()
+			assert.is_nil(FileUtils.mimeExtension("application/zip", registry))
+			assert.is_nil(FileUtils.mimeExtension("", registry))
+			assert.is_nil(FileUtils.mimeExtension(nil, registry))
+		end)
+	end)
+
 	describe("sanitize", function()
 		it("replaces the path separator but keeps other characters the file system allows", function()
 			assert.equals("a_b:c.epub", FileUtils.sanitize("a/b:c.epub", "/books"))

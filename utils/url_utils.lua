@@ -50,6 +50,14 @@ function UrlUtils.parseContentDisposition(disposition)
 	return nil
 end
 
+--- Remove the fragment ("#...") of a URL, which is never sent to a server
+-- @param item_url string|nil URL
+-- @return string|nil The URL without its fragment
+function UrlUtils.stripFragment(item_url)
+	if type(item_url) ~= "string" then return item_url end
+	return (item_url:gsub("#.*$", ""))
+end
+
 --- Determine if a URL is searchable (contains %s placeholder)
 -- @param catalog_url string URL to check
 -- @return boolean True if URL contains search placeholder

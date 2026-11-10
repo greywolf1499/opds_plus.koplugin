@@ -13,6 +13,21 @@ local Constants = {
 	STREAM_REL = "http://vaemendis.net/opds-pse/stream",
 	FACET_REL = "http://opds-spec.org/facet",
 
+	-- What catalog requests accept: OPDS 2.0 first, then OPDS 1.x, then anything (the same as KOReader's
+	-- own OPDS browser). A catalog's custom Accept header replaces it.
+	CATALOG_ACCEPT = "application/opds+json, application/atom+xml;profile=opds-catalog, */*",
+
+	-- Book types servers send that KOReader registers under another name. Each maps to the extension
+	-- that is used instead, and only when KOReader can open that extension.
+	MIME_EXTENSIONS = {
+		["application/x-cbr"] = "cbr",
+		["application/x-rar"] = "cbr",
+		["application/x-rar-compressed"] = "cbr",
+		["application/vnd.comicbook+rar"] = "cbr",
+		["application/x-cbt"] = "cbt",
+		["application/x-cb7"] = "cb7",
+	},
+
 	-- Link relations that point to a sub-catalog (a link without a rel is accepted too)
 	CATALOG_REL = {
 		["subsection"] = true,
@@ -49,6 +64,7 @@ local Constants = {
 		FORBIDDEN = 403,
 		NOT_FOUND = 404,
 		NOT_ACCEPTABLE = 406,
+		UNSUPPORTED_MEDIA_TYPE = 415,
 	},
 
 	-- Redirects followed in a row before the last one is handed back (LuaSocket's own limit)

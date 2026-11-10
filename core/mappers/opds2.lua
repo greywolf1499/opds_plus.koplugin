@@ -11,6 +11,7 @@ local _ = require("gettext")
 
 local Constants = require("models.constants")
 local UrlUtils = require("utils.url_utils")
+local FileUtils = require("utils.file_utils")
 local UriTemplate = require("utils.uri_template")
 
 local Opds2Mapper = {}
@@ -229,7 +230,7 @@ local function finalIndirectType(properties)
 end
 
 local function hasProvider(mime)
-	return type(mime) == "string" and DocumentRegistry:hasProvider(nil, mime) and true or false
+	return FileUtils.mimeExtension(mime, DocumentRegistry) ~= nil
 end
 
 local function matchesAny(rels, pattern)

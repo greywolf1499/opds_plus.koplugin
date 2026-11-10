@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ## [Unreleased]
 
+### Added
+- **OPDS 2.0 Catalogs**: Catalogs that serve OPDS 2.0 (JSON) feeds open like any other: navigation, groups, books with their authors, series, covers and downloads, facets, pagination and search. OPDS Plus tells the two formats apart by the feed itself, so there is nothing to set.
+
+### Changed
+- **Catalog Requests Ask for OPDS 2.0 First**: Catalog requests now say which formats OPDS Plus reads, OPDS 2.0 first and then OPDS 1, so a server that has both can send the newer one. A server that refuses such a request is asked again the old way, and a catalog's own **Accept** header (in its custom headers) still wins.
+- **Clearer Message for a Web Page**: An address that leads to a web page (a login page, a web reader) now says that it is not an OPDS catalog, instead of showing an empty or broken list.
+
+### Fixed
+- Comic books that servers label `application/x-cbr`, `application/x-rar-compressed` or similar are offered for download as `.cbr`, and types with parameters (`application/epub+zip; charset=utf-8`) are recognized.
+
 ## [1.4.0] - 2026-11-10
 
 **Install this version by hand, as before.** From 1.4.0 on, OPDS Plus can update itself.
