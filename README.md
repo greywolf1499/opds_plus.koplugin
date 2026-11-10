@@ -75,6 +75,19 @@
 | ![View Toggle Menu](.github/screenshots/view_toggle_menu.png) | ![Settings Menu](.github/screenshots/settings_menu.png) |
 |             *Switch views instantly via the menu*             |            *Extensive customization options*            |
 
+|                       **Book Details**                        |                      **Updates**                       |
+| :-----------------------------------------------------------: | :----------------------------------------------------: |
+|    ![Book Details](.github/screenshots/book_details.png)     | ![Update Available](.github/screenshots/update_available.png) |
+|         *Author, series, language, formats and more*          |        *Release notes, then install in one tap*        |
+
+|                     **OPDS 2.0 Shelves**                      |                   **Facets**                    |
+| :-----------------------------------------------------------: | :---------------------------------------------: |
+|  ![OPDS 2.0 Start Page](.github/screenshots/opds2_shelves.png)  | ![Facets](.github/screenshots/opds2_facets.png) |
+|     *Groups and shelves from an OPDS 2.0 start page*      |       *Narrow a catalog with its facets*        |
+
+The screenshots come from a mock catalog of public-domain classics with generated covers
+(`tools/e2e/catalog/screenshots.sh` regenerates them).
+
 ## 📥 Installation
 
 ### Method 1: Manual Installation (Recommended)
