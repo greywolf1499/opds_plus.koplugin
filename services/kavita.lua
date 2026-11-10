@@ -81,7 +81,7 @@ function OPDSPSE:getLastPage(remote_url, username, password)
 
         if progress_code == 200 then
             -- if HTTP GET was successful, pull page number from response
-            last_page = progress_body:match("\"pageNum\":(.+),\"seriesId")
+            last_page = progress_body:match("\"pageNum\":(.+),\"seriesId") or 0
         else
             logger.dbg("OPDSPSE:getLastPage: Progress Request failed:", progress_status or progress_code)
             logger.dbg("OPDSPSE:getLastPage: Progress Response headers:", progress_headers)

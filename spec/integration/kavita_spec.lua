@@ -112,6 +112,13 @@ describe("Kavita page streaming", function()
 			assert.equals(0, OPDSPSE:getLastPage(STREAM, "reader", "s3cret"))
 		end)
 
+		it("starts from the first page when the progress says no page", function()
+			http:on(AUTH, { code = 200, body = SIGN_IN })
+			http:on(PROGRESS, { code = 200, body = "{}" })
+
+			assert.equals(0, OPDSPSE:getLastPage(STREAM, "reader", "s3cret"))
+		end)
+
 		it("sends the custom headers of the catalog with both requests", function()
 			HttpClient.setCatalogs({
 				{ url = SERVER .. "/opds", headers = { { name = "X-Api-Key", value = "abc" } } },
@@ -188,6 +195,15 @@ describe("Kavita page streaming", function()
 
 		it("starts from the first page when Kavita can't say", function()
 			open()
+
+			assert.equals(1, viewer.switched_to)
+		end)
+
+		it("starts from the first page when Kavita's answer says no page", function()
+			http:on(AUTH, { code = 200, body = SIGN_IN })
+			http:on(PROGRESS, { code = 200, body = "{}" })
+
+			OPDSPSE:streamPages(STREAM, 30, false, "reader", "s3cret")
 
 			assert.equals(1, viewer.switched_to)
 		end)
