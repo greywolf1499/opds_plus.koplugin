@@ -97,6 +97,8 @@ function SyncManager.showFiletypesDialog(browser)
 end
 
 --- Parse filetypes string into a lookup table
+-- Types are lowercase in the table: KOReader matches extensions without regard to case, and a server can
+-- send `.EPUB` as well as `.epub`.
 -- @param filetypes_str string Comma-separated list of filetypes
 -- @return table|nil Lookup table of filetypes, or nil if no filter
 function SyncManager.parseFiletypes(filetypes_str)
@@ -106,7 +108,14 @@ function SyncManager.parseFiletypes(filetypes_str)
 
 	local file_list = {}
 	for filetype in util.gsplit(filetypes_str, ",") do
-		file_list[util.trim(filetype)] = true
+		filetype = util.trim(filetype):lower()
+		if filetype ~= "" then
+			file_list[filetype] = true
+		end
+	end
+	-- A field with nothing but spaces and commas filters nothing
+	if next(file_list) == nil then
+		return nil
 	end
 	return file_list
 end
@@ -217,7 +226,7 @@ function SyncManager.fillPendingSyncs(browser, server)
 				end
 				local filetype = DownloadManager.getFiletype(link)
 				if filetype then
-					if not file_list or file_list[filetype] then
+					if not file_list or file_list[filetype:lower()] then
 						local filename = browser:getFileName(entry)
 						local download_path = browser:getLocalDownloadPath(filename, filetype, link.href)
 						if dl_count <= browser.sync_max_dl then
