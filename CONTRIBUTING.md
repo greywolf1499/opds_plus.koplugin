@@ -17,6 +17,7 @@ First off, thank you for considering contributing to OPDS Plus! It's people like
 		- [Lua Code Style](#lua-code-style)
 		- [Git Commit Messages](#git-commit-messages)
 		- [Documentation Style](#documentation-style)
+		- [Wiki](#wiki)
 	- [Development Setup](#development-setup)
 		- [Prerequisites](#prerequisites)
 		- [Setting Up Development Environment](#setting-up-development-environment)
@@ -177,6 +178,14 @@ Fixes #123
 - Add emojis sparingly for visual appeal
 - Keep line length reasonable (80-100 characters)
 - Use proper markdown formatting
+
+### Wiki
+
+The [wiki](https://github.com/greywolf1499/opds_plus.koplugin/wiki) is generated from `docs/wiki/`: when a change
+there reaches `main`, `.github/workflows/wiki-sync.yml` replaces the wiki's pages with those files. Edit the
+pages in `docs/wiki/` with a pull request, as with code; edits made in the wiki's web editor are overwritten by
+the next sync. Link between pages by their file name without `.md` (`[Updating](Updating)`), and to images by
+their `raw.githubusercontent.com` address on `main`.
 
 ## Development Setup
 

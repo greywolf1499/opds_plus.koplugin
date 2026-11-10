@@ -1,0 +1,56 @@
+name: Sync Wiki
+
+# Mirrors docs/wiki into the repository's GitHub wiki. The wiki is generated: pages edited in the web UI are
+# overwritten by the next sync, so change them in docs/wiki instead.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/wiki/**'
+      - '.github/workflows/wiki-sync.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wiki-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Push docs/wiki to the wiki
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          wiki_url="https://github.com/${GITHUB_REPOSITORY}.wiki.git"
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+          wiki="$RUNNER_TEMP/wiki"
+          if ! git -c http.extraheader="$auth" clone --quiet --depth 1 "$wiki_url" "$wiki"; then
+            echo "::notice::The wiki does not exist yet. Create its first page on GitHub once, then re-run this workflow."
+            exit 0
+          fi
+          cd "$wiki"
+          git rm -r --quiet --ignore-unmatch -- .
+          cp "$GITHUB_WORKSPACE"/docs/wiki/*.md .
+          git add -A
+          if git diff --cached --quiet; then
+            echo "The wiki is up to date."
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit --quiet -m "Sync from ${GITHUB_SHA::7}"
+          git -c http.extraheader="$auth" push --quiet origin HEAD
+          git --no-pager diff --stat HEAD~1 HEAD
