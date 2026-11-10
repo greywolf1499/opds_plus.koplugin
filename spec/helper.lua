@@ -68,6 +68,8 @@ package.path = table.concat({
 
 fs = require("support.fs")
 helper.fs = fs
+-- From here on, live os.remove, os.rename and lfs.rmdir raise for paths outside a helper.tmpdir().
+fs.install_guards()
 
 -- Stand-ins registered for every spec. Their factories run again after helper.reset(), so each
 -- test sees fresh state (for example an empty logger.calls).
@@ -177,7 +179,7 @@ function helper.load(name, stubs)
 	return require(name)
 end
 
---- A fresh temp dir, removed by helper.reset().
+--- A fresh /tmp/opds_plus_test_* dir, removed by helper.reset(). The only place specs may write or delete.
 function helper.tmpdir()
 	return fs.tmpdir()
 end
