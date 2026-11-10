@@ -29,9 +29,13 @@ jobs:
         with:
           name: opds_plus.koplugin
 
+      - name: Check the release notes
+        run: test -s RELEASE_NOTES.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
+          body_path: RELEASE_NOTES.md
           files: |
             opds_plus.koplugin.zip
             opds_plus.koplugin.zip.sha256

@@ -267,8 +267,12 @@ opds_plus.koplugin/
 - A new top-level directory that is not plugin code, such as a tools directory: add it to `NON_RUNTIME` in `scripts/build_release.py` and in `spec/helper.lua`
 
 ```bash
-python3 scripts/build_release.py        # writes dist/opds_plus.koplugin.zip
+python3 scripts/build_release.py               # writes dist/opds_plus.koplugin.zip
+python3 scripts/build_release.py --tag v1.5.0  # also checks the version and writes dist/RELEASE_NOTES.md
+python3 -m unittest discover -s scripts        # the build script's own tests
 ```
+
+**Cutting a release** (maintainers): raise `VERSION` in `opds_plus_version.lua` and the **Version** line near the top of README.md, turn `## [Unreleased]` in CHANGELOG.md into `## [X.Y.Z] - date` (with a new empty `[Unreleased]` above it and a link definition at the bottom), merge, then push an annotated `vX.Y.Z` tag. `release.yml` refuses a tag that does not match `VERSION` and the newest CHANGELOG entry, and publishes that entry as the release notes, which is also what **Check for updates** shows in KOReader. Write it for users.
 
 ## Testing
 
@@ -319,7 +323,7 @@ spec/
 |-----|--------------|
 | `lint` | `luacheck . --config .luacheckrc` |
 | `test` | `scripts/setup_test_env.sh`, then `scripts/test.sh` |
-| `package` | Builds the release archive with `scripts/build_release.py`, extracts it and runs the specs against the extracted copy, so a file missing from the archive fails the build |
+| `package` | Tests `scripts/build_release.py`, builds the release archive with it, extracts it and runs the specs against the extracted copy, so a file missing from the archive fails the build |
 
 All three must pass. `release.yml` runs the same workflow for a `v*` tag and publishes the archive that passed.
 

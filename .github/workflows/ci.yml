@@ -59,6 +59,10 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Test the build script
+        run: python3 -m unittest discover -s scripts
+
+      # With a tag it also writes dist/RELEASE_NOTES.md from the tag's CHANGELOG.md entry
       - name: Build the release archive
         env:
           RELEASE_TAG: ${{ inputs.tag }}
@@ -83,4 +87,5 @@ jobs:
           path: |
             dist/opds_plus.koplugin.zip
             dist/opds_plus.koplugin.zip.sha256
+            dist/RELEASE_NOTES.md
           if-no-files-found: error
