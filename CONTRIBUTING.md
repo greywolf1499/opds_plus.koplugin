@@ -309,6 +309,8 @@ spec/
 
 **Contract tests.** The stand-ins are small, so they could drift from what KOReader really does. `scripts/test.sh --contract` checks them against a real KOReader in `KOREADER_DIR` (default `/usr/lib/koreader`). CI does not run these, because KOReader is not installed there, and they skip themselves when it is not found.
 
+**End-to-end kits.** `tools/e2e/` drives the plugin inside a real, headless KOReader: catalog browsing against a mock OPDS server (`tools/e2e/catalog/run.sh`), the self-updater against a mock of GitHub (`tools/e2e/ota/run.sh`) and a smoke run against real catalogs (`tools/e2e/opds/live.sh`). CI does not run them either; see [tools/e2e/README.md](tools/e2e/README.md) for what each one checks and when to run it. `tools/e2e/catalog/screenshots.sh` regenerates the README screenshots.
+
 ### Continuous Integration
 
 `.github/workflows/ci.yml` runs on every pull request and every push to `main`:
