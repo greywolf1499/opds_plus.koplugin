@@ -17,6 +17,7 @@ First off, thank you for considering contributing to OPDS Plus! It's people like
 		- [Lua Code Style](#lua-code-style)
 		- [Git Commit Messages](#git-commit-messages)
 		- [Documentation Style](#documentation-style)
+		- [Wiki](#wiki)
 	- [Development Setup](#development-setup)
 		- [Prerequisites](#prerequisites)
 		- [Setting Up Development Environment](#setting-up-development-environment)
@@ -178,6 +179,14 @@ Fixes #123
 - Keep line length reasonable (80-100 characters)
 - Use proper markdown formatting
 
+### Wiki
+
+The [wiki](https://github.com/greywolf1499/opds_plus.koplugin/wiki) is generated from `docs/wiki/`: when a change
+there reaches `main`, `.github/workflows/wiki-sync.yml` replaces the wiki's pages with those files. Edit the
+pages in `docs/wiki/` with a pull request, as with code; edits made in the wiki's web editor are overwritten by
+the next sync. Link between pages by their file name without `.md` (`[Updating](Updating)`), and to images by
+their `raw.githubusercontent.com` address on `main`.
+
 ## Development Setup
 
 ### Prerequisites
@@ -236,25 +245,31 @@ opds_plus.koplugin/
 ├── main.lua                  # Plugin entry point and KOReader menu registration
 ├── opds_plus_version.lua     # Version number (single source of truth)
 ├── config/                   # Persistent settings (settings.lua) and the settings menu (settings_menu.lua)
-├── core/                     # Catalogs, feeds, parsing, navigation, downloads, sync and shared state
+├── core/                     # Catalogs, feeds, navigation, downloads, sync and shared state
+│   ├── parsers/              # Feed parsers: Atom (OPDS 1) and JSON (OPDS 2.0)
+│   └── mappers/              # Turn either parsed feed into the same menu items
 ├── models/                   # Constants
-├── services/                 # HTTP client, cover cache and loaders, Kavita progress
+├── services/                 # HTTP client, cover cache and loaders, Kavita streaming, the self-updater
 ├── ui/                       # The browser (browser.lua), dialogs/ and the list, grid and cover menus/
-├── utils/                    # Pure helpers: URLs, files, catalogs, headers, results, debug logging
+├── utils/                    # Pure helpers: URLs, files, catalogs, headers, JSON, URI templates, versions
 ├── spec/                     # Automated tests (not part of the release archive)
 ├── scripts/                  # Test tooling and the release build (not part of the release archive)
-└── .github/workflows/        # CI and release workflows
+├── tools/e2e/                # End-to-end kits in a headless KOReader (not part of the release archive)
+├── docs/wiki/                # Source of the GitHub wiki (not part of the release archive)
+└── .github/workflows/        # CI, release and wiki sync workflows
 ```
 
 ### Key Components
 
 - **main.lua**: Plugin lifecycle and menu registration
-- **core/parser.lua**: Converts OPDS Atom/XML into Lua tables
-- **core/navigation_handler.lua**: Turns a parsed feed into menu items (entries, links, search)
+- **core/parser.lua**: Tells Atom (OPDS 1) and JSON (OPDS 2.0) feeds apart by their content and hands them to `core/parsers/`
+- **core/mappers/**: Turn a parsed Atom or OPDS 2.0 feed into the same menu items; `spec/integration/mapper_contract_spec.lua` holds both to one model
+- **core/navigation_handler.lua**: Builds the menu from a feed's items, links, facets and search
 - **core/feed_fetcher.lua**: Fetches feeds and OpenSearch descriptions, and keeps a cache of pages
 - **core/download_manager.lua** and **core/sync_manager.lua**: Downloads and catalog sync
 - **core/catalog_manager.lua** and **core/state_manager.lua**: The list of catalogs and the shared state behind the settings
-- **services/http_client.lua**: HTTP requests, including a catalog's custom headers
+- **services/http_client.lua**: HTTP requests and their redirects, including a catalog's custom headers
+- **services/ota_updater.lua** and **ui/dialogs/update_dialog.lua**: The self-updater and its menu (see [SECURITY.md](SECURITY.md) for its trust model)
 - **services/cover_cache.lua**, **cover_loader.lua** and **image_loader.lua**: Cover downloading and caching
 - **ui/menus/**: List, grid and cover rendering
 - **ui/dialogs/**: Book info, download, search and settings dialogs
@@ -267,8 +282,12 @@ opds_plus.koplugin/
 - A new top-level directory that is not plugin code, such as a tools directory: add it to `NON_RUNTIME` in `scripts/build_release.py` and in `spec/helper.lua`
 
 ```bash
-python3 scripts/build_release.py        # writes dist/opds_plus.koplugin.zip
+python3 scripts/build_release.py               # writes dist/opds_plus.koplugin.zip
+python3 scripts/build_release.py --tag v1.5.0  # also checks the version and writes dist/RELEASE_NOTES.md
+python3 -m unittest discover -s scripts        # the build script's own tests
 ```
+
+**Cutting a release** (maintainers): raise `VERSION` in `opds_plus_version.lua` and the **Version** line near the top of README.md, turn `## [Unreleased]` in CHANGELOG.md into `## [X.Y.Z] - date` (with a new empty `[Unreleased]` above it and a link definition at the bottom), merge, then push an annotated `vX.Y.Z` tag. `release.yml` refuses a tag that does not match `VERSION` and the newest CHANGELOG entry, and publishes that entry as the release notes, which is also what **Check for updates** shows in KOReader. Write it for users.
 
 ## Testing
 
@@ -309,6 +328,8 @@ spec/
 
 **Contract tests.** The stand-ins are small, so they could drift from what KOReader really does. `scripts/test.sh --contract` checks them against a real KOReader in `KOREADER_DIR` (default `/usr/lib/koreader`). CI does not run these, because KOReader is not installed there, and they skip themselves when it is not found.
 
+**End-to-end kits.** `tools/e2e/` drives the plugin inside a real, headless KOReader: catalog browsing against a mock OPDS server (`tools/e2e/catalog/run.sh`), the self-updater against a mock of GitHub (`tools/e2e/ota/run.sh`) and a smoke run against real catalogs (`tools/e2e/opds/live.sh`). CI does not run them either; see [tools/e2e/README.md](tools/e2e/README.md) for what each one checks and when to run it. `tools/e2e/catalog/screenshots.sh` regenerates the README screenshots.
+
 ### Continuous Integration
 
 `.github/workflows/ci.yml` runs on every pull request and every push to `main`:
@@ -317,9 +338,9 @@ spec/
 |-----|--------------|
 | `lint` | `luacheck . --config .luacheckrc` |
 | `test` | `scripts/setup_test_env.sh`, then `scripts/test.sh` |
-| `package` | Builds the release archive with `scripts/build_release.py`, extracts it and runs the specs against the extracted copy, so a file missing from the archive fails the build |
+| `package` | Tests `scripts/build_release.py`, builds the release archive with it, extracts it and runs the specs against the extracted copy, so a file missing from the archive fails the build |
 
-All three must pass. `release.yml` runs the same workflow for a `v*` tag and publishes the archive that passed.
+All three must pass. `release.yml` runs the same workflow for a `v*` tag and publishes the archive that passed. `wiki-sync.yml` mirrors `docs/wiki/` to the wiki after a push to `main` (see [Wiki](#wiki)).
 
 ### Manual Testing Checklist
 

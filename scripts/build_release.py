@@ -10,7 +10,8 @@ SOURCE_DATE_EPOCH) on every entry, so the same commit gives the same bytes with 
 
 Usage: scripts/build_release.py [--tag vX.Y.Z]
   --tag  also require the tag to match VERSION in opds_plus_version.lua and the newest CHANGELOG.md entry
-         (an empty value skips the check)
+         (an empty value skips the check), and write that entry to dist/RELEASE_NOTES.md, the body of the
+         GitHub release
 
 Needs only Python 3 and git.
 """
@@ -74,14 +75,26 @@ def read_version():
     return match.group(1)
 
 
-def check_tag(tag, version):
+def check_tag(tag, version, changelog):
     if tag != "v" + version:
         raise BuildError(f"tag {tag} does not match VERSION {version} in opds_plus_version.lua")
-    text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    match = re.search(r"^## \[(\d[^\]]*)\]", text, re.MULTILINE)
+    match = re.search(r"^## \[(\d[^\]]*)\]", changelog, re.MULTILINE)
     newest = match.group(1) if match else None
     if newest != version:
         raise BuildError(f"the newest CHANGELOG.md entry is {newest}, expected {version}")
+
+
+def release_notes(changelog, version):
+    """The text of a version's CHANGELOG.md entry, without its heading and the link definitions at the end."""
+    heading = re.search(r"^## \[" + re.escape(version) + r"\][^\n]*\n", changelog, re.MULTILINE)
+    if not heading:
+        raise BuildError(f"CHANGELOG.md has no entry for {version}")
+    following = re.search(r"^## \[", changelog[heading.end() :], re.MULTILINE)
+    body = changelog[heading.end() : heading.end() + following.start()] if following else changelog[heading.end() :]
+    body = re.sub(r"^\[[^\]\n]+\]: \S+[ \t]*$\n?", "", body, flags=re.MULTILINE).strip()
+    if not body:
+        raise BuildError(f"the CHANGELOG.md entry for {version} is empty")
+    return body + "\n"
 
 
 def check_no_unlisted_lua():
@@ -157,13 +170,22 @@ def verify_archive(path, files):
 
 def build(tag):
     version = read_version()
+    notes = None
     if tag:
-        check_tag(tag, version)
+        changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        check_tag(tag, version, changelog)
+        notes = release_notes(changelog, version)
     check_no_unlisted_lua()
     files = collect_files()
 
     dist = ROOT / "dist"
     dist.mkdir(exist_ok=True)
+    notes_path = dist / "RELEASE_NOTES.md"
+    if notes:
+        notes_path.write_text(notes, encoding="utf-8")
+    else:
+        # an untagged build must not leave an older release's notes next to its archive
+        notes_path.unlink(missing_ok=True)
     archive = dist / (NAME + ".zip")
     write_archive(archive, files)
     verify_archive(archive, files)
