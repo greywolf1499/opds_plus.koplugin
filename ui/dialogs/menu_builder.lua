@@ -16,6 +16,7 @@ local Constants = require("models.constants")
 local HttpClient = require("services.http_client")
 local RequestHeaders = require("utils.request_headers")
 local StateManager = require("core.state_manager")
+local UrlUtils = require("utils.url_utils")
 
 local OPDSMenuBuilder = {}
 
@@ -483,8 +484,7 @@ function OPDSMenuBuilder.buildSearchDialog(browser, item_url)
 					callback = function()
 						UIManager:close(dialog)
 						browser.catalog_title = _("Search results")
-						local search_str = util.urlEncode(dialog:getInputText())
-						local search_url = item_url:gsub("%%s", function() return search_str end)
+						local search_url = UrlUtils.buildSearchUrl(item_url, util.urlEncode(dialog:getInputText()))
 						browser:updateCatalog(search_url)
 					end,
 				},

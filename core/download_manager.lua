@@ -22,6 +22,7 @@ local T = require("ffi/util").template
 
 local Constants = require("models.constants")
 local HttpClient = require("services.http_client")
+local FileUtils = require("utils.file_utils")
 local StateManager = require("core.state_manager")
 
 local DownloadManager = {}
@@ -34,10 +35,7 @@ function DownloadManager.getFiletype(link)
 	if not DocumentRegistry:hasProvider("dummy." .. filetype) then
 		filetype = nil
 	end
-	if not filetype and DocumentRegistry:hasProvider(nil, link.type) then
-		filetype = DocumentRegistry:mimeToExt(link.type)
-	end
-	return filetype
+	return filetype or FileUtils.mimeExtension(link.type, DocumentRegistry)
 end
 
 -- Get the current download directory based on context

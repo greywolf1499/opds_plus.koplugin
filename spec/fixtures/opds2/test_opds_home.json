@@ -1,0 +1,195 @@
+{
+  "metadata": {
+    "title": "OPDS 2.0 Test Catalog"
+  },
+  "links": [
+    {
+      "rel": "self",
+      "href": "https://test.opds.io/2.0/home.json",
+      "type": "application/opds+json"
+    }
+  ],
+  "navigation": [
+    {
+      "href": "https://test.opds.io/2.0/navigation.json",
+      "title": "Explore (Navigation Feed)",
+      "type": "application/opds+json"
+    },
+    {
+      "href": "https://test.opds.io/2.0/publications.json",
+      "title": "French Books (Publications Feed)",
+      "type": "application/opds+json"
+    },
+    {
+      "href": "https://test.opds.io/2.0/home.json",
+      "title": "Third Link",
+      "type": "application/opds+json"
+    }
+  ],
+  "groups": [
+    {
+      "metadata": {
+        "title": "French Classics",
+        "numberOfItems": 5
+      },
+      "links": [
+        {
+          "rel": "self",
+          "href": "https://test.opds.io/2.0/publications.json",
+          "type": "application/opds+json"
+        }
+      ],
+      "publications": [
+        {
+          "metadata": {
+            "@type": "http://schema.org/Book",
+            "title": "Voyage au centre de la Terre",
+            "author": {
+              "name": "Jules Verne",
+              "sortAs": "Verne, Jules"
+            },
+            "identifier": "http://fr.feedbooks.com/book/1474/voyage-au-centre-de-la-terre",
+            "language": "fr",
+            "modified": "2018-04-23T22:15:00Z",
+            "published": "1864-01-01",
+            "publisher": "Feedbooks",
+            "numberOfPages": 251,
+            "subject": [
+              {
+                "name": "Science Fiction",
+                "code": "FBFIC028000"
+              },
+              {
+                "name": "Action & Aventure",
+                "code": "FBFIC002000"
+              }
+            ],
+            "description": "Le professeur Lidenbrock trouve un document dans lequel il apprend l'existence d'un vol..."
+          },
+          "links": [
+            {
+              "rel": "http://opds-spec.org/acquisition/open-access",
+              "href": "https://test.opds.io/assets/centredelaterre/file.epub",
+              "type": "application/epub+zip"
+            }
+          ],
+          "images": [
+            {
+              "href": "https://test.opds.io/assets/centredelaterre/small.jpg",
+              "type": "image/jpeg",
+              "height": 110,
+              "width": 146
+            },
+            {
+              "href": "https://test.opds.io/assets/centredelaterre/normal.jpg",
+              "type": "image/jpeg",
+              "height": 346,
+              "width": 260
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "title": "More Navigation"
+      },
+      "navigation": [
+        {
+          "href": "https://test.opds.io/2.0/home.json",
+          "title": "French Books",
+          "type": "application/opds+json"
+        },
+        {
+          "href": "https://test.opds.io/2.0/home.json",
+          "title": "English Books",
+          "type": "application/opds+json"
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "title": "English Classics",
+        "numberOfItems": 3
+      },
+      "publications": [
+        {
+          "metadata": {
+            "@type": "http://schema.org/Book",
+            "title": "Moby-Dick",
+            "author": {
+              "name": "Herman Melville",
+              "sortAs": "Melville, Herman"
+            },
+            "identifier": "http://www.feedbooks.com/book/54/moby-dick",
+            "language": "en",
+            "modified": "2018-04-23T23:18:00Z",
+            "published": "1851-01-01",
+            "publisher": "Feedbooks",
+            "description": "Moby-Dick is an 1851 novel by Herman Melville. The story tells the adventures of the wa..."
+          },
+          "links": [
+            {
+              "rel": "http://opds-spec.org/acquisition/open-access",
+              "href": "https://test.opds.io/assets/moby/file.epub",
+              "type": "application/epub+zip"
+            }
+          ],
+          "images": [
+            {
+              "href": "https://test.opds.io/assets/moby/small.jpg",
+              "type": "image/jpeg",
+              "height": 169,
+              "width": 110
+            },
+            {
+              "href": "https://test.opds.io/assets/moby/normal.jpg",
+              "type": "image/jpeg",
+              "height": 400,
+              "width": 260
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "publications": [
+    {
+      "metadata": {
+        "@type": "http://schema.org/Book",
+        "title": "Moby-Dick",
+        "author": {
+          "name": "Herman Melville",
+          "sortAs": "Melville, Herman"
+        },
+        "identifier": "http://www.feedbooks.com/book/54/moby-dick",
+        "language": "en",
+        "modified": "2018-04-23T23:18:00Z",
+        "published": "1851-01-01",
+        "publisher": "Feedbooks",
+        "description": "Moby-Dick is an 1851 novel by Herman Melville. The story tells the adventures of the wa..."
+      },
+      "links": [
+        {
+          "rel": "http://opds-spec.org/acquisition/open-access",
+          "href": "https://test.opds.io/assets/moby/file.epub",
+          "type": "application/epub+zip"
+        }
+      ],
+      "images": [
+        {
+          "href": "https://test.opds.io/assets/moby/small.jpg",
+          "type": "image/jpeg",
+          "height": 169,
+          "width": 110
+        },
+        {
+          "href": "https://test.opds.io/assets/moby/normal.jpg",
+          "type": "image/jpeg",
+          "height": 400,
+          "width": 260
+        }
+      ]
+    }
+  ]
+}

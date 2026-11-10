@@ -458,4 +458,45 @@ describe("KOReader contract", function()
 			end
 		end)
 	end)
+
+	describe("the book types KOReader registers", function()
+		-- mimetype -> set of extensions, from every addProvider("ext", "mimetype", ...) of the document providers
+		local function registrations()
+			local by_mimetype, extensions = {}, {}
+			local dir = KOREADER .. "/frontend/document"
+			for name in lfs.dir(dir) do
+				if name:match("%.lua$") then
+					local source = read(dir .. "/" .. name)
+					for extension, mimetype in source:gmatch("addProvider%(%s*\"([^\"]+)\"%s*,%s*\"([^\"]+)\"") do
+						by_mimetype[mimetype] = by_mimetype[mimetype] or {}
+						by_mimetype[mimetype][extension] = true
+						extensions[extension] = true
+					end
+				end
+			end
+			return by_mimetype, extensions
+		end
+
+		it("leave the types the plugin maps itself unregistered, and open what they map to", function()
+			local Constants = helper.load("models.constants")
+			local by_mimetype, extensions = registrations()
+			assert.is_true(extensions.epub and extensions.cbz and true, "found no providers to compare with")
+			for mimetype, extension in pairs(Constants.MIME_EXTENSIONS) do
+				assert.is_nil(by_mimetype[mimetype], mimetype .. " is registered now: its entry is not needed")
+				if extension ~= "cb7" then
+					assert.is_true(extensions[extension], extension .. " is not opened by KOReader")
+				end
+			end
+		end)
+
+		it("include every type the stand-in registry knows, under the extension it gives", function()
+			local registry = require("support.documentregistry").new()
+			local by_mimetype = registrations()
+			for mimetype in pairs(registry.mimetypes) do
+				assert.is_table(by_mimetype[mimetype], mimetype .. " is not registered by KOReader")
+				local extension = registry:mimeToExt(mimetype)
+				assert.is_true(by_mimetype[mimetype][extension], mimetype .. " is not registered as " .. extension)
+			end
+		end)
+	end)
 end)

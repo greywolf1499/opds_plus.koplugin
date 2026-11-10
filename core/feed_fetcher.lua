@@ -15,6 +15,7 @@ local T = require("ffi/util").template
 local OPDSParser = require("core.parser")
 local Constants = require("models.constants")
 local HttpClient = require("services.http_client")
+local RequestHeaders = require("utils.request_headers")
 local UrlUtils = require("utils.url_utils")
 local FileUtils = require("utils.file_utils")
 local Result = require("utils.result")
@@ -26,6 +27,25 @@ local CatalogCache = Cache:new {
 	slots = Constants.CACHE_SLOTS,
 }
 
+-- Servers (by origin) that refused a catalog request for its Accept header: until KOReader restarts their
+-- catalogs are asked for without one, as before the plugin sent it
+local refuses_accept = {}
+
+-- Whether the custom headers of the catalog a URL belongs to set Accept themselves
+local function catalogSetsAccept(item_url)
+	for __, header in ipairs(HttpClient.customHeadersFor(item_url) or {}) do
+		if type(header) == "table" and type(header.name) == "string" and header.name:lower() == "accept"
+			and RequestHeaders.validate(header.name, header.value) then
+			return true
+		end
+	end
+	return false
+end
+
+local function refusedAccept(code)
+	return code == Constants.HTTP_STATUS.NOT_ACCEPTABLE or code == Constants.HTTP_STATUS.UNSUPPORTED_MEDIA_TYPE
+end
+
 -- Fetch raw XML feed from URL
 -- @param item_url string URL to fetch from
 -- @param headers_only boolean If true, only fetch headers (HEAD request)
@@ -35,21 +55,40 @@ local CatalogCache = Cache:new {
 -- @return string|table XML content or headers, nil on error
 -- @return table|nil Response headers of a GET
 function FeedFetcher.fetchFeed(item_url, headers_only, username, password, cached)
+	item_url = UrlUtils.stripFragment(item_url)
 	socketutil:set_timeout(socketutil.LARGE_BLOCK_TIMEOUT, socketutil.LARGE_TOTAL_TIMEOUT)
 	local own_headers = { ["Accept-Encoding"] = "identity" }
 	if cached and not headers_only then
 		own_headers["If-None-Match"] = cached.etag
 		own_headers["If-Modified-Since"] = cached.last_modified
 	end
+	-- Only catalogs are negotiated: a HEAD request asks about a book
+	local origin = RequestHeaders.originKey(item_url)
+	local send_accept = not headers_only and not (origin and refuses_accept[origin])
+		and not catalogSetsAccept(item_url)
+	if send_accept then
+		own_headers["Accept"] = Constants.CATALOG_ACCEPT
+	end
 	-- Redirects are followed by the client rather than by LuaSocket, which drops the credentials of a
 	-- redirect to the same server and sends the custom headers of the catalog to any other
-	local code, headers, status, info = socket.skip(1, HttpClient.request({
-		url      = item_url,
-		method   = headers_only and "HEAD" or "GET",
-		headers  = own_headers,
-		user     = username,
-		password = password,
-	}))
+	local function get()
+		return socket.skip(1, HttpClient.request({
+			url      = item_url,
+			method   = headers_only and "HEAD" or "GET",
+			headers  = own_headers,
+			user     = username,
+			password = password,
+		}))
+	end
+	local code, headers, status, info = get()
+	if send_accept and refusedAccept(code) then
+		logger.info("OPDS: the server refused the catalog Accept header, asking again without it:", item_url)
+		if origin then
+			refuses_accept[origin] = true
+		end
+		own_headers["Accept"] = nil
+		code, headers, status, info = get()
+	end
 	socketutil:reset_timeout()
 
 	if headers_only then
@@ -98,6 +137,23 @@ function FeedFetcher.fetchFeed(item_url, headers_only, username, password, cache
 	return nil
 end
 
+--- Tell whether a payload is an HTML page (a login page, a web reader, an error page) rather than a feed
+-- @param text string Payload
+-- @return boolean
+function FeedFetcher.isWebPage(text)
+	if type(text) ~= "string" then return false end
+	local head = text:sub(1, 1024):gsub("^\239\187\191", ""):lower()
+	-- Past an XML declaration and comments, an XHTML page starts the same way
+	head = head:gsub("^%s*<%?xml.-%?>", "")
+	repeat
+		local stripped = head:gsub("^%s*<!%-%-.-%-%->", "", 1)
+		local changed = stripped ~= head
+		head = stripped
+	until not changed
+	head = head:match("^%s*(.*)$")
+	return head:match("^<!doctype%s+html[%s>]") ~= nil or head:match("^<html[%s>]") ~= nil
+end
+
 -- Parse feed with caching support
 -- @param item_url string URL to fetch and parse
 -- @param username string|nil Optional HTTP auth username
@@ -107,11 +163,14 @@ end
 function FeedFetcher.parseFeed(item_url, username, password, debug_callback)
 	-- One request per feed: a server that tags or dates its feeds answers "not modified" when the copy
 	-- kept here is still current, and one that does not just sends the feed.
+	item_url = UrlUtils.stripFragment(item_url)
 	local key = "opds|catalog|" .. item_url
 	local cached = CatalogCache:check(key)
 	local feed, headers = FeedFetcher.fetchFeed(item_url, false, username, password, cached)
+	local content_type = headers and headers["content-type"]
 
 	if feed and cached and feed == cached.xml then
+		content_type = cached.content_type or content_type
 		if debug_callback then
 			debug_callback("Cache hit for", item_url)
 		end
@@ -120,14 +179,24 @@ function FeedFetcher.parseFeed(item_url, username, password, debug_callback)
 			xml = feed,
 			etag = headers["etag"],
 			last_modified = headers["last-modified"],
+			content_type = content_type,
 		})
 	end
 
-	if feed then
-		return OPDSParser:parse(feed)
+	if not feed then
+		return nil
 	end
 
-	return nil
+	if FeedFetcher.isWebPage(feed) then
+		logger.dbg("OPDS: a web page came back instead of a catalog:", item_url, content_type)
+		UIManager:show(InfoMessage:new {
+			text = T(_("This address is a web page, not an OPDS catalog:\n\n%1\n\nCheck the catalog URL; the server's documentation gives the address of its OPDS feed."),
+				BD.url(item_url)),
+		})
+		return nil
+	end
+
+	return OPDSParser:parse(feed, content_type)
 end
 
 -- Parse feed with Result-based error handling

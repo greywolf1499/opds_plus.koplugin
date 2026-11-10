@@ -82,6 +82,18 @@ describe("UrlUtils", function()
 		end)
 	end)
 
+	describe("stripFragment", function()
+		it("removes everything from the first #", function()
+			assert.equals("https://example.org/opds?page=2",
+				UrlUtils.stripFragment("https://example.org/opds?page=2#opdsplus-group=1#x"))
+		end)
+
+		it("leaves an address without a fragment, and a missing one, as they are", function()
+			assert.equals("https://example.org/opds", UrlUtils.stripFragment("https://example.org/opds"))
+			assert.is_nil(UrlUtils.stripFragment(nil))
+		end)
+	end)
+
 	describe("isSearchable", function()
 		it("is true for a URL with a %s placeholder", function()
 			assert.is_true(UrlUtils.isSearchable("https://example.org/search?q=%s"))

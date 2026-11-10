@@ -1,0 +1,66 @@
+{
+  "metadata": { "title": { "en": "Edge cases", "fr": "Cas limites" }, "numberOfItems": 40, "itemsPerPage": 2, "currentPage": 2 },
+  "links": [
+    { "rel": "self", "href": "/opds2/edge?page=2", "type": "application/opds+json" },
+    { "rel": ["next", "http://example.org/rel/other"], "href": "edge?page=3", "type": "application/opds+json" },
+    { "rel": "previous", "href": "edge?page=1" },
+    { "rel": "first", "href": "edge?page=1" },
+    { "rel": "last", "href": "edge?page=20" },
+    { "rel": "search", "href": "/opds2/search{?query,author}", "type": "application/opds+json", "templated": true },
+    null
+  ],
+  "navigation": [
+    { "href": "/opds2/new", "title": { "de": "Neu", "en": "New" }, "type": "application/opds+json" },
+    { "href": "/opds2/edge?page=2", "rel": "self", "title": "This page" },
+    null,
+    { "title": "No href" }
+  ],
+  "facets": [
+    {
+      "metadata": { "title": "Genre" },
+      "links": [
+        { "href": "/opds2/edge?genre=sf", "title": "Science fiction", "rel": "self", "properties": { "numberOfItems": 12 } },
+        { "href": "/opds2/edge?genre=fantasy", "title": "Fantasy", "properties": { "numberOfItems": 8 } }
+      ]
+    },
+    { "metadata": {}, "links": [ { "href": "?sort=new", "title": "Newest" } ] }
+  ],
+  "groups": [
+    { "metadata": { "title": "Empty" } },
+    { "metadata": { "title": "Inline only" }, "publications": [ { "metadata": { "title": "Hidden" } } ] }
+  ],
+  "publications": [
+    {
+      "metadata": {
+        "title": "Borrowed",
+        "author": [ { "name": { "en": "Ann Author", "fr": "Anne Auteur" } }, "Bob Writer", null ],
+        "belongsTo": { "series": [ { "name": "Saga", "position": 2.5 } ] },
+        "description": "<p>A <b>borrowed</b> book.</p>"
+      },
+      "links": [
+        { "rel": "http://opds-spec.org/acquisition/borrow", "href": "/borrow/1", "type": "application/opds-publication+json" },
+        {
+          "rel": "http://opds-spec.org/acquisition",
+          "href": "/adept/1",
+          "type": "application/vnd.adobe.adept+xml",
+          "properties": { "indirectAcquisition": [ { "type": "application/vnd.adobe.adept+xml", "child": [ { "type": "application/epub+zip" } ] } ] }
+        },
+        { "href": "/files/1.cbz", "type": "application/vnd.comicbook+zip", "title": "Comic" },
+        { "rel": "alternate", "href": "/web/1", "type": "text/html" }
+      ],
+      "images": [
+        { "href": "/img/1-cover.jpg", "rel": "http://opds-spec.org/image" },
+        { "href": "/img/1-thumb.jpg", "rel": "http://opds-spec.org/image/thumbnail" }
+      ]
+    },
+    {
+      "metadata": {
+        "title": null,
+        "contributor": { "name": "Cee Contributor" },
+        "belongsTo": { "collection": { "name": "Box set", "position": "3" } }
+      },
+      "links": [ { "rel": "http://opds-spec.org/acquisition/open-access", "href": "/f/2.epub", "type": "application/epub+zip" } ],
+      "images": null
+    }
+  ]
+}

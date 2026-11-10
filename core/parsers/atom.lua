@@ -1,0 +1,128 @@
+--[[
+    This code is derived from the LAPHLibs which can be found here:
+
+    https://github.com/Wiladams/LAPHLibs
+--]]
+local util = require("util")
+local luxl = require("luxl")
+local ffi = require("ffi")
+
+local OPDSParser = {}
+
+local unescape_map  = {
+    ["lt"] = "<",
+    ["gt"] = ">",
+    ["amp"] = "&",
+    ["quot"] = '"',
+    ["apos"] = "'"
+}
+
+local gsub = string.gsub
+local function unescape(str)
+    return gsub(str, '(&(#?)([%d%a]+);)', function(orig, n, s)
+        if unescape_map[s] then
+            return unescape_map[s]
+        elseif n == "#" then  -- unescape unicode
+            local codepoint
+            -- Determine if the code point is written as a decimal or hexadecimal number
+            if string.sub(s, 1, 1) == "x" then
+                codepoint = tonumber(string.sub(s, 2), 16)
+            else
+                codepoint = tonumber(s)
+            end
+            if not codepoint then
+                -- Not a number (for example &#xZZ;): keep the text rather than failing the whole feed
+                return orig
+            end
+            return util.unicodeCodepointToUtf8(codepoint)
+        else
+            return orig
+        end
+    end)
+end
+
+-- Elements that can occur several times inside their parent, so they are collected
+-- into a list. Any other repeated element keeps only its last occurrence.
+local LIST_ELEMENTS = { entry = true, link = true, Url = true, author = true, meta = true }
+
+-- Elements whose attributes say what their text means, as in
+-- <meta property="group-position" refines="#series">3</meta>. The text is stored
+-- under "#text" next to the attributes instead of replacing them.
+local ATTRIBUTES_WITH_TEXT = { meta = true }
+
+function OPDSParser:createFlatXTable(xlex, curr_element, keep_attributes)
+    curr_element = curr_element or {}
+
+    local curr_attr_name
+    local attr_count = 0
+
+    -- start reading the thing
+    for event, offset, size in xlex:Lexemes() do
+        local txt = ffi.string(xlex.buf + offset, size)
+        if event == luxl.EVENT_START then
+            if txt ~= "xml" then
+                -- does current element already have something
+                -- with this name?
+
+                -- if it does, if it's a table, add to it
+                -- if it doesn't, then add a table
+                local tab = self:createFlatXTable(xlex, nil, ATTRIBUTES_WITH_TEXT[txt])
+                if LIST_ELEMENTS[txt] then
+                    if curr_element[txt] == nil then
+                        curr_element[txt] = {}
+                    end
+                    table.insert(curr_element[txt], tab)
+                elseif type(curr_element) == "table" then
+                    curr_element[txt] = tab
+                end
+            end
+        elseif event == luxl.EVENT_ATTR_NAME then
+            curr_attr_name = unescape(txt)
+        elseif event == luxl.EVENT_ATTR_VAL then
+            curr_element[curr_attr_name] = unescape(txt)
+            attr_count = attr_count + 1
+            curr_attr_name = nil
+        elseif event == luxl.EVENT_TEXT then
+            if keep_attributes and attr_count > 0 then
+                curr_element["#text"] = unescape(txt)
+            else
+                curr_element = unescape(txt)
+            end
+        elseif event == luxl.EVENT_END then
+            return curr_element
+        end
+    end
+    return curr_element
+end
+
+function OPDSParser:parse(text)
+    text = text:gsub("<%?xml%-stylesheet.-%?>", "")
+    -- luxl doesn't handle XML comments, so strip them
+    text = text:gsub("<!%-%-.-%-%->", "")
+    -- luxl is also particular about the syntax for self-closing, empty & orphaned tags...
+    text = text:gsub("<([%l:]+)/>", "<%1 />")
+    -- We also need to handle the slash-less variants for br & hr...
+    text = text:gsub("<([bh]r)>", "<%1 />")
+    -- Some OPDS catalogs wrap text in a CDATA section, remove it as it causes parsing problems
+    text = text:gsub("<!%[CDATA%[(.-)%]%]>", function (s)
+        return s:gsub("%p", {["&"] = "&amp;", ["<"] = "&lt;", [">"] = "&gt;"})
+    end )
+
+    -- NOTE: OPDS content tags are likely to contain a bunch of HTML or XHTML. We do *NOT* want to let luxl parse that,
+    --       because it doesn't really deal well with various XHTML quirks, as the list of crappy replacements above attests to...
+    --       There's also a high probability of finding orphaned tags or badly nested ones in there, which would screw everything up.
+    --       In any case, we just want to treat the whole thing as a single text node anyway, so, just mangle the markup to force luxl's hand.
+    -- A self-closing content tag (e.g. <content type="text"/>) has no text. Turn it
+    -- into an empty element first, otherwise the lazy ".-" in the rewrite below runs
+    -- past it to the next entry's content tag and swallows everything in between.
+    text = text:gsub("<content%s+[^<>]-/>", "<content />")
+    text = text:gsub('<content type=".-">', "<content>")
+    text = text:gsub("<content>(.-)</content>", function (s)
+        return '<content type="text">' .. s:gsub("%p", {["<"] = "&lt;", [">"] = "&gt;", ['"'] = "&quot;", ["'"] = "&apos;"}) .. "</content>"
+    end )
+
+    local xlex = luxl.new(text, #text)
+    return assert(self:createFlatXTable(xlex))
+end
+
+return OPDSParser

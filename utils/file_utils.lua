@@ -4,6 +4,8 @@
 local lfs = require("libs/libkoreader-lfs")
 local util = require("util")
 
+local Constants = require("models.constants")
+
 local FileUtils = {}
 
 --- Add file extension if missing, or if it is not one the reader can open
@@ -21,6 +23,30 @@ function FileUtils.ensureExtension(filename, filetype, is_known)
 	end
 
 	return filename
+end
+
+--- Get the extension of a book type KOReader can open
+-- Parameters of the type (";charset=...") and letter case are ignored, and types KOReader registers under
+-- another name (application/x-cbr for application/vnd.comicbook-rar) are mapped first.
+-- @param mimetype string|nil Type of a link
+-- @param registry table KOReader's DocumentRegistry
+-- @return string|nil The extension, or nil when no reader opens the type
+function FileUtils.mimeExtension(mimetype, registry)
+	if type(mimetype) ~= "string" then return nil end
+	if registry:hasProvider(nil, mimetype) then
+		return registry:mimeToExt(mimetype)
+	end
+	local base = mimetype:match("^%s*([^;%s]+)")
+	if not base then return nil end
+	base = base:lower()
+	if registry:hasProvider(nil, base) then
+		return registry:mimeToExt(base)
+	end
+	local extension = Constants.MIME_EXTENSIONS[base]
+	if extension and registry:hasProvider("dummy." .. extension) then
+		return extension
+	end
+	return nil
 end
 
 --- Sanitize filename for safe filesystem usage

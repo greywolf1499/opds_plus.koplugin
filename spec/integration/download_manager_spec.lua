@@ -141,6 +141,13 @@ describe("DownloadManager", function()
 			assert.equals("epub", DownloadManager.getFiletype(link))
 		end)
 
+		it("maps a comic book type KOReader registers under another name", function()
+			registry:add_extension("cbr")
+			local link = { href = HOST .. "/download/42", type = "application/x-cbr" }
+
+			assert.equals("cbr", DownloadManager.getFiletype(link))
+		end)
+
 		it("is nil when neither the extension nor the mimetype is something KOReader opens", function()
 			local link = { href = HOST .. "/download/42", type = "application/zip" }
 
