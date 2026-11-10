@@ -56,20 +56,22 @@ function OPDSPSE:getLastPage(remote_url, username, password)
 
         -- Do HTTP GET request for chapter progress
         local progress_parsed = url.parse(progress_url)
-        local progress_data = {}
+        local progress_body
         local progress_code, progress_headers, progress_status
         if progress_parsed.scheme == "http" or progress_parsed.scheme == "https" then
             socketutil:set_timeout(socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT)
-            progress_code, progress_headers, progress_status = socket.skip(1, http.request {
+            local progress_info
+            -- The token and the credentials only go to this server, however the request is redirected
+            progress_code, progress_headers, progress_status, progress_info = socket.skip(1, HttpClient.request({
                 url         = progress_url,
-                headers     = HttpClient.withCustomHeaders(progress_url, {
+                headers     = {
                     ["Accept-Encoding"] = "identity",
                     ["Authorization"] = "Bearer "..bearer_token,
-                }),
-                sink        = ltn12.sink.table(progress_data),
+                },
                 user        = username,
                 password    = password,
-            })
+            }))
+            progress_body = progress_info.body
             socketutil:reset_timeout()
         else
             UIManager:show(InfoMessage:new {
@@ -79,7 +81,7 @@ function OPDSPSE:getLastPage(remote_url, username, password)
 
         if progress_code == 200 then
             -- if HTTP GET was successful, pull page number from response
-            last_page = progress_data[1]:match("\"pageNum\":(.+),\"seriesId")
+            last_page = progress_body:match("\"pageNum\":(.+),\"seriesId") or 0
         else
             logger.dbg("OPDSPSE:getLastPage: Progress Request failed:", progress_status or progress_code)
             logger.dbg("OPDSPSE:getLastPage: Progress Response headers:", progress_headers)
@@ -112,7 +114,7 @@ function OPDSPSE:streamPages(remote_url, count, continue, username, password, la
             local index = key - 1
             local page_url = remote_url:gsub("{pageNumber}", tostring(index))
             page_url = page_url:gsub("{maxWidth}", tostring(Screen:getWidth()))
-            local page_data = {}
+            local page_data
 
             logger.dbg("Streaming page from", page_url)
             local parsed = url.parse(page_url)
@@ -120,15 +122,14 @@ function OPDSPSE:streamPages(remote_url, count, continue, username, password, la
             local code, headers, status
             if parsed.scheme == "http" or parsed.scheme == "https" then
                 socketutil:set_timeout(socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT)
-                code, headers, status = socket.skip(1, http.request {
+                local info
+                code, headers, status, info = socket.skip(1, HttpClient.request({
                     url         = page_url,
-                    headers     = HttpClient.withCustomHeaders(page_url, {
-                        ["Accept-Encoding"] = "identity",
-                    }),
-                    sink        = ltn12.sink.table(page_data),
+                    headers     = { ["Accept-Encoding"] = "identity" },
                     user        = username,
                     password    = password,
-                })
+                }))
+                page_data = info.body
                 socketutil:reset_timeout()
             else
                 UIManager:show(InfoMessage:new {
@@ -136,7 +137,7 @@ function OPDSPSE:streamPages(remote_url, count, continue, username, password, la
                 })
             end
 
-            local data = table.concat(page_data)
+            local data = page_data or ""
             if code == 200 then
                 local page_bb = RenderImage:renderImageData(data, #data, false)
                              or RenderImage:renderImageFile("resources/koreader.png", false)

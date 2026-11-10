@@ -416,8 +416,10 @@ describe("KOReader contract", function()
 			for _, name in ipairs(names) do
 				local file = name:gsub("%.", "/") .. ".lua"
 				local source = strip_comments(read(helper.plugin_root .. "/" .. file))
-				for alias, module in source:gmatch("local%s+([%w_]+)%s*=%s*require%s*%(?%s*[\"']([^\"']+)[\"']") do
-					if not is_own(module) then
+				-- `local host = require("socket.url").parse(url).host` binds a field of the module, not the module
+				for alias, module, rest in source:gmatch(
+					"local%s+([%w_]+)%s*=%s*require%s*%(?%s*[\"']([^\"']+)[\"']%s*%)?([^\n]*)") do
+					if not is_own(module) and not rest:find("^%s*[%.:%[%(]") then
 						for member in source:gmatch("%f[%w_]" .. alias .. "[.:]([%w_]+)") do
 							used[module] = used[module] or {}
 							used[module][member] = used[module][member] or file

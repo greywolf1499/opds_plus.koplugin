@@ -145,6 +145,76 @@ describe("HttpClient", function()
 
 			assert.equals("slow", HttpClient.fetch(url, 5).value)
 		end)
+
+		describe("when redirected", function()
+			local MIRROR = "https://cdn.example.net/cover.jpg"
+
+			it("returns the body of the address the redirect leads to", function()
+				http:on(url, { code = 302, headers = { Location = MIRROR }, body = "<html>moved</html>" })
+				http:on(MIRROR, { code = 200, body = "JPEG" })
+
+				local result = HttpClient.fetch(url)
+
+				assert.is_true(result:isOk())
+				assert.equals("JPEG", result.value)
+			end)
+
+			it("follows a permanent redirect (308), which LuaSocket leaves alone", function()
+				http:on(url, { code = 308, headers = { Location = MIRROR } })
+				http:on(MIRROR, { code = 200, body = "JPEG" })
+
+				assert.equals("JPEG", HttpClient.fetch(url).value)
+			end)
+
+			it("sends the credentials again when the redirect stays on the same server", function()
+				http:on(url, { code = 301, headers = { Location = "/opds/cover/1" } })
+				http:on("https://example.org/opds/cover/1", { code = 200, body = "JPEG" })
+
+				HttpClient.fetch(url, nil, nil, "reader", "s3cret")
+
+				assert.equals("reader", http.requests[2].user)
+				assert.equals("s3cret", http.requests[2].password)
+			end)
+
+			it("keeps the credentials and the custom headers of a catalog away from another server", function()
+				HttpClient.setCatalogs({ { url = url, headers = { { name = "X-Api-Key", value = "abc" } } } })
+				http:on(url, { code = 302, headers = { Location = MIRROR } })
+				http:on(MIRROR, { code = 200, body = "JPEG" })
+
+				HttpClient.fetch(url, nil, nil, "reader", "s3cret")
+
+				assert.equals("abc", http.requests[1].headers["X-Api-Key"])
+				assert.equals("reader", http.requests[1].user)
+				assert.is_nil(http.requests[2].headers["X-Api-Key"])
+				assert.is_nil(http.requests[2].user)
+				assert.is_nil(http.requests[2].password)
+			end)
+
+			it("checks the length of what the redirect led to, not of the redirect", function()
+				http:on(url, {
+					code = 302,
+					headers = { Location = MIRROR, ["Content-Length"] = "18" },
+					body = "<html>moved</html>",
+				})
+				http:on(MIRROR, { code = 200, body = "JPEG", headers = { ["Content-Length"] = "4" } })
+
+				assert.equals("JPEG", HttpClient.fetch(url).value)
+			end)
+
+			it("maps what the address the redirect leads to answers", function()
+				http:on(url, { code = 302, headers = { Location = MIRROR } })
+				http:on(MIRROR, { code = 401 })
+
+				assert.equals(HttpClient.ErrorCodes.AUTH_REQUIRED, HttpClient.fetch(url).code)
+			end)
+
+			it("reports a redirect that never ends as a server error", function()
+				http:on(url, { code = 302, headers = { Location = url } })
+
+				assert.equals(HttpClient.ErrorCodes.SERVER_ERROR, HttpClient.fetch(url).code)
+				assert.equals(6, #http.requests)
+			end)
+		end)
 	end)
 
 	describe("custom headers", function()

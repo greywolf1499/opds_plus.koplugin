@@ -9,7 +9,6 @@ local DocumentRegistry = require("document/documentregistry")
 local InfoMessage = require("ui/widget/infomessage")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
-local http = require("socket.http")
 local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
 local ltn12 = require("ltn12")
@@ -135,7 +134,7 @@ end
 -- @return boolean True if download succeeded
 function DownloadManager.downloadFile(browser, local_path, remote_url, username, password, caller_callback, options)
 	logger.dbg("Downloading file", local_path, "from", remote_url)
-	local code, headers, status
+	local code, headers, status, info
 	local parsed = url.parse(remote_url)
 
 	if parsed.scheme == "http" or parsed.scheme == "https" then
@@ -151,15 +150,30 @@ function DownloadManager.downloadFile(browser, local_path, remote_url, username,
 			return false
 		end
 		socketutil:set_timeout(socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT)
-		code, headers, status = socket.skip(1, http.request {
+		-- Redirects are followed by the client rather than by LuaSocket, which drops the credentials of a
+		-- redirect to the same server and sends the custom headers of the catalog to any other. The first
+		-- request writes to the file opened above; after a redirect it is opened again, which also empties
+		-- it of whatever the redirect said.
+		local first_request = true
+		code, headers, status, info = socket.skip(1, HttpClient.request({
 			url      = remote_url,
-			headers  = HttpClient.withCustomHeaders(remote_url, {
-				["Accept-Encoding"] = "identity",
-			}),
-			sink     = ltn12.sink.file(file),
+			headers  = { ["Accept-Encoding"] = "identity" },
 			user     = username,
 			password = password,
-		})
+		}, {
+			sink = function()
+				local handle = file
+				if not first_request then
+					local reopen_error
+					handle, reopen_error = io.open(local_path, "w")
+					if not handle then
+						return nil, reopen_error
+					end
+				end
+				first_request = false
+				return ltn12.sink.file(handle)
+			end,
+		}))
 		socketutil:reset_timeout()
 	else
 		UIManager:show(InfoMessage:new {
@@ -178,12 +192,12 @@ function DownloadManager.downloadFile(browser, local_path, remote_url, username,
 			caller_callback(local_path)
 		end
 		return true
-	elseif code == Constants.HTTP_STATUS.FOUND and remote_url:match("^https")
+	elseif code == Constants.HTTP_STATUS.FOUND and info.url:match("^https")
 		and headers and headers.location and headers.location:match("^http[^s]") then
 		util.removeFile(local_path)
 		UIManager:show(InfoMessage:new {
 			text = T(_("Insecure HTTPS → HTTP downgrade attempted by redirect from:\n\n'%1'\n\nto\n\n'%2'.\n\nPlease inform the server administrator that many clients disallow this because it could be a downgrade attack."),
-				BD.url(remote_url), BD.url(headers.location)),
+				BD.url(info.url), BD.url(headers.location)),
 			icon = "notice-warning",
 		})
 	else

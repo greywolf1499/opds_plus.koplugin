@@ -169,12 +169,25 @@ describe("FeedFetcher", function()
 
 		describe("asking for the headers only", function()
 			it("sends a HEAD request and returns the headers whatever the status", function()
-				route(URL, { code = 302, headers = { Location = "https://files.example.org/book.epub" } })
+				route(URL, { code = 404, headers = { ["Content-Type"] = "text/html" } })
 
 				local headers = FeedFetcher.fetchFeed(URL, true)
 
 				assert.equals("HEAD", http.requests[1].method)
-				assert.equals("https://files.example.org/book.epub", headers.location)
+				assert.equals("text/html", headers["content-type"])
+				assert.same({}, ui:texts())
+			end)
+
+			it("follows a redirect, and tells the address it led to", function()
+				local target = "https://files.example.org/book.epub"
+				route(URL, { code = 302, headers = { Location = target } })
+				route(target, { code = 200, headers = { ["Content-Type"] = "application/epub+zip" } })
+
+				local headers = FeedFetcher.fetchFeed(URL, true)
+
+				assert.equals("HEAD", http.requests[2].method)
+				assert.equals("application/epub+zip", headers["content-type"])
+				assert.equals(target, headers.location)
 				assert.same({}, ui:texts())
 			end)
 
@@ -232,12 +245,88 @@ describe("FeedFetcher", function()
 		end)
 
 		describe("redirects", function()
-			it("tells where a permanently moved catalog went", function()
-				route(URL, { code = 301, headers = { Location = "https://new.example.org/opds/" } })
+			local MOVED = "https://library.example.org/opds/v2/"
+			local OTHER_SERVER = "https://files.example.net/feed.xml"
+
+			it("follows a redirect and returns the feed it leads to", function()
+				route(URL, { code = 301, headers = { Location = MOVED } })
+				route(MOVED, { code = 200, body = FEED, headers = { ETag = '"v2"' } })
+
+				local xml, headers = FeedFetcher.fetchFeed(URL)
+
+				assert.equals(FEED, xml)
+				assert.equals('"v2"', headers.etag)
+				assert.equals(MOVED, http.requests[2].url)
+				assert.same({}, ui:texts())
+			end)
+
+			it("follows a permanent redirect (308), which LuaSocket leaves alone", function()
+				route(URL, { code = 308, headers = { Location = MOVED } })
+				route(MOVED, { code = 200, body = FEED })
+
+				assert.equals(FEED, (FeedFetcher.fetchFeed(URL)))
+			end)
+
+			it("sends the credentials again when the redirect stays on the same server", function()
+				route(URL, { code = 301, headers = { Location = "/opds/v2/" } })
+				route(MOVED, { code = 200, body = FEED })
+
+				FeedFetcher.fetchFeed(URL, false, "reader", "s3cret")
+
+				assert.equals(MOVED, http.requests[2].url)
+				assert.equals("reader", http.requests[2].user)
+				assert.equals("s3cret", http.requests[2].password)
+			end)
+
+			it("keeps the credentials away from another server", function()
+				route(URL, { code = 302, headers = { Location = OTHER_SERVER } })
+				route(OTHER_SERVER, { code = 200, body = FEED })
+
+				FeedFetcher.fetchFeed(URL, false, "reader", "s3cret")
+
+				assert.equals("reader", http.requests[1].user)
+				assert.is_nil(http.requests[2].user)
+				assert.is_nil(http.requests[2].password)
+			end)
+
+			it("keeps the custom headers of a catalog away from another server", function()
+				HttpClient.setCatalogs({
+					{ url = "https://library.example.org/opds", headers = { { name = "X-Api-Key", value = "abc" } } },
+				})
+				route(URL, { code = 302, headers = { Location = OTHER_SERVER } })
+				route(OTHER_SERVER, { code = 200, body = FEED })
+
+				FeedFetcher.fetchFeed(URL)
+
+				assert.equals("abc", http.requests[1].headers["X-Api-Key"])
+				assert.is_nil(http.requests[2].headers["X-Api-Key"])
+				assert.equals("identity", http.requests[2].headers["Accept-Encoding"])
+			end)
+
+			it("asks the address a redirect leads to whether the copy is still current", function()
+				route(URL, { code = 301, headers = { Location = MOVED } })
+				route(MOVED, { code = 304 })
+
+				local xml = FeedFetcher.fetchFeed(URL, false, nil, nil, { xml = "<feed>old</feed>", etag = '"v2"' })
+
+				assert.equals("<feed>old</feed>", xml)
+				assert.equals('"v2"', http.requests[2].headers["If-None-Match"])
+			end)
+
+			it("reports the failure of the address a redirect leads to", function()
+				route(URL, { code = 302, headers = { Location = MOVED } })
+				route(MOVED, { code = 404 })
+
+				assert.is_nil(FeedFetcher.fetchFeed(URL))
+				assert.equals("Catalog not found.", message())
+			end)
+
+			it("tells where a catalog that moved to plain HTTP went", function()
+				route(URL, { code = 301, headers = { Location = "http://new.example.org/opds/" } })
 
 				assert.is_nil(FeedFetcher.fetchFeed(URL))
 				assert.equals(
-					"The catalog has been permanently moved. Please update catalog URL to 'https://new.example.org/opds/'.",
+					"The catalog has been permanently moved. Please update catalog URL to 'http://new.example.org/opds/'.",
 					message()
 				)
 			end)
@@ -254,24 +343,16 @@ describe("FeedFetcher", function()
 				assert.truthy(shown.text:find("downgrade", 1, true))
 			end)
 
-			it("treats a redirect that stays on HTTPS as an ordinary failure", function()
-				route(URL, { code = 302, status = "HTTP/1.1 302 Found", headers = { Location = "https://other.example.org/" } })
+			for _, start in ipairs({ URL, "http://library.example.org/opds/" }) do
+				it("treats a redirect that never ends as an ordinary failure: " .. start, function()
+					route(start, { code = 302, status = "HTTP/1.1 302 Found", headers = { Location = start } })
 
-				assert.is_nil(FeedFetcher.fetchFeed(URL))
-				assert.equals("Cannot get catalog. Server response status: HTTP/1.1 302 Found.", message())
-				assert.is_nil(ui:last().icon)
-			end)
-
-			it("treats a redirect between plain HTTP addresses as an ordinary failure", function()
-				route("http://library.example.org/opds/", {
-					code = 302,
-					status = "HTTP/1.1 302 Found",
-					headers = { Location = "http://library.example.org/other/" },
-				})
-
-				assert.is_nil(FeedFetcher.fetchFeed("http://library.example.org/opds/"))
-				assert.equals("Cannot get catalog. Server response status: HTTP/1.1 302 Found.", message())
-			end)
+					assert.is_nil(FeedFetcher.fetchFeed(start))
+					assert.equals("Cannot get catalog. Server response status: HTTP/1.1 302 Found.", message())
+					assert.is_nil(ui:last().icon)
+					assert.equals(6, #http.requests)
+				end)
+			end
 
 			it("survives a redirect without a Location header", function()
 				route(URL, { code = 302, status = "HTTP/1.1 302 Found" })
@@ -468,21 +549,22 @@ describe("FeedFetcher", function()
 
 		it("takes the name from the address a redirect leads to", function()
 			route(DOWNLOAD, { code = 302, headers = { Location = "https://files.example.org/books/Dune.epub" } })
+			route("https://files.example.org/books/Dune.epub", { code = 200 })
 
 			assert.equals("Dune.epub", FeedFetcher.getServerFileName(DOWNLOAD, "epub"))
 		end)
 
 		it("decodes the name in the address a redirect leads to", function()
 			route(DOWNLOAD, { code = 302, headers = { Location = "https://files.example.org/books/Dune%20(1965).epub" } })
+			route("https://files.example.org/books/Dune%20(1965).epub", { code = 200 })
 
 			assert.equals("Dune (1965).epub", FeedFetcher.getServerFileName(DOWNLOAD, "epub"))
 		end)
 
 		it("leaves the query string of the redirect address out of the name", function()
-			route(DOWNLOAD, {
-				code = 302,
-				headers = { Location = "https://files.example.org/books/Dune.epub?X-Amz-Signature=abc123&Expires=99" },
-			})
+			local signed = "https://files.example.org/books/Dune.epub?X-Amz-Signature=abc123&Expires=99"
+			route(DOWNLOAD, { code = 302, headers = { Location = signed } })
+			route(signed, { code = 200 })
 
 			assert.equals("Dune.epub", FeedFetcher.getServerFileName(DOWNLOAD, "epub"))
 		end)
@@ -490,6 +572,7 @@ describe("FeedFetcher", function()
 		it("takes the name from the address when the redirect address has no file name", function()
 			local plain = "https://library.example.org/get/42"
 			route(plain, { code = 302, headers = { Location = "https://files.example.org/books/" } })
+			route("https://files.example.org/books/", { code = 200 })
 
 			assert.equals("42.epub", FeedFetcher.getServerFileName(plain, "epub"))
 		end)

@@ -437,6 +437,92 @@ describe("DownloadManager", function()
 			assert.is_false(fs.exists(target))
 		end)
 
+		describe("redirects", function()
+			local MIRROR = "https://mirror.example.net/dune.epub"
+
+			it("saves the book from the address a redirect leads to, not what the redirect said", function()
+				http:on(URL, { code = 302, headers = { Location = MIRROR }, body = "<html>moved</html>" })
+				http:on(MIRROR, { code = 200, body = BODY })
+
+				local ok = DownloadManager.downloadFile(browser, target, URL)
+
+				assert.is_true(ok)
+				assert.equals(BODY, fs.read(target))
+				assert.same({}, ui:texts())
+			end)
+
+			it("follows a permanent redirect (308), which LuaSocket leaves alone", function()
+				http:on(URL, { code = 308, headers = { Location = MIRROR } })
+				http:on(MIRROR, { code = 200, body = BODY })
+
+				assert.is_true(DownloadManager.downloadFile(browser, target, URL))
+				assert.equals(BODY, fs.read(target))
+			end)
+
+			it("sends the credentials again when the redirect stays on the same server", function()
+				http:on(URL, { code = 301, headers = { Location = "/files/dune.epub" } })
+				http:on(HOST .. "/files/dune.epub", { code = 200, body = BODY })
+
+				DownloadManager.downloadFile(browser, target, URL, "reader", "s3cret")
+
+				assert.equals(HOST .. "/files/dune.epub", http.requests[2].url)
+				assert.equals("reader", http.requests[2].user)
+				assert.equals("s3cret", http.requests[2].password)
+			end)
+
+			it("keeps the credentials away from another server", function()
+				http:on(URL, { code = 302, headers = { Location = MIRROR } })
+				http:on(MIRROR, { code = 200, body = BODY })
+
+				DownloadManager.downloadFile(browser, target, URL, "reader", "s3cret")
+
+				assert.equals("reader", http.requests[1].user)
+				assert.is_nil(http.requests[2].user)
+				assert.is_nil(http.requests[2].password)
+			end)
+
+			it("keeps the custom headers of a catalog away from another server", function()
+				HttpClient.setCatalogs({
+					{ url = CATALOG, headers = { { name = "X-Api-Key", value = "abc" } } },
+				})
+				http:on(URL, { code = 302, headers = { Location = MIRROR } })
+				http:on(MIRROR, { code = 200, body = BODY })
+
+				DownloadManager.downloadFile(browser, target, URL)
+
+				assert.equals("abc", http.requests[1].headers["X-Api-Key"])
+				assert.is_nil(http.requests[2].headers["X-Api-Key"])
+				assert.equals("identity", http.requests[2].headers["Accept-Encoding"])
+			end)
+
+			it("deletes the file and says why when the address a redirect leads to refuses", function()
+				http:on(URL, { code = 302, headers = { Location = MIRROR } })
+				http:on(MIRROR, { code = 404, status = "HTTP/1.1 404 Not Found", body = "<html>gone</html>" })
+
+				local ok = DownloadManager.downloadFile(browser, target, URL)
+
+				assert.is_false(ok)
+				assert.same({ "Could not save file to:\n" .. target .. "\nHTTP/1.1 404 Not Found" }, ui:texts())
+				assert.is_false(fs.exists(target))
+			end)
+
+			it("fails cleanly when the file cannot be written again for the next address", function()
+				http:on(URL, function()
+					-- The path turns into a folder while the first answer is on its way
+					os.remove(target)
+					assert(lfs.mkdir(target))
+					return { code = 302, headers = { Location = MIRROR } }
+				end)
+				http:on(MIRROR, { code = 200, body = BODY })
+
+				local ok = DownloadManager.downloadFile(browser, target, URL)
+
+				assert.is_false(ok)
+				assert.truthy(ui:last().text:find("Could not save file to:", 1, true))
+				assert.equals(1, #http.requests)
+			end)
+		end)
+
 		it("refuses a redirect from https to http, and deletes the file", function()
 			http:on(URL, { code = 302, headers = { Location = "http://mirror.example.net/dune.epub" } })
 
@@ -451,9 +537,9 @@ describe("DownloadManager", function()
 			assert.is_false(fs.exists(target))
 		end)
 
-		it("takes a redirect on plain http that was not followed for an ordinary failure", function()
+		it("takes a redirect on plain http that never ends for an ordinary failure", function()
 			local plain = "http://library.example.org/download/dune.epub"
-			http:on(plain, { code = 302, headers = { Location = "http://mirror.example.net/dune.epub" } })
+			http:on(plain, { code = 302, headers = { Location = plain } })
 
 			local ok = DownloadManager.downloadFile(browser, target, plain)
 

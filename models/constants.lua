@@ -40,13 +40,19 @@ local Constants = {
 		OK = 200,
 		MOVED_PERMANENTLY = 301,
 		FOUND = 302, -- Redirect
+		SEE_OTHER = 303,
 		NOT_MODIFIED = 304,
+		TEMPORARY_REDIRECT = 307,
+		PERMANENT_REDIRECT = 308,
 		BAD_REQUEST = 400,
 		UNAUTHORIZED = 401,
 		FORBIDDEN = 403,
 		NOT_FOUND = 404,
 		NOT_ACCEPTABLE = 406,
 	},
+
+	-- Redirects followed in a row before the last one is handed back (LuaSocket's own limit)
+	MAX_REDIRECTS = 5,
 
 	-- HTTP Success Range
 	HTTP_SUCCESS_MIN = 200,
