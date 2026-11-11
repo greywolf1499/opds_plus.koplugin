@@ -3,6 +3,7 @@
 -- This eliminates repeated context building code (DRY principle)
 
 local Result = require("utils.result")
+local RequestHeaders = require("utils.request_headers")
 
 local BrowserContext = {}
 
@@ -36,6 +37,7 @@ function BrowserContext.fromBrowser(browser)
 		-- Authentication
 		username = browser.root_catalog_username,
 		password = browser.root_catalog_password,
+		basic_auth_origin = RequestHeaders.originKey(browser.root_catalog_url) or false,
 	}
 end
 
@@ -56,10 +58,11 @@ end
 -- @param username string|nil Username for HTTP auth
 -- @param password string|nil Password for HTTP auth
 -- @return table Context object with custom credentials
-function BrowserContext.withAuth(browser, username, password)
+function BrowserContext.withAuth(browser, username, password, catalog_url)
 	local context = BrowserContext.fromBrowser(browser)
 	context.username = username
 	context.password = password
+	context.basic_auth_origin = RequestHeaders.originKey(catalog_url) or false
 	return context
 end
 

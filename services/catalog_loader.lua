@@ -13,7 +13,7 @@ local Result = require("utils.result")
 local CatalogLoader = {}
 
 function CatalogLoader.prepare(url, context)
-	local state = FeedFetcher.newRequestState()
+	local state = FeedFetcher.newRequestState(context.basic_auth_origin or false)
 	context.fetch_state = state
 	local result = Result.wrapPcall(function()
 		local items, facets, search = FeedFetcher.genItemTableFromURL(url, context.username, context.password,

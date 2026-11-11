@@ -437,11 +437,13 @@ function OPDSMenuBuilder.buildSubCatalogDialog(browser, item_url)
 						local name = dialog:getInputText()
 						if name ~= "" then
 							UIManager:close(dialog)
+							local username, password = HttpClient.basicCredentialsFor(item_url,
+								browser.root_catalog_url, browser.root_catalog_username, browser.root_catalog_password)
 							local fields = {
 								name,
 								item_url,
-								browser.root_catalog_username,
-								browser.root_catalog_password,
+								username,
+								password,
 								browser.root_catalog_raw_names,
 								nil, -- sync
 								HttpClient.customHeadersFor(item_url),

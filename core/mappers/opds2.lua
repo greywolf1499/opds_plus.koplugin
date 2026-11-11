@@ -457,7 +457,9 @@ function Opds2Mapper.map(catalog, item_url, browser_context, debug_callback)
 							context.search_template_type,
 							context.username,
 							context.password,
-							debug_callback
+							debug_callback,
+							context.fetch_state,
+							context.basic_auth_origin or false
 						)
 						if template then
 							search_url = build_href(template)

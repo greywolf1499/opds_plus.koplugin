@@ -39,8 +39,8 @@ local function reportError(message, state)
 	end
 end
 
-function FeedFetcher.newRequestState()
-	return { cache = {}, refuses_accept = {}, errors = {} }
+function FeedFetcher.newRequestState(basic_auth_origin)
+	return { cache = {}, refuses_accept = {}, errors = {}, basic_auth_origin = basic_auth_origin }
 end
 
 -- A background reader returns its cache/negotiation changes and messages to the UI process.
@@ -74,8 +74,9 @@ end
 -- @param state table|nil Collect changes and messages for a background reader
 -- @return string|table XML content or headers, nil on error
 -- @return table|nil Response headers of a GET
-function FeedFetcher.fetchFeed(item_url, headers_only, username, password, cached, state)
+function FeedFetcher.fetchFeed(item_url, headers_only, username, password, cached, state, basic_auth_origin)
 	item_url = UrlUtils.stripFragment(item_url)
+	if basic_auth_origin == nil and state then basic_auth_origin = state.basic_auth_origin end
 	socketutil:set_timeout(socketutil.LARGE_BLOCK_TIMEOUT, socketutil.LARGE_TOTAL_TIMEOUT)
 	local own_headers = { ["Accept-Encoding"] = "identity" }
 	if cached and not headers_only then
@@ -98,7 +99,7 @@ function FeedFetcher.fetchFeed(item_url, headers_only, username, password, cache
 			headers  = own_headers,
 			user     = username,
 			password = password,
-		}))
+		}, { basic_auth_origin = basic_auth_origin }))
 	end
 	local code, headers, status, info = get()
 	if send_accept and refusedAccept(code) then
@@ -181,13 +182,13 @@ end
 -- @param password string|nil Optional HTTP auth password
 -- @param debug_callback function|nil Optional debug logging callback
 -- @return table Parsed feed or nil on error
-function FeedFetcher.parseFeed(item_url, username, password, debug_callback, state)
+function FeedFetcher.parseFeed(item_url, username, password, debug_callback, state, basic_auth_origin)
 	-- One request per feed: a server that tags or dates its feeds answers "not modified" when the copy
 	-- kept here is still current, and one that does not just sends the feed.
 	item_url = UrlUtils.stripFragment(item_url)
 	local key = "opds|catalog|" .. item_url
 	local cached = CatalogCache:check(key)
-	local feed, headers = FeedFetcher.fetchFeed(item_url, false, username, password, cached, state)
+	local feed, headers = FeedFetcher.fetchFeed(item_url, false, username, password, cached, state, basic_auth_origin)
 	local content_type = headers and headers["content-type"]
 
 	if feed and cached and feed == cached.xml then
@@ -228,8 +229,9 @@ end
 -- @param password string|nil Optional HTTP auth password
 -- @param debug_callback function|nil Optional debug logging callback
 -- @return Result Result with parsed feed or error
-function FeedFetcher.parseFeedResult(item_url, username, password, debug_callback, state)
-	local result = Result.wrapPcall(FeedFetcher.parseFeed)(item_url, username, password, debug_callback, state)
+function FeedFetcher.parseFeedResult(item_url, username, password, debug_callback, state, basic_auth_origin)
+	local result = Result.wrapPcall(FeedFetcher.parseFeed)(
+		item_url, username, password, debug_callback, state, basic_auth_origin)
 
 	-- Convert nil success to error
 	if result:isOk() and result.value == nil then
@@ -245,8 +247,8 @@ end
 -- @param username string|nil Optional HTTP auth username
 -- @param password string|nil Optional HTTP auth password
 -- @return string Filename extracted from server or URL
-function FeedFetcher.getServerFileName(item_url, filetype, username, password)
-	local headers = FeedFetcher.fetchFeed(item_url, true, username, password)
+function FeedFetcher.getServerFileName(item_url, filetype, username, password, basic_auth_origin)
+	local headers = FeedFetcher.fetchFeed(item_url, true, username, password, nil, nil, basic_auth_origin)
 	local filename
 
 	if headers then
@@ -279,8 +281,8 @@ end
 -- @param password string|nil Optional HTTP auth password
 -- @param debug_callback function|nil Optional debug logging callback
 -- @return string|nil Search template URL with {searchTerms} placeholder
-function FeedFetcher.getSearchTemplate(osd_url, search_template_type, username, password, debug_callback, state)
-	local search_descriptor = FeedFetcher.parseFeed(osd_url, username, password, debug_callback, state)
+function FeedFetcher.getSearchTemplate(osd_url, search_template_type, username, password, debug_callback, state, basic_auth_origin)
+	local search_descriptor = FeedFetcher.parseFeed(osd_url, username, password, debug_callback, state, basic_auth_origin)
 
 	---@diagnostic disable-next-line: undefined-field
 	if search_descriptor and search_descriptor.OpenSearchDescription and search_descriptor.OpenSearchDescription.Url then
@@ -303,8 +305,8 @@ end
 -- @param catalog_parser function Function to parse catalog into item table
 -- @param state table|nil Collect changes and messages instead of showing UI in the worker
 -- @return table Item table suitable for menu display
-function FeedFetcher.genItemTableFromURL(item_url, username, password, debug_callback, catalog_parser, state)
-	local result = FeedFetcher.parseFeedResult(item_url, username, password, debug_callback, state)
+function FeedFetcher.genItemTableFromURL(item_url, username, password, debug_callback, catalog_parser, state, basic_auth_origin)
+	local result = FeedFetcher.parseFeedResult(item_url, username, password, debug_callback, state, basic_auth_origin)
 
 	local catalog = result:unwrapOrElse(function(err)
 		logger.info("Cannot get catalog info from", item_url, err)

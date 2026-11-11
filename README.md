@@ -332,6 +332,12 @@ The button shows how many headers the catalog has, such as **Headers (2)**.
 - Headers the plugin has to control itself, such as `Host`, `Content-Length`, `Connection` and `Accept-Encoding`, can't be set. A custom `Authorization` header replaces the catalog's username and password.
 - Treat headers like a password. They are saved as plain text in `opdsplus.lua`, so anyone who can read that file can read them.
 
+Development builds also scope the catalog's username and password to its scheme, host and port,
+including the **first** request to a linked feed, cover, download or stream. A foreign link does not
+inherit the source login, and saving it as a subcatalog does not copy that login. Destination-specific
+custom headers still apply. Older download-queue entries without a saved catalog origin withhold
+Basic credentials and show a notice; remove and re-add any entries that need authentication.
+
 ## 🔧 Technical Details
 
 ### Requirements

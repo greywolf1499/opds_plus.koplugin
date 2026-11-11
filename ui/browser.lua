@@ -41,6 +41,7 @@ local CatalogManager = require("core.catalog_manager")
 
 -- Import the catalog utilities
 local CatalogUtils = require("utils.catalog_utils")
+local RequestHeaders = require("utils.request_headers")
 
 -- Import the navigation handler
 local NavigationHandler = require("core.navigation_handler")
@@ -218,24 +219,24 @@ end
 
 function OPDSBrowser:fetchFeed(item_url, headers_only)
     return FeedFetcher.fetchFeed(item_url, headers_only,
-        self.root_catalog_username, self.root_catalog_password)
+        self.root_catalog_username, self.root_catalog_password, nil, nil, self.root_catalog_url or false)
 end
 
 function OPDSBrowser:parseFeed(item_url)
     return FeedFetcher.parseFeed(item_url,
         self.root_catalog_username, self.root_catalog_password,
-        function(...) self:_debugLog(...) end)
+        function(...) self:_debugLog(...) end, nil, self.root_catalog_url or false)
 end
 
 function OPDSBrowser:getServerFileName(item_url, filetype)
     return FeedFetcher.getServerFileName(item_url, filetype,
-        self.root_catalog_username, self.root_catalog_password)
+        self.root_catalog_username, self.root_catalog_password, self.root_catalog_url or false)
 end
 
 function OPDSBrowser:getSearchTemplate(osd_url)
     return FeedFetcher.getSearchTemplate(osd_url, self.search_template_type,
         self.root_catalog_username, self.root_catalog_password,
-        function(...) self:_debugLog(...) end)
+        function(...) self:_debugLog(...) end, nil, self.root_catalog_url or false)
 end
 
 function OPDSBrowser:genItemTableFromURL(item_url)
@@ -244,7 +245,7 @@ function OPDSBrowser:genItemTableFromURL(item_url)
         function(...) self:_debugLog(...) end,
         function(catalog, catalog_url)
             return self:genItemTableFromCatalog(catalog, catalog_url)
-        end)
+        end, nil, self.root_catalog_url or false)
 end
 
 function OPDSBrowser:genItemTableFromCatalog(catalog, item_url)
@@ -373,7 +374,10 @@ function OPDSBrowser:openCatalog(item)
     local generation = self._catalog_generation
     local root = #self.paths == 0
     local context = BrowserContext.fromBrowser(self)
-    if root then context.username, context.password = item.username, item.password end
+    if root then
+        context.username, context.password = item.username, item.password
+        context.basic_auth_origin = RequestHeaders.originKey(item.url) or false
+    end
     local connect_callback
     if item.searchable then
         connect_callback = function()

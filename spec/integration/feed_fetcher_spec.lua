@@ -49,6 +49,57 @@ describe("FeedFetcher", function()
 	after_each(helper.reset)
 
 	describe("background request state", function()
+		it("keeps OPDS 2 OpenSearch credentials scoped and its errors in the worker packet", function()
+			helper.stub("rapidjson", require("support.json_shims").rapidjson())
+			route(URL, { code = 200, body = [[
+				{"metadata":{"title":"Library"},
+				 "links":[{"rel":"search","type":"application/opensearchdescription+xml",
+				           "href":"https://other.example/search.xml"}],
+				 "navigation":[{"title":"Books","href":"/books","type":"application/opds+json"}]}
+			]] })
+			route("https://other.example/search.xml", { code = 404 })
+			local context = require("support.context")({ username = "reader", password = "secret" })
+			context.basic_auth_origin = URL
+			local packet = assert(require("services.catalog_loader").prepare(URL, context))
+			assert.equals(1, #packet.items)
+			assert.equals("reader", http.requests[1].user)
+			assert.is_nil(http.requests[2].user)
+			assert.is_nil(http.requests[2].password)
+			assert.same({}, ui:texts())
+			FeedFetcher.applyRequestState(packet.state)
+			assert.same({ "Catalog not found." }, ui:texts())
+		end)
+
+		it("keeps catalog credentials out of foreign feeds, nested search descriptors and filename HEADs", function()
+			local other = "https://other.example"
+			route(URL, { code = 200, body = FEED:gsub("</feed>",
+				'<link rel="search" type="application/opensearchdescription+xml" href="'
+				.. other .. '/search.xml"/></feed>') })
+			route(other .. "/search.xml", { code = 200, body =
+				'<OpenSearchDescription><Url type="application/atom+xml" template="'
+				.. other .. '/search?q={searchTerms}"/></OpenSearchDescription>' })
+			route(other .. "/feed", { code = 200, body = FEED })
+			route(other .. "/book.epub", { code = 200 })
+			local context = require("support.context")({ username = "reader", password = "secret" })
+			context.basic_auth_origin = URL
+			local packet = assert(require("services.catalog_loader").prepare(URL, context))
+			assert.equals("A Book", packet.items[1].text)
+			assert.equals(other .. "/search?q=%s", packet.search)
+			assert.equals("reader", http.requests[1].user)
+			assert.is_nil(http.requests[2].user)
+			FeedFetcher.parseFeed(other .. "/feed", "reader", "secret", nil, packet.state)
+			FeedFetcher.getServerFileName(other .. "/book.epub", "epub", "reader", "secret", URL)
+			assert.equals("HEAD", http.requests[4].method)
+			for index = 2, 4 do
+				assert.is_nil(http.requests[index].user)
+				assert.is_nil(http.requests[index].password)
+			end
+			context.basic_auth_origin = nil
+			require("services.catalog_loader").prepare(URL, context)
+			assert.is_nil(http.requests[5].user)
+			assert.is_nil(http.requests[5].password)
+		end)
+
 		it("transfers cache validators and content back to a reader with an empty cache", function()
 			route(URL, { code = 200, body = FEED, headers = { ETag = '"background"' } })
 			local state = FeedFetcher.newRequestState()

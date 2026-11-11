@@ -36,6 +36,10 @@ own headers. Add them in the catalog's **Edit** dialog under **Headers**: see
 
 ## Downloads
 
+- **Some queued downloads have no saved catalog origin** (development builds): these entries predate
+  credential-origin tracking. Their saved username and password are withheld rather than sent to an
+  unverified destination. Public downloads and destination-specific custom headers still work. Remove
+  and re-add entries from their catalog if they need Basic authentication.
 - **Could not save file to: …**: the download folder can't be written to. Choose another folder in the download
   dialog.
 - **A book has no download button**: the catalog lists it without a file KOReader can open, such as an audiobook

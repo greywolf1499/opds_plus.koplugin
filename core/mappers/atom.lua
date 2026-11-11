@@ -64,7 +64,8 @@ function AtomMapper.map(catalog, item_url, browser_context, debug_callback)
 								browser_context.username,
 								browser_context.password,
 								debug_callback,
-								browser_context.fetch_state
+								browser_context.fetch_state,
+								browser_context.basic_auth_origin or false
 							)
 							-- Without a template there is nothing to search with: resolving a nil href would
 							-- give the address of this very catalog, and searching would only reload it.

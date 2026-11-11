@@ -37,7 +37,7 @@ local function kavitaStream(remote_url)
 end
 
 -- This function attempts to pull chapter progress from Kavita.
-function OPDSPSE:getLastPage(remote_url, username, password)
+function OPDSPSE:getLastPage(remote_url, username, password, basic_auth_origin)
     local provider, err = kavitaStream(remote_url)
     if not provider then
         if err then logger.warn("OPDSPSE:getLastPage:", err) end
@@ -46,6 +46,9 @@ function OPDSPSE:getLastPage(remote_url, username, password)
     end
     local progress_url = provider.base .. "/api/Reader/get-progress?chapterId=" .. provider.chapter
     local auth_url = provider.base .. "/api/Plugin/authenticate?apiKey=" .. provider.api_key .. "&pluginName=KOReader-OPDS"
+    if basic_auth_origin ~= nil then
+        username, password = HttpClient.basicCredentialsFor(auth_url, basic_auth_origin, username, password)
+    end
 
     -- Do an HTTP POST to get the Bearer Token for authentication of the /api/Reader/get-progress endpoint
     local auth_data = {}
@@ -84,7 +87,7 @@ function OPDSPSE:getLastPage(remote_url, username, password)
         },
         user = username,
         password = password,
-    }))
+    }, { basic_auth_origin = basic_auth_origin }))
     socketutil:reset_timeout()
     if not headers or code ~= 200 then
         logger.warn("OPDSPSE:getLastPage: progress request failed:", status or code)
@@ -107,7 +110,8 @@ function OPDSPSE:openBook(browser, item, acquisition, choose_page, use_feed_posi
     if type(settings) ~= "table" then
         logger.warn("OPDSPSE: local resume storage is unavailable")
         return self:streamPages(acquisition.href, acquisition.count, choose_page,
-            browser.root_catalog_username, browser.root_catalog_password, acquisition.last_read)
+            browser.root_catalog_username, browser.root_catalog_password, acquisition.last_read,
+            { basic_auth_origin = browser.root_catalog_url or false })
     end
     if settings.stream_progress ~= nil and type(settings.stream_progress) ~= "table" then
         logger.warn("OPDSPSE: invalid local resume storage")
@@ -128,6 +132,7 @@ function OPDSPSE:openBook(browser, item, acquisition, choose_page, use_feed_posi
     local dirty = false
     return self:streamPages(acquisition.href, acquisition.count, choose_page,
         browser.root_catalog_username, browser.root_catalog_password, position, {
+            basic_auth_origin = browser.root_catalog_url or false,
             on_page = function(page)
                 records[key] = { page = page, updated = os.time() }
                 settings.stream_progress = records
@@ -219,8 +224,9 @@ function OPDSPSE:streamPages(remote_url, count, continue, username, password, la
         end
     end})
     local function fetch(page, lookup)
+        local basic_auth_origin = options and options.basic_auth_origin
         if lookup then
-            local ok, progress = pcall(self.getLastPage, self, remote_url, username, password)
+            local ok, progress = pcall(self.getLastPage, self, remote_url, username, password, basic_auth_origin)
             if ok then
                 page = math.min(CatalogUtils.pageNumber(progress + 1) or 1, count)
             else
@@ -244,7 +250,7 @@ function OPDSPSE:streamPages(remote_url, count, continue, username, password, la
             headers = { ["Accept-Encoding"] = "identity" },
             user = username,
             password = password,
-        }))
+        }, { basic_auth_origin = basic_auth_origin }))
         socketutil:reset_timeout()
         if code ~= 200 or not headers then
             logger.warn("OPDSPSE: page could not be loaded", code, status)

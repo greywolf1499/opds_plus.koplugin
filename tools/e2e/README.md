@@ -36,6 +36,10 @@ server's routes are listed at the top of `mock_opds_server.py`.
 The `parandroid` scenario checks both temporary-name exceptions and a missing
 temporary path: covers must still load serially without starting a subprocess.
 
+`customheaders` also checks initial cross-origin Basic credential withholding using the real HTTP
+transport, same-origin Basic and custom-header precedence, and subcatalog credential-copy boundaries.
+All credentials in this scenario are synthetic and requests stay on loopback.
+
 ### Cover scheduling regression
 
 ```bash

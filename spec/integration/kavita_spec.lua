@@ -98,6 +98,17 @@ describe("Kavita page streaming", function()
 	after_each(helper.reset)
 
 	describe("getLastPage", function()
+		it("withholds foreign catalog Basic credentials but retains the provider's own API key and token", function()
+			kavita_knows(7)
+			assert.equals(7, OPDSPSE:getLastPage(STREAM, "reader", "secret", OTHER .. "/opds"))
+			for _, request in ipairs(http.requests) do
+				assert.is_nil(request.user)
+				assert.is_nil(request.password)
+			end
+			assert.equals(API_KEY, http.requests[1].headers.Authentication)
+			assert.equals("Bearer TOKEN-1", http.requests[2].headers.Authorization)
+		end)
+
 		it("skips non-Kavita and empty URLs without sending a request", function()
 			assert.equals(0, OPDSPSE:getLastPage(OTHER .. "/stream?page={pageNumber}"))
 			assert.equals(0, OPDSPSE:getLastPage(OTHER .. "/stream?next=/api/opds/key/image?chapterId=42"))
@@ -516,6 +527,16 @@ describe("Kavita page streaming", function()
 			local count = 0
 			for _ in pairs(browser.settings.stream_progress) do count = count + 1 end
 			assert.equals(4, count)
+		end)
+
+		it("does not send catalog Basic credentials to an initial cross-origin stream URL", function()
+			browser.root_catalog_url = SERVER .. "/opds"
+			browser.root_catalog_password = "secret"
+			OPDSPSE:openBook(browser, item, acquisition)
+			assert.equals(1, #http.requests)
+			assert.equals(OTHER .. "/pages/6?width=600", http.requests[1].url)
+			assert.is_nil(http.requests[1].user)
+			assert.is_nil(http.requests[1].password)
 		end)
 
 		it("discards deferred page errors after a newer page or viewer close", function()

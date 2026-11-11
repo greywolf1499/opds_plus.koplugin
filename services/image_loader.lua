@@ -38,7 +38,7 @@ end
 -- Fetch one URL in a forked subprocess, which writes the body to a temporary
 -- file: a pipe could fill up and block the child before it exits. Returns nil
 -- when no subprocess could be started.
-local function startFetch(url, username, password)
+local function startFetch(url, username, password, basic_auth_origin)
     -- os.tmpname() raises where /tmp does not exist (Android).
     local has_path, path = pcall(os.tmpname)
     if not has_path or not path then
@@ -59,7 +59,8 @@ local function startFetch(url, username, password)
             Constants.TIMEOUTS.IMAGE_LOAD,
             Constants.TIMEOUTS.IMAGE_MAX_TIME,
             username,
-            password
+            password,
+            basic_auth_origin
         )
         if success and content and content ~= "" then
             local file = io.open(path, "wb")
@@ -220,7 +221,8 @@ function Batch:loadImages(urls)
                 local fetch = pending_fetch
                 pending_fetch = nil
                 Debug.log("ImageLoader:", "Fetching cover with auth:", self.username and "yes" or "no")
-                local job = self.parallel_downloads ~= false and startFetch(fetch.url, self.username, self.password)
+                local job = self.parallel_downloads ~= false
+                    and startFetch(fetch.url, self.username, self.password, self.basic_auth_origin)
                 if job then
                     job.stale_content = fetch.stale_content
                     table.insert(jobs, job)
@@ -235,7 +237,8 @@ function Batch:loadImages(urls)
                         Constants.TIMEOUTS.IMAGE_LOAD,
                         Constants.TIMEOUTS.IMAGE_MAX_TIME,
                         self.username,
-                        self.password
+                        self.password,
+                        self.basic_auth_origin
                     )
                     finish(fetch.url, success and content or nil, fetch.stale_content)
                     -- The fetch blocked the UI: end this tick so it can run before the next cover.
@@ -316,11 +319,13 @@ function ImageLoader:loadImages(
     cover_cache_enabled,
     cache_max_mb,
     cache_ttl_minutes,
-    parallel_downloads
+    parallel_downloads,
+    basic_auth_origin
 )
     local batch = Batch:new {
         username = username,
         password = password,
+        basic_auth_origin = basic_auth_origin,
         cover_cache_enabled = cover_cache_enabled ~= false,
         cache_max_mb = cache_max_mb,
         cache_ttl_minutes = cache_ttl_minutes,
@@ -332,11 +337,12 @@ function ImageLoader:loadImages(
 end
 
 --- Warm disk-cache bytes only; unsupported subprocesses never fall back to blocking HTTP.
-function ImageLoader:prefetch(urls, username, password, cache_max_mb, cache_ttl_minutes, can_continue)
+function ImageLoader:prefetch(urls, username, password, cache_max_mb, cache_ttl_minutes, can_continue, basic_auth_origin)
     local batch = Batch:new {
         prefetch = true,
         username = username,
         password = password,
+        basic_auth_origin = basic_auth_origin,
         cover_cache_enabled = true,
         parallel_downloads = true,
         cache_max_mb = cache_max_mb,

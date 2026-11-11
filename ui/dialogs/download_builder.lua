@@ -184,7 +184,8 @@ function DownloadDialogBuilder.buildDownloadDialog(browser, item, filename, crea
 			callback = function()
 				-- Use PSE streaming to view the cover as a single page
 				OPDSPSE:streamPages(cover_link, 1, false,
-					browser.root_catalog_username, browser.root_catalog_password)
+					browser.root_catalog_username, browser.root_catalog_password, nil,
+					{ basic_auth_origin = browser.root_catalog_url or false })
 			end,
 		},
 		{

@@ -191,7 +191,7 @@ function CoverLoader.schedulePrefetch(menu)
 		end
 		local settings = menu.settings
 		local batch, halt = ImageLoader:prefetch(urls, menu.root_catalog_username, menu.root_catalog_password,
-			settings.cover_cache_max_mb, settings.cover_cache_ttl_minutes, can_continue)
+			settings.cover_cache_max_mb, settings.cover_cache_ttl_minutes, can_continue, menu.root_catalog_url or false)
 		menu._cover_prefetch_batch = batch
 		menu._halt_cover_prefetch = halt
 	end
@@ -264,7 +264,8 @@ function CoverLoader.loadVisibleCovers(menu, debug_log)
 		cache_enabled,
 		cache_max_mb,
 		cache_ttl_minutes,
-		parallel_downloads
+		parallel_downloads,
+		menu.root_catalog_url or false
 	)
 	batch.pause_until = menu._cover_pause_until
 	menu._cover_batch = batch

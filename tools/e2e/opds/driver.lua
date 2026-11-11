@@ -98,8 +98,9 @@ local function start()
 		polite()
 		local before = #shown
 		local context = BrowserContext.withAuth(OPDSBrowser, credentials and credentials.user,
-			credentials and credentials.password)
-		local catalog = FeedFetcher.parseFeed(url, context.username, context.password)
+			credentials and credentials.password, credentials and credentials.origin)
+		local catalog = FeedFetcher.parseFeed(url, context.username, context.password,
+			nil, nil, context.basic_auth_origin)
 		if not catalog then
 			return nil, shown[#shown] or "no feed"
 		end
@@ -147,6 +148,7 @@ local function start()
 
 	for _, target in ipairs(TARGETS) do
 		local credentials = login(target.login)
+		if credentials then credentials.origin = target.url end
 		if not target.url then
 			report("SKIP " .. target.name .. ": no URL in the environment")
 		elseif target.login and not credentials then
