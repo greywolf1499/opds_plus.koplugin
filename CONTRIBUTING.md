@@ -283,7 +283,7 @@ opds_plus.koplugin/
 
 ```bash
 python3 scripts/build_release.py               # writes dist/opds_plus.koplugin.zip
-python3 scripts/build_release.py --tag v1.5.0  # also checks the version and writes dist/RELEASE_NOTES.md
+python3 scripts/build_release.py --tag v1.6.0  # also checks the version and writes dist/RELEASE_NOTES.md
 python3 -m unittest discover -s scripts        # the build script's own tests
 ```
 

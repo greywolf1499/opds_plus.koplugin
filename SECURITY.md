@@ -52,8 +52,23 @@ working, but it means an attacker on the same network could impersonate a catalo
 
 - refuse to follow a redirect from `https://` to `http://`;
 - send Basic credentials and the `Authorization`, `Cookie` and `Proxy-Authorization` headers only to the
-  origin (scheme, host and port) they were configured for, never across a redirect to another origin;
+  origin (scheme, host and port) they were configured for, including the first request to a linked resource,
+  never across a redirect to another origin;
 - send a catalog's custom headers only to that catalog's origin.
+
+### Authentication discovery and streaming sync (1.6.0 and later)
+
+Linked authentication documents are fetched anonymously over same-origin HTTPS, with certificate-chain
+and hostname verification using KOReader's CA bundle. Catalog credentials, custom headers and redirects
+are disabled for that request. Inline documents received with an ordinary catalog request still use the
+catalog connection's existing TLS behavior. Treat provider text as untrusted information, not permission
+to send credentials to advertised links. OAuth login, token persistence and refresh are not implemented.
+
+Streaming progress writes require the catalog's explicit **Sync streaming progress** opt-in. The default
+is local-only reading, including use of Kavita's read-only image endpoint. Synchronization checks the
+provider/stream identity and asks on conflicting positions; its server APIs cannot make the read/check/write
+sequence atomic. Closing or suspending cancels pending requests, but an already-sent write may have reached
+the server. See the [streaming guide](docs/wiki/Kavita.md#two-way-streaming-progress).
 
 ### The in-app updater (1.4.0 and later)
 

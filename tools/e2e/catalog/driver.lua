@@ -886,21 +886,29 @@ local function nontouch_steps()
         return table.concat(found, " ")
     end
 
-    -- Dark pixels in the rows a grid cell keeps for its underline. With no line drawn, only the author text that
-    -- overflows its box can put ink there.
-    local function underline_rows_ink()
-        local ink = 0
+    -- Compare with the underline disabled: author text need not overflow at every screen size.
+    local function underline_rows()
+        local ink, changed = 0, 0
+        local reference = Device.screen.bb:copy()
         for _, row in ipairs(b.layout) do
             for _, cell in ipairs(row) do
                 local d = cell.dimen
+                local style = cell._underline.style
+                cell._underline.style = "none"
+                reference:paintRect(d.x, d.y, d.w, d.h, require("ffi/blitbuffer").COLOR_WHITE)
+                cell:paintTo(reference, d.x, d.y)
+                cell._underline.style = style
                 for py = d.y + d.h - cell._underline.dimen.h, d.y + d.h - 1 do
                     for px = d.x, d.x + d.w - 1 do
                         if is_dark(px, py, 250) then ink = ink + 1 end
+                        if Device.screen.bb:getPixel(px, py):getColor8().a
+                            ~= reference:getPixel(px, py):getColor8().a then changed = changed + 1 end
                     end
                 end
             end
         end
-        return ink
+        reference:free()
+        return ink, changed
     end
 
     local function item_no()
@@ -1074,10 +1082,9 @@ local function nontouch_steps()
         -- A step later the toast is off the screen, so only the grid is left to measure.
         function()
             shot("touch_grid")
-            -- Nothing is focused here, so the rows kept for the underline show whatever text overflows into them.
-            local ink = underline_rows_ink()
+            local ink, changed = underline_rows()
             emit("nontouch.touch.grid_underline_rows_ink", ink)
-            c.check("touch.grid_author_text_not_clipped", ink > 0, ink)
+            c.check("touch.grid_author_text_not_clipped", changed == 0, changed)
             Device.hasDPad, Device.hasKeys = orig_dpad, orig_keys
             StateManager.getInstance():setDisplayMode("list")
             close_browser(plugin())

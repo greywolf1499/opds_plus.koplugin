@@ -243,6 +243,11 @@ unlike standard PSE positions, it is zero-based until completion uses the page c
 
 ### Screenshots
 
+The `nontouch` scenario checks unfocused grid rows against a repaint with the underline disabled.
+It does not require author text to overflow into those rows: that depends on screen size and font metrics.
+Both 600x800 and default-size runs check for actual erased pixels rather than treating a naturally blank
+underline area as clipping.
+
 ```bash
 .tools/venv/bin/pip install pillow   # once; .tools/venv comes from scripts/setup_test_env.sh
 tools/e2e/catalog/screenshots.sh     # rewrites .github/screenshots/*.png

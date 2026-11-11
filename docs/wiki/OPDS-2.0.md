@@ -43,13 +43,13 @@ KOReader restarts. A catalog's own **Accept** header, set under its custom heade
 - **A shelf is empty**: the catalog changed since its start page was opened. Go back and open the start page again.
 - **A book has no download button**: the catalog lists it without a file KOReader can open (an audiobook, or a
   book that can only be read in the browser).
-- **Login keeps failing**: check the catalog's Basic credentials or custom headers. Development builds
+- **Login keeps failing**: check the catalog's Basic credentials or custom headers. Versions 1.6.0 and later
   explain authentication documents as described below, but OAuth login remains unsupported.
 
-## Authentication discovery in development builds
+## Authentication discovery
 
 An OPDS authentication document is information about a catalog's login methods, not a catalog of books.
-Development builds recognize it in a `401` response or at its direct address. Provider title/description,
+From 1.6.0, it is recognized in a `401` response or at its direct address. Provider title/description,
 Basic username/password labels and unsupported methods are shown in a scrollable information window.
 Edit the catalog's existing username and password fields to use Basic authentication.
 
