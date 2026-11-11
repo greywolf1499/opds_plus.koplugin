@@ -34,7 +34,7 @@ end
 local function startFetch(url, username, password)
     -- os.tmpname() raises where /tmp does not exist (Android).
     local has_path, path = pcall(os.tmpname)
-    if not has_path then
+    if not has_path or not path then
         return nil
     end
     local parent = ffi.C.getpid()

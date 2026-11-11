@@ -156,7 +156,7 @@ local function start()
 			check(target.name .. " is explained", not feed and tostring(why):find("web page", 1, true), why)
 		else
 			local feed, why = open(target.url, credentials, target)
-			if check(target.name .. " opens as " .. target.format, feed, why) then
+			if check(target.name .. " opens as " .. target.format, feed, why) and feed then
 				local counts = describe(feed)
 				report("INFO " .. target.name .. ": " .. summary(counts))
 				if target.folders then
@@ -171,7 +171,7 @@ local function start()
 					if feed.search_url then
 						local results, search_why = open(UrlUtils.buildSearchUrl(feed.search_url,
 							util.urlEncode("the")), credentials)
-						if check(target.name .. " search answers", results, search_why) then
+						if check(target.name .. " search answers", results, search_why) and results then
 							report("INFO " .. target.name .. " search: " .. summary(describe(results)))
 						end
 					end
@@ -194,7 +194,7 @@ local function start()
 					seen[folder.url] = true
 					local inner, inner_why = open(folder.url, credentials)
 					if not check(target.name .. " folder " .. depth .. " (" .. tostring(folder.title) .. ") opens",
-							inner, inner_why) then
+							inner, inner_why) or not inner then
 						break
 					end
 					report("INFO " .. target.name .. " folder " .. depth .. ": " .. summary(describe(inner)))

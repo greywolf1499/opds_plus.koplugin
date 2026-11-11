@@ -39,6 +39,8 @@ describe("UpdateDialog", function()
 			end
 		end
 		for _, name in ipairs({ "check", "preflight", "fetch", "apply", "cleanup", "rollback", "hasBackup" }) do
+			-- Generated method fields coexist with this fixture's string/table data fields.
+			---@diagnostic disable-next-line: assign-type-mismatch
 			fake[name] = record(name)
 		end
 		function fake:called(name)

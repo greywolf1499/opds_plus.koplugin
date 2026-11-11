@@ -252,7 +252,7 @@ function HttpClient.fetch(url, timeout, maxtime, username, password)
     local socket_url = require("socket.url")
 
     local parsed = type(url) == "string" and socket_url.parse(url)
-    if not parsed or (parsed.scheme ~= "http" and parsed.scheme ~= "https") then
+    if not parsed or not parsed.host or (parsed.scheme ~= "http" and parsed.scheme ~= "https") then
         return Result.err("Unsupported protocol", HttpClient.ErrorCodes.UNSUPPORTED_PROTOCOL)
     end
 

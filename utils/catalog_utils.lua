@@ -62,8 +62,7 @@ local function parseAuthorName(entry_author, default)
 
 	if type(author) == "table" then
 		if #author > 0 then
-			author = table.concat(author, ", ")
-			return author
+			return table.concat(author, ", ")
 		else
 			return nil
 		end

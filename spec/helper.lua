@@ -99,6 +99,11 @@ baseline("gettext", function()
 end)
 
 baseline("logger", function()
+	---@class SpecLogger
+	---@field calls table[]
+	---@field levels table<string, integer>
+	---@field logged fun(level: string, text: string): boolean
+	---@field [string] function|table
 	local logger = { calls = {}, levels = { dbg = 1, info = 2, warn = 3, err = 4 } }
 	for level in pairs(logger.levels) do
 		logger[level] = function(...)

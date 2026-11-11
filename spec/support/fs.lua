@@ -187,10 +187,12 @@ function fs.install_guards()
 	if os.remove ~= live.remove then
 		return
 	end
+	---@diagnostic disable-next-line: duplicate-set-field
 	os.remove = function(path) -- luacheck: ignore 122
 		assert_contained(path, "os.remove")
 		return live.remove(path)
 	end
+	---@diagnostic disable-next-line: duplicate-set-field
 	os.rename = function(from, to) -- luacheck: ignore 122
 		assert_contained(from, "os.rename from")
 		assert_contained(to, "os.rename to")

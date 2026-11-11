@@ -48,6 +48,7 @@ end
 -- @param text string A version such as "1.4.0", "v1.4.0" or "1.4.0-rc.1+build.5"
 -- @return table|nil { major, minor, patch, prerelease, build }; the numbers are numbers and the identifiers
 --   of prerelease and build are strings. nil when text is not a semantic version
+---@return {major: number, minor: number, patch: number, prerelease: string[], build: string[]}?
 function Semver.parse(text)
 	if type(text) ~= "string" then
 		return nil

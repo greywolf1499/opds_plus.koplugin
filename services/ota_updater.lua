@@ -484,7 +484,9 @@ function OtaUpdater:extract(checked)
 	if not reader:open(self.download_path) then
 		return nil, E.INVALID_ARCHIVE, reader.err
 	end
-	local ok, err, detail = true, nil, nil
+	---@type boolean?
+	local ok = true
+	local err, detail
 	for entry in reader:iterate() do
 		local known = by_path[entry.path]
 		if not known or known.mode ~= entry.mode then
