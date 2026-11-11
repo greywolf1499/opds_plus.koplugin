@@ -23,4 +23,10 @@ See [OPDS 2.0](OPDS-2.0) for everything that works with OPDS 2.0 catalogs.
 ## Notes
 
 If Komga's OPDS 1 feed offers a book as a page stream, the stream buttons described on the [Kavita](Kavita)
-page show for it too. Reading progress is only read from Kavita, so **Page stream** starts at the first page.
+page show for it too. In v1.5.0, use the explicit **Resume ...** button for a PSE position; the default
+**Page stream** action starts at the first page.
+
+Development builds also use standard PSE `lastRead` and local saved positions for the default stream
+action. Local rewinds, validated page selection and persistence are described in the
+[streaming guide](Kavita#resume-in-development-builds). This does not yet write progress back to Komga
+or add page streaming to OPDS 2.0 feeds that provide no PSE stream.

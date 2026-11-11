@@ -378,6 +378,9 @@ describe("KOReader contract", function()
 	describe("the KOReader API the plugin uses", function()
 		-- Inherited from Widget and the base classes the scan can't see in a widget's own file
 		local inherited = { new = true, extend = true, init = true, handleEvent = true }
+		local inherited_from = {
+			["ui/widget/imageviewer"] = { paintTo = "ui/widget/container/widgetcontainer" },
+		}
 		-- Modules whose members the scan can't judge: Device is assembled for each platform; the members of
 		-- `socket` that are modules of their own live in other files
 		local skipped = { device = true, socket = true }
@@ -438,7 +441,9 @@ describe("KOReader contract", function()
 				if source then
 					scanned[#scanned + 1] = module
 					for member, file in pairs(members) do
-						if not inherited[member] and not source:find("%f[%w_]" .. member .. "%f[^%w_]") then
+						local parent = inherited_from[module] and inherited_from[module][member]
+						local definition = parent and real_source(parent) or source
+						if not inherited[member] and not definition:find("%f[%w_]" .. member .. "%f[^%w_]") then
 							missing[#missing + 1] = module .. "." .. member .. " (" .. file .. ")"
 						end
 					end
