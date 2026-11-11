@@ -3,9 +3,12 @@
 -- Shared between list_menu.lua and grid_menu.lua to eliminate duplication
 
 local RenderImage = require("ui/renderimage")
+local UIManager = require("ui/uimanager")
+local time = require("ui/time")
 
 local ImageLoader = require("services.image_loader")
 local Debug = require("utils.debug")
+local Constants = require("models.constants")
 
 local CoverLoader = {}
 
@@ -34,9 +37,9 @@ end
 -- @param items_by_url table Map of URL -> array of item_data
 -- @param cover_width number Target cover width
 -- @param cover_height number Target cover height
--- @param debug_log function|nil Optional debug logging function
--- @return function Callback for ImageLoader
-function CoverLoader.createRenderCallback(items_by_url, cover_width, cover_height)
+-- @param is_current function|nil Guard rejecting callbacks from an old menu generation
+-- @return function Callback for ImageLoader, returning a continuation for duplicate covers
+function CoverLoader.createRenderCallback(items_by_url, cover_width, cover_height, is_current)
 	return function(url, content)
 		local items = items_by_url[url]
 		if not items then
@@ -44,11 +47,16 @@ function CoverLoader.createRenderCallback(items_by_url, cover_width, cover_heigh
 			return
 		end
 
-		for _, item_data in ipairs(items) do
+		local index = 0
+		local render_next
+		render_next = function()
+			if is_current and not is_current() then
+				return
+			end
+			index = index + 1
+			local item_data = items[index]
 			local entry = item_data.entry
 			local widget = item_data.widget
-
-			entry.lazy_load_cover = false
 
 			-- Render the cover image maintaining aspect ratio
 			local ok, cover_bb = pcall(function()
@@ -61,6 +69,11 @@ function CoverLoader.createRenderCallback(items_by_url, cover_width, cover_heigh
 				)
 			end)
 
+			if is_current and not is_current() then
+				if ok and cover_bb then cover_bb:free() end
+				return
+			end
+			entry.lazy_load_cover = false
 			if ok and cover_bb then
 				entry.cover_bb = cover_bb
 				entry.cover_failed = false
@@ -72,8 +85,32 @@ function CoverLoader.createRenderCallback(items_by_url, cover_width, cover_heigh
 			-- Update the widget to show the new cover (or error state)
 			widget.entry = entry
 			widget:update()
+			if index < #items then
+				return render_next
+			end
 		end
+		return render_next()
 	end
+end
+
+function CoverLoader.defer(menu)
+	menu._cover_pause_until = time.now() + time.s(Constants.IMAGE_LOADER.INPUT_QUIET_TIME)
+	if menu._cover_batch then
+		menu._cover_batch:defer()
+	end
+end
+
+function CoverLoader.stopLoading(menu)
+	menu._cover_generation = (menu._cover_generation or 0) + 1
+	if menu._scheduled_cover_load then
+		UIManager:unschedule(menu._scheduled_cover_load)
+		menu._scheduled_cover_load = nil
+	end
+	if menu.halt_image_loading then
+		menu.halt_image_loading()
+		menu.halt_image_loading = nil
+	end
+	menu._cover_batch = nil
 end
 
 --- Load covers for menu items
@@ -108,14 +145,17 @@ function CoverLoader.loadVisibleCovers(menu, debug_log)
 	local parallel_downloads = not menu.settings or menu.settings.cover_parallel_downloads ~= false
 
 	-- Create render callback
+	menu._cover_generation = menu._cover_generation or 0
+	local generation = menu._cover_generation
 	local render_callback = CoverLoader.createRenderCallback(
 		items_by_url,
 		menu.cover_width,
-		menu.cover_height
+		menu.cover_height,
+		function() return menu._cover_generation == generation end
 	)
 
 	-- Load covers asynchronously
-	local _, halt = ImageLoader:loadImages(
+	local batch, halt = ImageLoader:loadImages(
 		urls,
 		render_callback,
 		username,
@@ -125,6 +165,8 @@ function CoverLoader.loadVisibleCovers(menu, debug_log)
 		cache_ttl_minutes,
 		parallel_downloads
 	)
+	batch.pause_until = menu._cover_pause_until
+	menu._cover_batch = batch
 
 	-- Clear the pending items
 	menu._items_to_update = {}
@@ -135,11 +177,7 @@ end
 --- Clean up cover loading and free resources
 -- @param menu table Menu instance with halt_image_loading and item_table
 function CoverLoader.cleanup(menu)
-	-- Cancel any in-progress image loading
-	if menu.halt_image_loading then
-		menu.halt_image_loading()
-		menu.halt_image_loading = nil
-	end
+	CoverLoader.stopLoading(menu)
 
 	-- Free cover image blitbuffers
 	if menu.item_table then

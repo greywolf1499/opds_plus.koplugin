@@ -377,7 +377,7 @@ describe("KOReader contract", function()
 
 	describe("the KOReader API the plugin uses", function()
 		-- Inherited from Widget and the base classes the scan can't see in a widget's own file
-		local inherited = { new = true, extend = true, init = true }
+		local inherited = { new = true, extend = true, init = true, handleEvent = true }
 		-- Modules whose members the scan can't judge: Device is assembled for each platform; the members of
 		-- `socket` that are modules of their own live in other files
 		local skipped = { device = true, socket = true }

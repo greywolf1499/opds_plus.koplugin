@@ -42,6 +42,18 @@ local tmp_root = os.getenv("HARNESS_TMP") or ""
 local TMP_ROOT_PATTERN = "^/tmp/opds_plus_test_harness%.%w+/tmp$"
 local tmp_counter = 0
 
+assert(tmp_root:match(TMP_ROOT_PATTERN), "HARNESS_TMP is not a harness work dir")
+require("ffi/posix_h")
+local tmp_file_counter = 0
+-- Lua's os.tmpname ignores TMPDIR; keep every test-created file inside this run.
+---@diagnostic disable-next-line: duplicate-set-field
+os.tmpname = function()
+    tmp_file_counter = tmp_file_counter + 1
+    local path = string.format("%s/image-%d-%06d.tmp", tmp_root, require("ffi").C.getpid(), tmp_file_counter)
+    assert(io.open(path, "wb")):close()
+    return path
+end
+
 local function make_temp_dir()
     assert(tmp_root:match(TMP_ROOT_PATTERN), "HARNESS_TMP is not a harness work dir: " .. tmp_root)
     tmp_counter = tmp_counter + 1
@@ -1100,12 +1112,12 @@ local function server_stats(reset)
     return stats
 end
 
--- os.tmpname() files are /tmp/lua_XXXXXX.
+-- Only count temporary files owned by this harness run.
 local function count_lua_tmp()
     local lfs = require("libs/libkoreader-lfs")
     local n = 0
-    for name in lfs.dir("/tmp") do
-        if name:find("^lua_") then n = n + 1 end
+    for name in lfs.dir(tmp_root) do
+        if name:find("^image%-%d+%-%d+%.tmp$") then n = n + 1 end
     end
     return n
 end
@@ -1183,6 +1195,136 @@ local function emit_batch(prefix, r)
     emit(prefix .. ".server_requests", r.server.requests)
     emit(prefix .. ".server_max_inflight", r.server.max_inflight)
     emit(prefix .. ".server_with_auth", r.server.with_auth)
+end
+
+-- Queue real UI key events during deliberately slow decoding, not timer callbacks posing as input.
+local function inputfairness_steps()
+    local Event = require("ui/event")
+    local Key = require("device/key")
+    local RenderImage = require("ui/renderimage")
+    local FocusManager = require("ui/widget/focusmanager")
+    local StateManager = require("core.state_manager")
+    local CoverCache = require("services.cover_cache")
+    local FFIUtil = require("ffi/util")
+    local time = require("ui/time")
+    local c = checker("inputfairness")
+    local steps = {}
+
+    for _, case in ipairs({
+        { name = "cached", cached = true },
+        { name = "duplicates", cached = true, duplicate = true },
+        { name = "cold" },
+    }) do
+        steps[#steps + 1] = function(advance)
+            current = "inputfairness"
+            local p = plugin()
+            close_window_with_text("rendered in color")
+            close_window_with_text("cache database")
+            close_browser(p)
+            remove_cache_files()
+            local old_mode = StateManager.getInstance():getDisplayMode()
+            local old_dpad, old_keys, old_touch = Device.hasDPad, Device.hasKeys, Device.isTouchDevice
+            local old_focus = FocusManager.focus_non_touch
+            Device.hasDPad = function() return true end
+            Device.hasKeys = function() return true end
+            Device.isTouchDevice = function() return false end
+            FocusManager.focus_non_touch = true
+            StateManager.getInstance():setDisplayMode("grid")
+
+            local cover_url = BASE .. "/cover/900.png"
+            local ok, bytes = require("services.http_client").getUrlContent(cover_url)
+            assert(ok, bytes)
+            local items = {}
+            for index = 1, 6 do
+                local address = case.duplicate and cover_url or cover_url .. "?item=" .. index
+                items[index] = {
+                    text = "Input test " .. index, title = "Input test " .. index, author = "Harness",
+                    cover_url = address, lazy_load_cover = true, acquisitions = {},
+                }
+                if case.cached then assert(CoverCache.put(address, bytes, 0)) end
+            end
+            local b = open_browser()
+            b:switchItemTable("Input fairness", items)
+            local visible = b._items_to_update
+            local expected = #visible
+            assert(expected >= 4, "stress case needs at least four visible covers")
+            local input = Device.input
+            local old_wait, old_render, old_handle = input.waitEvent, RenderImage.renderImageData, b.handleEvent
+            local queued, enqueued, latencies = {}, {}, {}
+            local renders, updates, moves, pending = 0, 0, 0, false
+            local slice_renders, slice_updates, max_renders, max_updates = 0, 0, 0, 0
+
+            input.waitEvent = function(self, ...)
+                if #queued > 0 then return { table.remove(queued, 1) } end
+                return old_wait(self, ...)
+            end
+            b.handleEvent = function(self, event)
+                local started = enqueued[event]
+                local before = self:getFocusedItemNumber()
+                if started then
+                    latencies[#latencies + 1] = time.to_s(time.now() - started)
+                    max_renders = math.max(max_renders, slice_renders)
+                    max_updates = math.max(max_updates, slice_updates)
+                    slice_renders, slice_updates = 0, 0
+                end
+                local handled = old_handle(self, event)
+                if started and self:getFocusedItemNumber() ~= before then moves = moves + 1 end
+                return handled
+            end
+            ---@diagnostic disable-next-line: duplicate-set-field
+            RenderImage.renderImageData = function(self, content, ...)
+                if content ~= bytes then return old_render(self, content, ...) end
+                renders = renders + 1
+                slice_renders = slice_renders + 1
+                local event = Event:new("KeyPress", Key:new(renders % 2 == 1 and "Down" or "Up", {}))
+                queued[#queued + 1], enqueued[event] = event, time.now()
+                local bitmap = old_render(self, content, ...)
+                FFIUtil.usleep(80000)
+                pending = true
+                return bitmap
+            end
+            for _, item in ipairs(visible) do
+                local update = item.widget.update
+                item.widget.update = function(self, ...)
+                    if pending then
+                        updates, slice_updates = updates + 1, slice_updates + 1
+                        pending = false
+                    end
+                    return update(self, ...)
+                end
+            end
+
+            wait_for(function()
+                return renders == expected and #latencies == expected and #queued == 0
+            end, 20, function(completed)
+                input.waitEvent, RenderImage.renderImageData, b.handleEvent = old_wait, old_render, old_handle
+                table.sort(latencies)
+                local p50 = latencies[math.ceil(#latencies * 0.5)] or math.huge
+                local p95 = latencies[math.ceil(#latencies * 0.95)] or math.huge
+                emit("inputfairness." .. case.name .. ".p50_ms", math.floor(p50 * 1000))
+                emit("inputfairness." .. case.name .. ".p95_ms", math.floor(p95 * 1000))
+                emit("inputfairness." .. case.name .. ".max_renders_per_input", max_renders)
+                emit("inputfairness." .. case.name .. ".max_updates_per_input", max_updates)
+                emit("inputfairness." .. case.name .. ".expected", expected)
+                emit("inputfairness." .. case.name .. ".renders", renders)
+                emit("inputfairness." .. case.name .. ".updates", updates)
+                emit("inputfairness." .. case.name .. ".handled_keys", #latencies)
+                c.check(case.name .. ".completed", completed and renders == expected and updates == expected)
+                c.check(case.name .. ".keys_move_focus", moves == expected, moves)
+                c.check(case.name .. ".one_render_per_slice", max_renders == 1, max_renders)
+                c.check(case.name .. ".one_update_per_slice", max_updates == 1, max_updates)
+                c.check(case.name .. ".input_latency_bounded", p95 < 0.35, p95)
+                close_browser(p)
+                Device.hasDPad, Device.hasKeys, Device.isTouchDevice = old_dpad, old_keys, old_touch
+                FocusManager.focus_non_touch = old_focus
+                StateManager.getInstance():setDisplayMode(old_mode)
+                advance()
+            end)
+            return "async"
+        end
+    end
+    steps[#steps + 1] = function() c.finish() end
+    return steps
 end
 
 local function parcovers_steps()
@@ -1467,11 +1609,40 @@ local function covergate_steps()
             book_dialog("dialog_off", false, advance)
             return "async"
         end,
-        function()
+        function(advance)
             entry.callback()
             close_window_with_text("Parallel cover downloads")
             c.check("switch_back_on", p:getSetting("cover_parallel_downloads") == true,
                 p:getSetting("cover_parallel_downloads"))
+            local RenderImage = require("ui/renderimage")
+            local render = RenderImage.renderImageData
+            local renders = 0
+            ---@diagnostic disable-next-line: duplicate-set-field
+            RenderImage.renderImageData = function(self, ...)
+                renders = renders + 1
+                return render(self, ...)
+            end
+            local first_fork, tmp_before = #fork_pids + 1, count_lua_tmp()
+            local dialog = require("ui.dialogs.book_info_dialog").build(p.opds_browser, {
+                title = "Cancelled cover", acquisitions = {},
+                image = BASE .. "/cover/950.png?delay=1",
+            })
+            UIManager:show(dialog)
+            local batch = assert(last_batch, "dialog did not start a cover batch")
+            UIManager:scheduleIn(0.12, function()
+                UIManager:close(dialog)
+                c.check("closing_dialog_cancels_its_batch", not batch.loading)
+                UIManager:scheduleIn(1.2, function()
+                    RenderImage.renderImageData = render
+                    c.check("closed_dialog_has_no_late_decode", renders == 0, renders)
+                    c.check("closed_dialog_leaves_no_child", alive_children(first_fork) == 0)
+                    c.check("closed_dialog_leaves_no_temporary_file", count_lua_tmp() == tmp_before)
+                    advance()
+                end)
+            end)
+            return "async"
+        end,
+        function()
             ImageLoader.loadImages = real_load_images
             unwatch_forks()
             remove_cache_files()
@@ -3935,6 +4106,7 @@ local EXTRA = {
     { name = "nontouch", steps = nontouch_steps },
     { name = "listcover", steps = listcover_steps },
     { name = "parcovers", steps = parcovers_steps },
+    { name = "inputfairness", steps = inputfairness_steps },
     { name = "covergate", steps = covergate_steps },
     { name = "covers", steps = covers_steps },
     { name = "cachelib", steps = cachelib_steps },

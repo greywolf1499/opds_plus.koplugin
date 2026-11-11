@@ -28,6 +28,11 @@ function Batch:new(o)
     return setmetatable(o or {}, self)
 end
 
+function Batch:defer(seconds)
+    self.pause_until = math.max(self.pause_until or 0,
+        time.now() + time.s(seconds or Constants.IMAGE_LOADER.INPUT_QUIET_TIME))
+end
+
 -- Fetch one URL in a forked subprocess, which writes the body to a temporary
 -- file: a pipe could fill up and block the child before it exits. Returns nil
 -- when no subprocess could be started.
@@ -105,12 +110,19 @@ function Batch:loadImages(urls)
     local stop_loading = false
     local next_index = 1
     local jobs = {}
+    local ready = {}
+    local continuation
+    local delivered = false
     local ttl_seconds = (self.cache_ttl_minutes or Constants.COVER_CACHE.DEFAULT_TTL_MINUTES) * 60
     local max_bytes = (self.cache_max_mb or Constants.COVER_CACHE.DEFAULT_MAX_MB) * 1024 * 1024
 
     local function deliver(url, content)
         if not stop_loading and content and self.callback then
-            self.callback(url, content)
+            delivered = true
+            local more = self.callback(url, content)
+            if not stop_loading and type(more) == "function" then
+                continuation = more
+            end
         end
     end
 
@@ -128,32 +140,47 @@ function Batch:loadImages(urls)
 
     -- Downloads run in subprocesses, so a slow server never blocks the UI;
     -- decoding, cache writes and callbacks stay in this process.
-    local poll
+    local poll, after_paint, paint_wrapper
+    local delay
     poll = function()
         if stop_loading then
             return
         end
 
+        delivered = false
+        -- Reap bounded children even during input, but leave disk reads and rendering for an idle slice.
         for index = #jobs, 1, -1 do
             local job = jobs[index]
             if FFIUtil.isSubProcessDone(job.pid) then
                 table.remove(jobs, index)
-                finish(job.url, readFetch(job), job.stale_content)
+                ready[#ready + 1] = job
             elseif time.now() > job.deadline then
                 table.remove(jobs, index)
                 stopFetch(job)
-                finish(job.url, nil, job.stale_content)
-            end
-            if stop_loading then
-                return
+                job.failed = true
+                ready[#ready + 1] = job
             end
         end
 
-        -- Cache hits share the per-tick budget, so decoding them is spread out too.
-        local budget = Constants.IMAGE_LOADER.MAX_PARALLEL
+        if time.now() < (self.pause_until or 0) then
+            -- Input only postpones expensive work; it never kills and restarts a download.
+            UIManager:scheduleIn(Constants.IMAGE_LOADER.POLL_INTERVAL, poll)
+            return
+        end
         local blocked = false
-        while budget > 0 and #jobs < Constants.IMAGE_LOADER.MAX_PARALLEL and next_index <= #urls do
-            budget = budget - 1
+        -- One shared work slot: a continuation, a completed fetch, or a cache lookup/new fetch.
+        if continuation then
+            local work = continuation
+            continuation = nil
+            delivered = true
+            local more = work()
+            if not stop_loading and type(more) == "function" then
+                continuation = more
+            end
+        elseif #ready > 0 then
+            local job = table.remove(ready, 1)
+            finish(job.url, not job.failed and readFetch(job) or nil, job.stale_content)
+        elseif #jobs + #ready < Constants.IMAGE_LOADER.MAX_PARALLEL and next_index <= #urls then
             local url = urls[next_index]
             next_index = next_index + 1
 
@@ -186,17 +213,26 @@ function Batch:loadImages(urls)
                     blocked = true
                 end
             end
-            if stop_loading then
-                return
-            end
-            if blocked then
-                break
-            end
         end
 
-        self.loading = #jobs > 0 or next_index <= #urls
+        if stop_loading then
+            return
+        end
+        self.loading = #jobs > 0 or #ready > 0 or continuation ~= nil or next_index <= #urls
         if self.loading then
-            local delay = blocked and Constants.UI_TIMING.IMAGE_BATCH_DELAY or Constants.IMAGE_LOADER.POLL_INTERVAL
+            delay = blocked and Constants.UI_TIMING.IMAGE_BATCH_DELAY or Constants.IMAGE_LOADER.POLL_INTERVAL
+            if delivered then
+                -- Start the positive delay after repaint, not before a potentially slow e-ink paint.
+                paint_wrapper = UIManager:tickAfterNext(after_paint)
+            else
+                UIManager:scheduleIn(delay, poll)
+            end
+        end
+    end
+
+    after_paint = function()
+        paint_wrapper = nil
+        if not stop_loading then
             UIManager:scheduleIn(delay, poll)
         end
     end
@@ -209,11 +245,22 @@ function Batch:loadImages(urls)
         stop_loading = true
         self.loading = false
         self.callback = nil
+        continuation = nil
         UIManager:unschedule(poll)
+        UIManager:unschedule(after_paint)
+        if paint_wrapper then
+            UIManager:unschedule(paint_wrapper)
+        end
         for _, job in ipairs(jobs) do
             stopFetch(job)
         end
         jobs = {}
+        for _, job in ipairs(ready) do
+            if not job.failed then
+                os.remove(job.path)
+            end
+        end
+        ready = {}
     end
 
     return halt
@@ -221,7 +268,7 @@ end
 
 --- Load images from URLs asynchronously
 -- @param urls table Array of URLs to load
--- @param callback function Callback(url, content) called for each loaded image
+--- @param callback function Callback(url, content); may return a function for one later render slice
 -- @param username string|nil HTTP auth username
 -- @param password string|nil HTTP auth password
 -- @param cover_cache_enabled boolean|nil Whether to use in-memory cover cache (default: true)

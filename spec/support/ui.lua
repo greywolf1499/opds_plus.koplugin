@@ -50,6 +50,11 @@ function M.new()
 	function UIManager:nextTick(callback)
 		ui.scheduled[#ui.scheduled + 1] = { seconds = 0, callback = callback }
 	end
+	function UIManager:tickAfterNext(callback)
+		local wrapper = function() self:nextTick(callback) end
+		self:nextTick(wrapper)
+		return wrapper
+	end
 	function UIManager:unschedule(callback)
 		for index = #ui.scheduled, 1, -1 do
 			if ui.scheduled[index].callback == callback then
