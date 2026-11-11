@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ### Changed
 
+- **Cancellable Catalog Loading**: Fetch, parse and map catalogs in the background while keeping the current page visible. Tap or press a key to cancel without changing the listing or history. If background processes are unavailable, ask before loading in the foreground, where input will pause. Catalog caching, search and sequential feed-page fetching are preserved.
 - **Screenshots**: The README shows the book details, the update dialog and an OPDS 2.0 catalog's shelves and facets, all taken from a mock catalog of public-domain classics.
 - **Editor Diagnostics**: Add a reproducible LuaLS check with accurate Busted assertions and KOReader module resolution, without disabling production warnings.
 

@@ -37,20 +37,23 @@ function NavigationHandler.updateCatalog(item_url, browser, paths_updated)
 	local context = BrowserContext.fromBrowser(browser)
 	local debug_callback = function(...) if browser._debugLog then browser:_debugLog(...) end end
 
+	local facets, search
 	local menu_table = FeedFetcher.genItemTableFromURL(
 		item_url,
 		context.username,
 		context.password,
 		debug_callback,
 		function(catalog, url)
-			local items, facets, search = NavigationHandler.genItemTableFromCatalog(
-				catalog, url, context, debug_callback)
-			browser.facet_groups = facets
-			browser.search_url = search
+			local items
+			items, facets, search = NavigationHandler.genItemTableFromCatalog(catalog, url, context, debug_callback)
 			return items
 		end
 	)
 
+	return NavigationHandler.applyCatalog(menu_table, facets, search, item_url, browser, paths_updated)
+end
+
+function NavigationHandler.applyCatalog(menu_table, facets, search, item_url, browser, paths_updated)
 	-- Count how many have covers
 	local cover_count = 0
 	for _, item in ipairs(menu_table) do
@@ -59,7 +62,9 @@ function NavigationHandler.updateCatalog(item_url, browser, paths_updated)
 		end
 	end
 
-	if #menu_table > 0 or browser.facet_groups or browser.search_url then
+	if #menu_table > 0 or facets or search then
+		browser.facet_groups = facets
+		browser.search_url = search
 		if not paths_updated then
 			table.insert(browser.paths, {
 				url   = item_url,
@@ -120,12 +125,16 @@ function NavigationHandler.appendCatalog(item_url, browser)
 		end
 	)
 
+	return NavigationHandler.appendItems(menu_table, browser)
+end
+
+function NavigationHandler.appendItems(menu_table, browser, itemnumber)
 	if #menu_table > 0 then
 		for __, item in ipairs(menu_table) do
 			table.insert(browser.item_table, item)
 		end
 		browser.item_table.hrefs = menu_table.hrefs
-		browser:switchItemTable(browser.catalog_title, browser.item_table, -1)
+		browser:switchItemTable(browser.catalog_title, browser.item_table, itemnumber or -1)
 		return true
 	end
 
