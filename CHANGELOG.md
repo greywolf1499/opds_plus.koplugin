@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ### Fixed
 
+- **Responsive Update Checks**: Move connectivity probes and release requests off the UI thread, retaining parent-side settings and notifications. Manual checks can be cancelled; automatic checks pass input through when interrupted and never wake Wi-Fi. Reject stale results, coalesce duplicate checks, bound stalled workers and cancel on suspend/close/install. Ask before any manual foreground fallback.
 - **Series Descriptions**: Show a matching Calibre-style `SERIES:` metadata line only in the series field, not again in the description. Book details, download information and newly saved descriptions use the same cleanup. Keep rating/tags, prose, malformed or mismatched fields, and existing downloaded-book metadata unchanged.
 - **Shared Cover Workers**: Visible and prefetched covers share a two-worker limit rather than starting two workers per batch. If subprocesses are unavailable, speculative warming is skipped instead of falling back to blocking network requests.
 - **Decoded Cover Memory**: Keep an 8 MiB least-recently-used cover budget instead of retaining every visited page. Visible and dialog-borrowed images stay pinned, even when they exceed that budget. Release high-resolution dialog images and widget-scaled copies when their users close or are rebuilt.

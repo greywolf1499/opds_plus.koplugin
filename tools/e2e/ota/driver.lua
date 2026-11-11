@@ -120,11 +120,23 @@ local function start()
 	assert(plugin_dir:sub(1, #WORK + 1) == WORK .. "/", "plugin is not inside the work dir: " .. plugin_dir)
 
 	-- Loopback instead of GitHub, for updater requests only
+	local FFIUtil = require("ffi/util")
+	local gettime = require("socket").gettime
+	local parent_pid = tonumber(require("ffi").C.getpid())
+	local probe_delay, request_delay = 0, 0
+	local function delayed(stage, seconds)
+		if seconds == 0 then return end
+		local handle = assert(io.open(WORK .. "/check_workers.log", "a"))
+		handle:write(stage, " ", tostring(tonumber(require("ffi").C.getpid())), "\n")
+		handle:close()
+		FFIUtil.usleep(seconds * 1000000)
+	end
 	local real_request = HttpClient.request
 	local updater_requests = 0
 	HttpClient.request = function(request, options)
 		if options and options.allow_host == OtaUpdater.isAllowedHost then
 			updater_requests = updater_requests + 1
+			if request.url == OtaUpdater.LATEST_URL then delayed("request", request_delay) end
 			request.url = request.url:gsub("^https://api%.github%.com/", BASE .. "/api/")
 				:gsub("^https://github%.com/", BASE .. "/gh/")
 			request.create, request.verify, request.cafile = nil, nil, nil
@@ -138,14 +150,16 @@ local function start()
 
 	-- The emulator has no Wi-Fi to ask about
 	local NetworkMgr = require("ui/network/manager")
+	local connected, online, wifi_actions = true, true, 0
 	NetworkMgr.isConnected = function()
-		return true
+		return connected
 	end
 	NetworkMgr.isOnline = function()
-		return true
+		delayed("probe", probe_delay)
+		return online
 	end
-	NetworkMgr.runWhenOnline = function(_, callback)
-		callback()
+	NetworkMgr.beforeWifiAction = function()
+		wifi_actions = wifi_actions + 1
 	end
 
 	-- Record what the user would see; a restart prompt is recorded, never shown (it would restart KOReader)
@@ -167,9 +181,10 @@ local function start()
 		end
 	end
 	local function topmost(kind_field)
-		for index = #shown, 1, -1 do
-			if shown[index][kind_field] then
-				return shown[index]
+		for index = #UIManager._window_stack, 1, -1 do
+			local widget = UIManager._window_stack[index].widget
+			if widget[kind_field] then
+				return widget
 			end
 		end
 	end
@@ -344,20 +359,152 @@ local function start()
 			end)
 		end
 
+		local live_workers = {}
+		local spawned = 0
+		local real_spawn, real_done = FFIUtil.runInSubProcess, FFIUtil.isSubProcessDone
+		-- Instrument owned workers; restore both native functions in the final collection step.
+		---@diagnostic disable-next-line: duplicate-set-field
+		FFIUtil.runInSubProcess = function(...)
+			local pid, fd = real_spawn(...)
+			if pid then live_workers[pid], spawned = true, spawned + 1 end
+			return pid, fd
+		end
+		---@diagnostic disable-next-line: duplicate-set-field
+		FFIUtil.isSubProcessDone = function(pid)
+			local done = real_done(pid)
+			if done then live_workers[pid] = nil end
+			return done
+		end
+		local function heartbeat()
+			local ticks, gap, last = 0, 0, gettime()
+			local tick
+			tick = function()
+				local now = gettime()
+				ticks, gap, last = ticks + 1, math.max(gap, now - last), now
+				UIManager:scheduleIn(0.02, tick)
+			end
+			UIManager:scheduleIn(0.02, tick)
+			return function(label)
+				UIManager:unschedule(tick)
+				report("INFO " .. label .. " timer gap ms: " .. math.floor(gap * 1000))
+				check(label .. " timer remains responsive", ticks >= 10 and gap <= 0.35, gap)
+			end
+		end
+		for _, mode in ipairs({ "automatic", "manual" }) do
+			step(mode .. " slow check", function()
+				setMode("same")
+				plugin:saveSetting(UpdateDialog.LAST_CHECK, 0)
+				probe_delay, request_delay = 0.4, 0.6
+				local stop = heartbeat()
+				local started = gettime()
+				if mode == "automatic" then UpdateDialog.autoCheck(plugin) else UpdateDialog.checkNow(plugin) end
+				check(mode .. " check returns promptly", gettime() - started <= 0.35)
+				local count = spawned
+				if mode == "automatic" then UpdateDialog.autoCheck(plugin) else UpdateDialog.checkNow(plugin) end
+				check(mode .. " duplicate check coalesced", spawned == count)
+				return function()
+					if UpdateDialog._check_job then return false end
+					stop(mode)
+					check(mode .. " check publishes parent state", plugin:getSetting(UpdateDialog.LAST_CHECK) > 0)
+					probe_delay, request_delay = 0, 0
+					return true
+				end
+			end)
+		end
+		step("check work stays in children", function()
+			local handle = assert(io.open(WORK .. "/check_workers.log", "r"))
+			local trace = handle:read("*a")
+			handle:close()
+			local count, child_only = 0, true
+			for pid in trace:gmatch("%a+ (%d+)") do
+				count = count + 1
+				if tonumber(pid) == parent_pid then child_only = false end
+			end
+			check("probes and requests use workers", count == 4 and child_only, trace)
+		end)
+		for _, kind in ipairs({ "KeyPress", "Gesture" }) do
+			step("automatic interruption preserves " .. kind, function()
+				local InputContainer = require("ui/widget/container/inputcontainer")
+				local received = 0
+				local receiver = InputContainer:new { invisible = true, modal = true }
+				function receiver:onKeyPress(key_event)
+					if key_event:match({ "Down" }) then received = received + 1 end
+					return true
+				end
+				function receiver:onGesture(gesture)
+					if gesture.ges == "pan" then received = received + 1 end
+					return true
+				end
+				UIManager:show(receiver)
+				plugin:saveSetting(UpdateDialog.LAST_CHECK, 0)
+				probe_delay = 2
+				UpdateDialog.autoCheck(plugin)
+				local event = kind == "KeyPress" and Key:new("Down", {}) or { ges = "pan" }
+				UIManager:handleInputEvent(Event:new(kind, event))
+				return function()
+					if received == 0 then return false end
+					check("automatic " .. kind .. " forwarded exactly once", received == 1)
+					check("automatic check cancelled", not UpdateDialog._check_job)
+					check("cancelled check leaves state alone", plugin:getSetting(UpdateDialog.LAST_CHECK) == 0)
+					probe_delay = 0
+					UIManager:close(receiver)
+					return true
+				end
+			end)
+		end
+		step("offline check never wakes networking", function()
+			connected, online = false, false
+			plugin:saveSetting(UpdateDialog.LAST_CHECK, 0)
+			UpdateDialog.autoCheck(plugin)
+			return function()
+				if UpdateDialog._check_job then return false end
+				check("offline check never wakes networking", wifi_actions == 0)
+				check("offline check leaves state alone", plugin:getSetting(UpdateDialog.LAST_CHECK) == 0)
+				connected, online = true, true
+				return true
+			end
+		end)
+		step("suspend cancels a manual check", function()
+			for index = #UIManager._window_stack, 1, -1 do
+				local widget = UIManager._window_stack[index].widget
+				if type(widget.text) == "string" and widget.text:find("is up to date", 1, true) then
+					UIManager:close(widget)
+				end
+			end
+			probe_delay = 2
+			plugin:saveSetting(UpdateDialog.LAST_CHECK, 0)
+			UpdateDialog.checkNow(plugin)
+			local job = assert(UpdateDialog._check_job)
+			check("manual check has cancellation feedback", job.widget.text:find("cancel", 1, true))
+			Device.screen:shot(WORK .. "/update_checking.png")
+			plugin:onSuspend() -- Only the plugin hook; never suspend the host/device in this kit.
+			check("suspend cancels manual check", not UpdateDialog._check_job and job.cancelled)
+			check("suspend leaves check state alone", plugin:getSetting(UpdateDialog.LAST_CHECK) == 0)
+			probe_delay = 0
+		end)
+
 		step("up to date", function()
 			setMode("same")
 			UpdateDialog.checkNow(plugin)
-			check("up to date", lastText("is up to date"), "no up-to-date message")
+			return function()
+				if UpdateDialog._check_job then return false end
+				check("up to date", lastText("is up to date"), "no up-to-date message")
+				return true
+			end
 		end)
 
 		step("auto check toast", function()
 			setMode("good")
 			plugin:saveSetting(UpdateDialog.LAST_CHECK, 0)
 			local checked = UpdateDialog.autoCheck(plugin)
-			check("auto check toast", checked and lastText(NEW .. " is available"), "no toast")
-			check("auto check notified once", plugin:getSetting(UpdateDialog.NOTIFIED) == NEW)
-			check("auto check keeps etag", type(plugin:getSetting(UpdateDialog.ETAG)) == "string")
-			check("auto check waits a week", UpdateDialog.autoCheck(plugin) == false)
+			return function()
+				if UpdateDialog._check_job then return false end
+				check("auto check toast", checked and lastText(NEW .. " is available"), "no toast")
+				check("auto check notified once", plugin:getSetting(UpdateDialog.NOTIFIED) == NEW)
+				check("auto check keeps etag", type(plugin:getSetting(UpdateDialog.ETAG)) == "string")
+				check("auto check waits a week", UpdateDialog.autoCheck(plugin) == false)
+				return true
+			end
 		end)
 
 		step("read-only install", function()
@@ -385,10 +532,14 @@ local function start()
 		step("bad digest", function()
 			setMode("bad_digest")
 			UpdateDialog.checkNow(plugin)
-			local viewer = topmost("buttons_table")
-			press(viewer, "Install")
-			local before = #shown
+			local before
 			return function()
+				if not before then
+					if UpdateDialog._check_job then return false end
+					local viewer = assert(topmost("buttons_table"), "no release viewer")
+					before = #shown
+					press(viewer, "Install")
+				end
 				for index = before + 1, #shown do
 					local text = shown[index].text
 					if type(text) == "string" and text:find("checksum") then
@@ -405,10 +556,15 @@ local function start()
 		step("update", function()
 			setMode("good")
 			UpdateDialog.checkNow(plugin)
-			local viewer = topmost("buttons_table")
-			check("release notes shown", viewer and viewer.text:find("e2e release " .. NEW, 1, true), viewer and viewer.text)
-			press(viewer, "Install")
+			local installing = false
 			return function()
+				if not installing then
+					if UpdateDialog._check_job then return false end
+					local viewer = assert(topmost("buttons_table"), "no release viewer")
+					check("release notes shown", viewer.text:find("e2e release " .. NEW, 1, true), viewer.text)
+					installing = true
+					press(viewer, "Install")
+				end
 				if #restarts == 0 then
 					return false
 				end
@@ -424,6 +580,14 @@ local function start()
 			local before = #restarts
 			plugin:onShowOPDSPlusCatalog()
 			check("restart gate", #restarts == before + 1 and not plugin.opds_browser, "catalog opened after update")
+		end)
+		step("check workers collected", function()
+			return function()
+				if next(live_workers) then return false end
+				check("check workers collected", true)
+				FFIUtil.runInSubProcess, FFIUtil.isSubProcessDone = real_spawn, real_done
+				return true
+			end, 15
 		end)
 	elseif PHASE == "rollback" then
 		step("runs the new version", function()

@@ -341,9 +341,18 @@ function OPDS:onFlushSettings()
     end
 end
 
+function OPDS:onSuspend()
+    UpdateDialog.cancelCheck()
+end
+
+function OPDS:onCloseWidget()
+    UpdateDialog.cancelCheck()
+end
+
 -- Called by KOReader's plugin manager for "Delete plugin and settings". Downloaded books are left alone.
 -- The plugin folder may already be gone when this runs, so it must not load any modules lazily.
 function OPDS:deletePluginSettings()
+    UpdateDialog.cancelCheck()
     self.settings_manager:delete()
     ImageLoader.purgeCache()
     self.updated = nil
