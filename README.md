@@ -201,6 +201,10 @@ Access settings from: **OPDS Plus Catalog → Settings**
 - **Parallel Cover Downloads**:
   - Enabled (default): downloads several covers at once, in background processes, so pages of covers fill in faster and a slow server does not freeze the screen.
   - Disabled: downloads covers one at a time. Turn this off if covers stop loading or the device runs low on memory.
+- **Prefetch Neighboring Covers** (development builds, off by default):
+  - While the current page is ready and input is idle, cache covers for one neighboring display page in the last navigation direction (initially forward).
+  - Requires **Enable Cover Cache** and **Parallel Cover Downloads**. It downloads bytes only, without decoding images or repainting, and shares the two-worker limit with visible covers.
+  - Changing pages, views or catalogs, opening book details, or closing the browser cancels obsolete warming. It does not fetch another catalog page just to find covers.
 - **Thumbnails on Navigation Entries**:
   - Enabled (default): entries that open a list of books instead of being a book, such as a series or an author, show their thumbnail when the server provides one.
   - Disabled: only books show covers.

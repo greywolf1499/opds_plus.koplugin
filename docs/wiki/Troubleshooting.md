@@ -27,6 +27,10 @@ own headers. Add them in the catalog's **Edit** dialog under **Headers**: see
   Development builds yield between cover updates and pause new decoding briefly during key/touch activity;
   downloads already in progress continue. A single slow decode or screen refresh still takes time.
   With parallel downloads disabled, a network request can still block input.
+- **Neighboring covers are not prefetched** (development builds): this is off by default. Enable **Prefetch
+  Neighboring Covers**, **Enable Cover Cache** and **Parallel Cover Downloads**. Warming only runs while the
+  cover view is foreground, its visible covers are ready, and input is idle. It is skipped when background
+  processes are unavailable; normal visible-cover loading still has its serial fallback.
 
 ## Downloads
 

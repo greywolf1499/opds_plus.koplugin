@@ -46,8 +46,16 @@ Under **Cover Settings**:
   covers are kept, and clears the cache.
 - **Parallel Cover Downloads** (on by default): download several covers at once in the background. Turn it off if
   covers stop loading or the device runs low on memory.
+- **Prefetch Neighboring Covers** (development builds, off by default): once the visible covers are ready and
+  input is idle, cache covers for one neighboring display page, following the last navigation direction
+  (initially forward). Requires caching and parallel downloads. It shares the two-worker limit, does not decode
+  or paint speculative covers, and never fetches a catalog page just to discover more cover links.
 - **Thumbnails on Navigation Entries** (on by default): show thumbnails for entries such as a series or an
   author, when the server provides them.
+
+Warming stops when the page, view or catalog changes, a dialog covers the browser, or the browser closes.
+Disabling prefetch, caching or parallel downloads also cancels it. Devices that cannot start background
+processes skip warming instead of fetching synchronously.
 
 Development builds retain up to 8 MiB of decoded covers per browser, separate from the disk cache.
 Images still used on screen or by a dialog are never evicted, so they can exceed that budget.

@@ -72,7 +72,9 @@ function OPDSCoverMenu:updateItems(select_number)
             self._last_mode_had_covers = true
             self._last_display_mode = "grid"
 
-            return OPDSGridMenu.updateItems(self, select_number)
+            local result = OPDSGridMenu.updateItems(self, select_number)
+            CoverLoader.schedulePrefetch(self)
+            return result
         else
             -- Use list view
             self:_debugLog("Using OPDSListMenu (list mode)")
@@ -98,7 +100,9 @@ function OPDSCoverMenu:updateItems(select_number)
             self._last_display_mode = "list"
 
             -- Call OPDSListMenu's updateItems directly
-            return OPDSListMenu.updateItems(self, select_number)
+            local result = OPDSListMenu.updateItems(self, select_number)
+            CoverLoader.schedulePrefetch(self)
+            return result
         end
     else
         -- Use standard Menu for items without covers
@@ -120,7 +124,9 @@ function OPDSCoverMenu:updateItems(select_number)
         self._last_display_mode = nil
 
         -- Call standard Menu's updateItems directly
-        return Menu.updateItems(self, select_number)
+        local result = Menu.updateItems(self, select_number)
+        CoverLoader.schedulePrefetch(self)
+        return result
     end
 end
 

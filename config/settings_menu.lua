@@ -8,6 +8,12 @@ local Version = require("opds_plus_version")
 
 local SettingsMenu = {}
 
+local function stopCoverPrefetch(plugin)
+	if plugin.opds_browser then
+		require("services.cover_loader").stopPrefetch(plugin.opds_browser)
+	end
+end
+
 -- One radio entry per catalog, plus "None", for choosing the catalog that opens on launch
 local function buildDefaultCatalogItems(plugin)
 	local function choose(server)
@@ -99,6 +105,7 @@ function SettingsMenu.create(plugin)
 							callback = function()
 								local current = plugin:getSetting("cover_cache_enabled") ~= false
 								plugin:saveSetting("cover_cache_enabled", not current)
+								stopCoverPrefetch(plugin)
 								UIManager:show(InfoMessage:new {
 									text = not current and
 										_("Cover cache enabled.\n\nPreviously downloaded covers can be reused.") or
@@ -115,11 +122,29 @@ function SettingsMenu.create(plugin)
 							callback = function()
 								local current = plugin:getSetting("cover_parallel_downloads") ~= false
 								plugin:saveSetting("cover_parallel_downloads", not current)
+								stopCoverPrefetch(plugin)
 								UIManager:show(InfoMessage:new {
 									text = not current and
 										_("Parallel cover downloads enabled.\n\nSeveral covers are downloaded at once.") or
 										_("Parallel cover downloads disabled.\n\nCovers are downloaded one at a time."),
 									timeout = 2,
+								})
+							end,
+						},
+						{
+							text = _("Prefetch Neighboring Covers"),
+							checked_func = function()
+								return plugin:getSetting("cover_prefetch_enabled") == true
+							end,
+							callback = function()
+								local current = plugin:getSetting("cover_prefetch_enabled") == true
+								plugin:saveSetting("cover_prefetch_enabled", not current)
+								stopCoverPrefetch(plugin)
+								UIManager:show(InfoMessage:new {
+									text = not current and
+										_("Neighboring cover prefetch enabled.\n\nWhile idle in a cover view, cache covers for one neighboring page. Requires Cover Cache and Parallel Cover Downloads.") or
+										_("Neighboring cover prefetch disabled."),
+									timeout = 3,
 								})
 							end,
 						},

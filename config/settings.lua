@@ -96,6 +96,9 @@ function Settings:initializeDefaults()
 	if self.data.cover_parallel_downloads == nil then
 		self.data.cover_parallel_downloads = true
 	end
+	if self.data.cover_prefetch_enabled == nil then
+		self.data.cover_prefetch_enabled = false
+	end
 	if self.data.navigation_thumbnails == nil then
 		self.data.navigation_thumbnails = true
 	end
