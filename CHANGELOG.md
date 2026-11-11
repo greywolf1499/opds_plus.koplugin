@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ### Fixed
 
+- **Series Descriptions**: Show a matching Calibre-style `SERIES:` metadata line only in the series field, not again in the description. Book details, download information and newly saved descriptions use the same cleanup. Keep rating/tags, prose, malformed or mismatched fields, and existing downloaded-book metadata unchanged.
 - **Shared Cover Workers**: Visible and prefetched covers share a two-worker limit rather than starting two workers per batch. If subprocesses are unavailable, speculative warming is skipped instead of falling back to blocking network requests.
 - **Decoded Cover Memory**: Keep an 8 MiB least-recently-used cover budget instead of retaining every visited page. Visible and dialog-borrowed images stay pinned, even when they exceed that budget. Release high-resolution dialog images and widget-scaled copies when their users close or are rebuilt.
 - **Cover Loading and Keys**: Yield between cover decodes and widget updates, including cache hits and repeated cover URLs. Key and touch activity postpones expensive cover work without killing and restarting downloads. Thanks to @iav for the input-deferral work behind issue #117.

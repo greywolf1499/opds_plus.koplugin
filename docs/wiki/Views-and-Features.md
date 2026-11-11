@@ -31,6 +31,11 @@ Tapping a book opens its details: cover, authors, series and number, publisher, 
 description and the formats you can download, when the catalog provides them. From there you can download a
 format, choose the folder, change the file name, or view the cover.
 
+Development builds remove a leading Calibre-style `SERIES:` metadata line from the description only when
+its name and number match the series field. Rating/tags and the story text remain; a series mentioned in
+prose, later in the description, or with different metadata is kept. The same text is used in download
+information and when saving a new description. Existing downloaded-book descriptions are not rewritten.
+
 - **Save Description with Downloads** (on by default) saves the catalog's description with the file, so it
   shows in KOReader's **Book information**. A description the book already has, or one you edited, is never
   replaced. To remove a saved one, long-press it in **Book information** and tap **Reset custom**.

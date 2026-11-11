@@ -179,6 +179,7 @@ function DownloadDialogBuilder.buildDownloadDialog(browser, item, filename, crea
 
 	-- Get cover link (prefer full image over thumbnail for viewing)
 	local cover_link = item.image or item.thumbnail
+	local description = CatalogUtils.getDescription(item)
 
 	table.insert(buttons, {
 		{
@@ -192,12 +193,12 @@ function DownloadDialogBuilder.buildDownloadDialog(browser, item, filename, crea
 		},
 		{
 			text = _("Book information"),
-			enabled = type(item.content) == "string",
+			enabled = description:find("%S") ~= nil,
 			callback = function()
 				UIManager:show(TextViewer:new {
 					title = item.text,
 					title_multilines = true,
-					text = util.htmlToPlainTextIfHtml(item.content),
+					text = description,
 					text_type = "book_info",
 				})
 			end,

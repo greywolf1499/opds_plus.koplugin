@@ -156,6 +156,19 @@ the storage root, not in a nested `settings` table. Profiling caught the old see
 blocking updater connectivity probe during cold-start measurements; those mixed measurements are not used
 for the catalog comparison.
 
+### Series descriptions
+
+```bash
+tools/e2e/catalog/run.sh series,descsave
+```
+
+`series` checks the real book-details and download-information widgets: matching Calibre metadata appears
+once, rating/tags and prose remain, separate series elements also deduplicate, and a metadata-only body uses
+the no-description message. Later `SERIES:` mentions remain unchanged. `descsave` adds a matching metadata
+prefix to a book with a valid EPUB download and checks the actual saved custom description has no duplicate,
+while embedded descriptions and reader edits remain untouched. Unit cases also cover mismatched indices,
+malformed markers, escaped names, break variants and preserving the raw content/summary source.
+
 ### Screenshots
 
 ```bash

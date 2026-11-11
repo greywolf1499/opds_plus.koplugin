@@ -2782,6 +2782,9 @@ local function descsave_steps()
         function()
             local books = count(b)
             c.check("feed.lists_the_books", books == 5, books)
+            local item = assert(find_item(b, "Desc Book A"))
+            item.series, item.series_index = "Description Series", "2"
+            item.content = "SERIES: Description Series [2]<br />" .. item.content
         end,
         -- A: html description, the book has none of its own: it is saved as plain text next to the real properties
         download("A", "Desc Book A", single_format, function(file)
@@ -2792,6 +2795,7 @@ local function descsave_steps()
             emit("descsave.A.saved_text", text)
             c.check("A.description_is_plain_text", text:find("bold", 1, true) and text:find("Second paragraph.", 1, true)
                 and not text:find("[<>&]"), text)
+            c.check("A.description_has_no_duplicate_series", not text:find("SERIES:", 1, true))
             c.check("A.only_the_description_is_custom", count_keys(meta.custom) == 1, count_keys(meta.custom))
             c.check("A.original_title_kept", meta.original.title == TITLE, meta.original.title)
             c.check("A.original_authors_kept", meta.original.authors == AUTHOR, meta.original.authors)
@@ -3166,9 +3170,37 @@ local function series_steps()
             c.check("dialog.opens", dialog ~= nil)
             c.check("dialog.lists_every_author", dialog and shows_text(dialog, "Robert Louis Stevenson, Lloyd Osbourne"))
             c.check("dialog.has_a_series_row", dialog and shows_text(dialog, "Series:") and shows_text(dialog, "The Saga #3"))
+            c.check("dialog.description_has_no_duplicate_series", dialog and not shows_text(dialog, "SERIES:"))
+            c.check("dialog.keeps_other_fields_and_prose", dialog and shows_text(dialog, "RATING:")
+                and shows_text(dialog, "TAGS: Fantasy, Adventure") and shows_text(dialog, "A tale of boxes."))
         end,
         function()
             shot("series_dialog")
+            close_dialog()
+        end,
+        function()
+            local item = find_by_download(931)
+            b:showDownloads(item)
+            c.check("download_dialog.opens_information", press_button(b.download_dialog, "Book information"))
+            local viewer = UIManager:getTopmostVisibleWidget()
+            c.check("download_dialog.uses_the_same_description", viewer
+                and shows_text(viewer, "A tale of boxes.") and not shows_text(viewer, "SERIES:"))
+            UIManager:close(viewer)
+            UIManager:close(b.download_dialog)
+            b.download_dialog = nil
+        end,
+        function()
+            local dialog = open_dialog(933)
+            c.check("dialog.separate_metadata_also_deduplicates", dialog and shows_text(dialog, "Dune Chronicles #2")
+                and shows_text(dialog, "Spice.") and not shows_text(dialog, "SERIES:"))
+            close_dialog()
+            dialog = open_dialog(932)
+            c.check("dialog.keeps_series_mentions_in_prose", dialog and shows_text(dialog, "SERIES: Not Here")
+                and shows_text(dialog, "SERIES: Neither Here"))
+            close_dialog()
+            dialog = open_dialog(939)
+            c.check("dialog.metadata_only_has_no_description", dialog and shows_text(dialog, "Tom & Jerry #2.5")
+                and shows_text(dialog, "No description available.") and not shows_text(dialog, "SERIES:"))
             close_dialog()
         end,
         -- two books with one title are told apart by their series
