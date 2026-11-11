@@ -14,7 +14,18 @@ The update is downloaded from GitHub, its checksum is compared with the one publ
 every file in it is checked before anything is changed. The installed version is then swapped for the new one,
 and kept next to it as `opds_plus.koplugin.bak`.
 
-![An update is available](https://raw.githubusercontent.com/greywolf1499/opds_plus.koplugin/main/.github/screenshots/update_available.png)
+### Release notes in development builds
+
+Notes are formatted with headings, lists and emphasis. Current KOReader uses its native Markdown viewer;
+KOReader v2025.10 uses a compatibility viewer built from its existing Markdown converter and HTML scroller.
+The compatibility viewer keeps the general text viewer's font size and text style.
+Use the page keys or touch scrolling to read long notes. **Install**, **Skip this version** and **Later**
+are unchanged. Links and remote images in notes are not opened or fetched.
+
+If formatting fails, **View as plain text** opens the complete original notes with the same update controls.
+Cancelling that prompt does not install or skip the release.
+
+![Formatted notes in a development build](https://raw.githubusercontent.com/greywolf1499/opds_plus.koplugin/main/.github/screenshots/update_available.png)
 
 ## Weekly check
 
@@ -53,6 +64,7 @@ describes how the updater checks connections and archives.
 | GitHub answered with an error | Try again later. GitHub limits how often a device may ask. |
 | The plugins folder can't be written to / not enough free space | Free some space, or install by hand. |
 | This KOReader can't open zip archives | Install the update by hand from the release page. |
+| The release notes could not be formatted | Choose **View as plain text** to read the original notes and keep the update controls. |
 | The downloaded update did not match its checksum | Nothing was changed. Try again; if it keeps failing, install by hand. |
 
 In every case the installed version is kept.

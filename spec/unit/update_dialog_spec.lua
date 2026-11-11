@@ -58,6 +58,7 @@ describe("UpdateDialog", function()
 	before_each(function()
 		helper.reset()
 		ui = ui_stub.new()
+		ui.TextViewer.html_text_formats = { md = true }
 		restarts = {}
 		function ui.UIManager:askForRestart(message)
 			restarts[#restarts + 1] = message
@@ -79,6 +80,7 @@ describe("UpdateDialog", function()
 			["ui/widget/notification"] = ui.InfoMessage,
 			["socketutil"] = socketutil,
 			["datastorage"] = require("support.datastorage").new(helper.tmpdir()),
+			["apps/filemanager/filemanagerconverter"] = { mdToHtml = function() return "" end },
 		}
 		for name, value in pairs(ui.stubs) do
 			stubs[name] = value
@@ -172,6 +174,7 @@ describe("UpdateDialog", function()
 			local viewer = ui:last()
 			assert.equal("TextViewer", viewer.kind)
 			assert.equal("Fixes", viewer.text)
+			assert.equal("md", viewer.text_format)
 			ui:press(viewer, "Install")
 			assert.same({ RELEASE, "abc", 42 }, updater:called("apply")[1].args)
 			assert.is_nil(plugin.settings.ota_skipped_version)
@@ -196,6 +199,46 @@ describe("UpdateDialog", function()
 			ui:press(ui:last(), "Skip this version")
 			assert.equal("1.4.0", plugin.settings.ota_skipped_version)
 			assert.equal(0, #updater:called("fetch"))
+		end)
+
+		it("offers the original text after a renderer failure without installing or skipping", function()
+			local new = ui.TextViewer.new
+			ui.TextViewer.new = function(self, options)
+				if options.text_format == "md" then error("injected renderer failure") end
+				return new(self, options)
+			end
+			UpdateDialog.showRelease(plugin, updater, RELEASE)
+			local confirm = ui:last()
+			assert.equal("ConfirmBox", confirm.kind)
+			assert.matches("could not be formatted", confirm.text)
+			assert.equal("View as plain text", confirm.ok_text)
+			assert.is_nil(plugin.settings.ota_skipped_version)
+			assert.equal(0, #updater:called("fetch"))
+
+			confirm.ok_callback()
+			local viewer = ui:last()
+			assert.equal(RELEASE.notes, viewer.text)
+			assert.is_true(viewer.force_txt)
+			ui:press(viewer, "Skip this version")
+			assert.equal(RELEASE.version, plugin.settings.ota_skipped_version)
+			assert.equal(0, #updater:called("fetch"))
+		end)
+
+		it("keeps an explicit message when the release has no notes", function()
+			UpdateDialog.showRelease(plugin, updater, { version = RELEASE.version, notes = "" })
+			assert.equal("No release notes.", ui:last().text)
+			ui:press(ui:last(), "Later")
+			assert.is_nil(plugin.settings.ota_skipped_version)
+			assert.equal(0, #updater:called("fetch"))
+		end)
+
+		it("explains an empty compatibility conversion instead of showing blank notes", function()
+			ui.TextViewer.html_text_formats = nil
+			UpdateDialog.showRelease(plugin, updater, RELEASE)
+			assert.matches("could not be formatted", ui:last().text)
+			ui:last().ok_callback()
+			assert.equal(RELEASE.notes, ui:last().text)
+			assert.is_true(ui:last().force_txt)
 		end)
 	end)
 

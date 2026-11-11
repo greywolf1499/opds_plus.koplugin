@@ -18,6 +18,7 @@ local _ = require("gettext")
 local T = require("ffi/util").template
 local Constants = require("models.constants")
 local OtaUpdater = require("services.ota_updater")
+local ReleaseNotes = require("ui.dialogs.release_notes")
 
 local UpdateDialog = {}
 
@@ -165,7 +166,7 @@ end
 --- Shows a release: its notes, and Install / Skip this version / Later
 function UpdateDialog.showRelease(plugin, updater, release)
 	local viewer
-	viewer = TextViewer:new({
+	local options = {
 		title = T(_("OPDS Plus %1 is available"), release.version),
 		text = release.notes ~= "" and release.notes or _("No release notes."),
 		buttons_table = {
@@ -192,8 +193,23 @@ function UpdateDialog.showRelease(plugin, updater, release)
 				},
 			},
 		},
-	})
-	UIManager:show(viewer)
+	}
+	local ok, rendered = pcall(ReleaseNotes.new, options)
+	if ok then
+		viewer = rendered
+		UIManager:show(viewer)
+	else
+		logger.warn("OPDS+ OTA: release notes rendering failed", rendered)
+		UIManager:show(ConfirmBox:new {
+			text = _("The release notes could not be formatted. View the original notes as plain text?"),
+			ok_text = _("View as plain text"),
+			ok_callback = function()
+				options.text_format, options.force_txt = nil, true
+				viewer = TextViewer:new(options)
+				UIManager:show(viewer)
+			end,
+		})
+	end
 end
 
 --- "Check for updates": asks to go online if needed, always gets a fresh answer, and shows a skipped

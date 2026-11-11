@@ -192,6 +192,20 @@ tools/e2e/ota/real_dryrun.sh      # against the real latest release
 The updater moves and deletes plugin directories, so these kits install the built release archive as a plain
 copy; the repository is never linked into their `KO_HOME`.
 
+The mock run also exercises formatted release notes with the native Markdown viewer and the compatibility
+path (native Markdown support disabled for the test). It extracts actual rendered text, checks the end of long
+notes, sends page/D-pad/Back key events, and verifies all three update actions. Injected rendering failures
+must offer the complete original text, not an empty viewer. The request log must contain no note-image or
+link requests. `OTA_E2E_KEEP=1` keeps native, compatibility and plain-text screenshots in the printed work dir.
+For the small-screen check:
+
+```bash
+EMULATE_READER_W=600 EMULATE_READER_H=800 EMULATE_READER_DPI=167 tools/e2e/ota/run.sh
+```
+
+The compatibility path is run on the installed emulator; its production APIs are also checked against
+v2025.10 source. This does not claim a physical-device run or an entire v2025.10 binary/runtime test.
+
 ## opds
 
 ```bash
