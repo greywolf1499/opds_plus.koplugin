@@ -34,8 +34,10 @@ a Kavita progress lookup. A local rewind is respected; the largest page number d
 The explicit **Resume ... N** button still selects the position named by the catalog.
 
 **Stream from page** validates your choice before fetching any image. Positions are one-based in the
-viewer and PSE metadata; page-image URLs are zero-based. Resume positions beyond a changed page count
-are clamped to its last page. Invalid counts are refused.
+viewer and standard PSE metadata; page-image URLs are zero-based. Kavita instead publishes its
+zero-based cursor in `lastRead`, so recognized Kavita links are normalized before displaying the
+Resume button or opening a page. A completed chapter still resumes at its final page. Resume positions
+beyond a changed page count are clamped to its last page. Invalid counts are refused.
 
 Local progress changes only after a successfully loaded page is painted, not on speculative requests or
 failed/invalid images. It is saved with the plugin settings on viewer close or suspend. The latest

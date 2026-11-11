@@ -4973,6 +4973,37 @@ local function streamresume_steps()
             c.check("decode_failure_is_visible", window_has_text("Reading progress was not changed"))
             close_window_with_text("Reading progress was not changed")
             UIManager:close(viewer)
+            local catalog = require("core.parser"):parse([[
+                <feed xmlns="http://www.w3.org/2005/Atom" xmlns:pse="http://vaemendis.net/opds-pse/ns">
+                  <entry><id>urn:fixture:kavita</id><title>Kavita cursor fixture</title>
+                    <link rel="http://vaemendis.net/opds-pse/stream" type="image/png"
+                      href="image?chapterId=42&amp;pageNumber={pageNumber}" pse:count="20" pse:lastRead="3"/>
+                  </entry>
+                </feed>]])
+            b.root_catalog_url = BASE .. "/stream-fixture/kavita/api/opds/secret/"
+            item = b:genItemTableFromCatalog(catalog, b.root_catalog_url)[1]
+            c.check("kavita_normalizes_relative_feed_cursor", item.acquisitions[1].last_read == 4)
+            b:showDownloads(item)
+        end,
+        function()
+            local before = #seen
+            c.check("kavita_default_action", press_button(b.download_dialog, "Page stream"))
+            viewer = stream_viewer()
+            c.check("kavita_requests_matching_read_only_image", viewer._images_list_cur == 4
+                and #seen == before + 1 and seen[#seen] == BASE
+                    .. "/stream-fixture/kavita/api/Reader/image?chapterId=42&page=3&apiKey=secret&extractPdf=true")
+        end,
+        function()
+            UIManager:close(viewer)
+            b:showDownloads(item)
+        end,
+        function()
+            c.check("kavita_resume_label_matches_position", press_button(b.download_dialog, "Resume stream from page 4"))
+            viewer = stream_viewer()
+            c.check("kavita_explicit_resume_is_not_converted_twice", viewer._images_list_cur == 4)
+        end,
+        function()
+            UIManager:close(viewer)
             require("socket.http").request = real_request
             require("ui/trapper").dismissableRunInSubprocess = real_run
             p:saveSetting("stream_progress", previous)

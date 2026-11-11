@@ -189,6 +189,8 @@ selection, persistence, and unchanged progress after HTTP/decode failures. `cust
 the recognized Kavita stream fetches only its resumed image through the read-only reader endpoint while
 retaining scoped headers. These two fixture scenarios execute intercepted requests in-process so their
 capture assertions remain visible to the driver; they still use actual KOReader widgets and codecs.
+`streamresume` also parses a relative Kavita link through real luxl and verifies that its zero-based
+feed cursor becomes the same one-based page in the Resume label, default action and explicit action.
 No real account's progress is written.
 
 `streamloading` uses real subprocesses and a loopback image delayed by 1.2 seconds. With the synchronous
@@ -207,6 +209,9 @@ Kavita's image-read side effect and reader API were verified in
 and [ReaderController](https://github.com/Kareadita/Kavita/blob/a9cdf1cad9ae14f88a295c3a6fc7993f9823d59d/Kavita.Server/Controllers/ReaderController.cs#L91),
 and the read-only endpoint also exists in v0.8.8. In the inspected current source, `saveProgress=false`
 does not reliably suppress the OPDS endpoint's write, so this is not used as an opt-out.
+Kavita's feed cursor comes directly from `chapter.PagesRead` in
+[OpdsService](https://github.com/Kareadita/Kavita/blob/a9cdf1cad9ae14f88a295c3a6fc7993f9823d59d/Kavita.Services/OpdsService.cs#L1277);
+unlike standard PSE positions, it is zero-based until completion uses the page count.
 
 ### Screenshots
 
