@@ -54,7 +54,7 @@ describe("HttpClient", function()
 		end)
 
 		it("rejects URLs that are not http or https without sending anything", function()
-			for _, bad in ipairs({ "ftp://example.org/feed", "file:///etc/passwd", "example.org/feed" }) do
+			for _, bad in ipairs({ "", "ftp://example.org/feed", "file:///etc/passwd", "example.org/feed" }) do
 				local result = HttpClient.fetch(bad)
 
 				assert.is_true(result:isErr())

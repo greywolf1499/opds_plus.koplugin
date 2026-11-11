@@ -176,6 +176,14 @@ describe("Kavita page streaming", function()
 	end)
 
 	describe("streamPages", function()
+		it("reports an empty stream URL without opening the viewer or making a request", function()
+			OPDSPSE:streamPages("", 30, false)
+
+			assert.is_nil(viewer)
+			assert.same({}, http.requests)
+			assert.same({ "Invalid stream URL." }, ui:texts())
+		end)
+
 		-- Opens the viewer with no progress known, and gives the pages it was handed
 		local function open(last_page_read)
 			http:on(AUTH, { code = 401 })

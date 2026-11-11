@@ -96,6 +96,12 @@ function OPDSPSE:getLastPage(remote_url, username, password)
 end
 
 function OPDSPSE:streamPages(remote_url, count, continue, username, password, last_page_read)
+    local stream_address = type(remote_url) == "string" and url.parse(remote_url)
+    if not stream_address or (stream_address.scheme ~= "http" and stream_address.scheme ~= "https") then
+        logger.warn("OPDSPSE:streamPages: invalid stream URL")
+        UIManager:show(InfoMessage:new { text = _("Invalid stream URL.") })
+        return
+    end
     -- attempt to pull chapter progress from Kavita if user pressed
     -- "Page Stream" button.
     -- We have to pull the progress here, otherwise the creation of the page_table

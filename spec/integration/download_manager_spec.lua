@@ -348,6 +348,17 @@ describe("DownloadManager", function()
 	end)
 
 	describe("downloadFile", function()
+		it("reports an empty URL before opening the destination or making a request", function()
+			local target = dir .. "/untouched.epub"
+			fs.write(target, "keep this file")
+
+			assert.is_false(DownloadManager.downloadFile(new_browser(), target, ""))
+
+			assert.equals("keep this file", fs.read(target))
+			assert.same({}, http.requests)
+			assert.same({ "Invalid download URL." }, ui:texts())
+		end)
+
 		local browser, target
 
 		before_each(function()

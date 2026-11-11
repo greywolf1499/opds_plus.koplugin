@@ -540,7 +540,10 @@ function OtaUpdater:validateStaged(release)
 			return nil, E.VALIDATION_FAILED, err
 		end
 	end
-	local chunk = loadfile(self.staging_dir .. "/opds_plus_version.lua")
+	local chunk, err = loadfile(self.staging_dir .. "/opds_plus_version.lua")
+	if not chunk then
+		return nil, E.VALIDATION_FAILED, err
+	end
 	setfenv(chunk, {})
 	local ok, staged = pcall(chunk)
 	if not ok or type(staged) ~= "table" or Semver.compare(staged.VERSION, release.version) ~= 0 then
