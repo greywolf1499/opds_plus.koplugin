@@ -25,6 +25,9 @@ own headers. Add them in the catalog's **Edit** dialog under **Headers**: see
 - **No covers at all**: some catalogs don't provide cover images. If a catalog that has covers shows none, turn
   off **Settings → Cover Settings → Parallel Cover Downloads** and open the page again.
 - **Old covers**: **Settings → Cover Settings → Advanced → Clear Cover Cache**.
+- **Covers reload after changing a login or headers** (development builds): caches are separated by
+  authentication context. Old unscoped cover entries are ignored; normal cache limits still apply.
+  Header changes can also invalidate other catalogs' entries because redirects may use those headers.
 - **Slow keys while covers arrive**: keep **Parallel Cover Downloads** enabled if your device supports it.
   Development builds yield between cover updates and pause new decoding briefly during key/touch activity;
   downloads already in progress continue. A single slow decode or screen refresh still takes time.

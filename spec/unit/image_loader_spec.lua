@@ -4,7 +4,19 @@ local ui_stub = require("support.ui")
 describe("ImageLoader scheduling", function()
 	local ImageLoader, ui, clock, directory
 	local children, paths, cached, writes, requests, kills, next_pid
-	local can_fork, cache_ok, errors, fetch_content
+	local can_fork, cache_ok, errors, fetch_content, cache_stores, cache_key
+
+	local function use_http()
+		package.loaded["services.http_client"] = nil
+		local http = require("support.fake_http").new()
+		local client = helper.load("services.http_client", {
+			["socket.http"] = http, socketutil = require("support.socketutil").new(),
+			["ffi/sha2"] = require("support.sha256_stub"),
+		})
+		fetch_content = client.getUrlContent
+		cache_key = client.cacheKey
+		return http, client
+	end
 
 	local function step()
 		local task = table.remove(ui.scheduled, 1)
@@ -32,6 +44,8 @@ describe("ImageLoader scheduling", function()
 		ui = ui_stub.new()
 		clock, next_pid = 0, 0
 		can_fork, cache_ok, errors = true, true, {}
+		cache_stores = false
+		cache_key = function(url) return url end
 		children, paths, cached, writes, requests, kills = {}, {}, {}, {}, {}, {}
 		fetch_content = function(url)
 			requests[#requests + 1] = url
@@ -81,11 +95,13 @@ describe("ImageLoader scheduling", function()
 			},
 			["services.http_client"] = {
 				getUrlContent = function(...) return fetch_content(...) end,
+				cacheKey = function(...) return cache_key(...) end,
 			},
 			["services.cover_cache"] = {
 				get = function(url) return cached[url] end,
 				put = function(url, content)
 					writes[#writes + 1] = { url, content }
+					if cache_stores and cache_ok then cached[url] = { content = content } end
 					return cache_ok
 				end,
 			},
@@ -99,12 +115,7 @@ describe("ImageLoader scheduling", function()
 	after_each(helper.reset)
 
 	it("scopes mixed-origin covers in workers, serial loads, fork fallback and prefetch", function()
-		package.loaded["services.http_client"] = nil
-		local http = require("support.fake_http").new()
-		local client = helper.load("services.http_client", {
-			["socket.http"] = http, socketutil = require("support.socketutil").new(),
-		})
-		fetch_content = client.getUrlContent
+		local http = use_http()
 		http:on(function() return true end, { code = 200, body = "image" })
 		for _, mode in ipairs({ "worker", "serial", "fallback", "prefetch" }) do
 			can_fork = mode ~= "fallback"
@@ -128,6 +139,104 @@ describe("ImageLoader scheduling", function()
 			assert.is_nil(http.requests[#http.requests].user, mode)
 			assert.is_nil(http.requests[#http.requests].password, mode)
 		end
+	end)
+
+	it("does not reuse a private cached cover for another account or an unauthenticated request", function()
+		local http = use_http()
+		local url = "https://catalog.example/cover"
+		local delivered = {}
+		cache_stores = true
+		cached[url] = { content = "unscoped legacy cover" }
+		http:on(url, function(request)
+			if not request.user or request.password ~= "secret" then return { code = 401 } end
+			return { code = 200, body = "private-" .. request.user }
+		end)
+		local function load(username, origin, password)
+			local batch = ImageLoader:loadImages({ url }, function(_url, content)
+				delivered[#delivered + 1] = content
+			end, username, password or "secret", true, nil, nil, false, origin)
+			finish(batch)
+		end
+		load("ann", "https://catalog.example/opds")
+		load("bob", "https://catalog.example/opds")
+		assert.same({ "private-ann", "private-bob" }, delivered)
+		load("ann", "https://foreign.example/opds")
+		assert.equals(3, #http.requests)
+		assert.same({ "private-ann", "private-bob" }, delivered)
+		load("ann", "https://catalog.example/opds", "pw")
+		assert.equals(4, #http.requests)
+		assert.same({ "private-ann", "private-bob" }, delivered)
+		load("ann", "https://catalog.example/opds")
+		assert.equals(4, #http.requests)
+		assert.equals("private-ann", delivered[3])
+	end)
+
+	it("isolates redirect headers and commits a worker result under its original cache identity", function()
+		local http, client = use_http()
+		local url, other = "https://catalog.example/cover", "https://cdn.example/cover"
+		local header = { name = "Authorization", value = "Bearer first" }
+		local delivered = {}
+		cache_stores = true
+		client.setCatalogs({ { url = other, headers = { header } } })
+		http:on(url, { code = 302, headers = { Location = other } })
+		http:on(other, function(request)
+			return { code = 200, body = request.headers.Authorization }
+		end)
+		local function load()
+			return ImageLoader:loadImages({ url }, function(_url, content)
+				delivered[#delivered + 1] = content
+			end)
+		end
+		local first = load()
+		step()
+		complete(1)
+		header.value = "Bearer second"
+		finish(first)
+		local second = load()
+		step()
+		assert.is_not_nil(children[2], "changed redirect credentials must not hit the first worker's cache")
+		complete(2)
+		finish(second)
+		assert.same({ "Bearer first", "Bearer second" }, delivered)
+		assert.equals(4, #http.requests)
+		header.value = "Bearer first"
+		finish(load())
+		assert.equals("Bearer first", delivered[3])
+		assert.equals(4, #http.requests)
+	end)
+
+	it("refreshes pending cache context after waiting for a worker slot", function()
+		local http, client = use_http()
+		local url, other = "https://catalog.example/cover", "https://cdn.example/cover"
+		local header = { name = "Authorization", value = "Bearer first" }
+		client.setCatalogs({ { url = other, headers = { header } } })
+		cached[client.cacheKey(url)] = { content = "old-private", stale = true }
+		http:on(url, { code = 302, headers = { Location = other } })
+		http:on(other, { code = 403 })
+		http:on(function() return true end, { code = 200, body = "busy" })
+		local _, halt_busy = ImageLoader:loadImages({
+			"https://catalog.example/busy1", "https://catalog.example/busy2",
+		}, nil, nil, nil, false)
+		step()
+		step()
+		local delivered = {}
+		local pending = ImageLoader:loadImages({ url }, function(_url, content)
+			delivered[#delivered + 1] = content
+		end)
+		step()
+		step()
+		assert.equals(2, next_pid)
+		header.value = "Bearer second"
+		complete(1)
+		for _ = 1, 20 do
+			if children[3] then break end
+			step()
+		end
+		assert.is_not_nil(children[3])
+		complete(3)
+		finish(pending)
+		halt_busy()
+		assert.same({}, delivered, "a failed request must not fall back to another authentication context")
 	end)
 
 	it("shares one delivery slot between completed children and cache hits", function()

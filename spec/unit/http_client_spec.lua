@@ -13,10 +13,19 @@ describe("HttpClient", function()
 		HttpClient = helper.load("services.http_client", {
 			["socket.http"] = http,
 			socketutil = socketutil,
+			["ffi/sha2"] = require("support.sha256_stub"),
 		})
 	end)
 
 	after_each(helper.reset)
+
+	it("makes opaque cache identities while preserving canonical Basic origins", function()
+		local key = HttpClient.cacheKey(url, "reader", "secret")
+		assert.matches("^request%-v2:%x+$", key)
+		assert.equals(key, HttpClient.cacheKey(url, "reader", "secret", "https://EXAMPLE.org:443/other"))
+		assert.is_not.equals(key, HttpClient.cacheKey(url, "reader", "secret", false))
+		assert.is_not.equals(HttpClient.cacheKey(url), HttpClient.cacheKey(url, ""))
+	end)
 
 	describe("fetch", function()
 		it("returns the body of a successful response", function()

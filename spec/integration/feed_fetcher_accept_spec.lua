@@ -25,6 +25,7 @@ describe("FeedFetcher content negotiation", function()
 			socketutil = socketutil_stub.new(),
 			cache = Cache,
 			["document/documentregistry"] = registry_stub.new(),
+			["ffi/sha2"] = require("support.sha256_stub"),
 		}
 		for name, stand_in in pairs(ui.stubs) do
 			stubs[name] = stand_in
@@ -148,7 +149,7 @@ describe("FeedFetcher content negotiation", function()
 
 			assert.equals("Library", catalog.feed.title)
 			assert.equals(URL, http.requests[1].url)
-			assert.is_table(Cache.instances[1].items["opds|catalog|" .. URL])
+			assert.is_table(Cache.instances[1].items["opds|catalog|" .. HttpClient.cacheKey(URL)])
 		end)
 	end)
 
