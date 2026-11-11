@@ -158,26 +158,44 @@ end
 local SERIES_LINE_LIMIT = 3
 
 --- Series name and index from the "SERIES: Name [3]" line of the content (Calibre, Calibre-Web)
+-- Extra byte offsets identify a complete metadata line safe to remove from a description.
 local function seriesFromContent(markup)
 	if type(markup) ~= "string" then
 		return nil
 	end
 
-	local lines_read = 0
-	for line in (markup .. "<br />"):gmatch("(.-)<br%s*/?>") do
+	local lines_read, metadata_prefix = 0, true
+	for line_start, line, after_break in (markup .. "<br />"):gmatch("()(.-)<br%s*/?>()") do
 		lines_read = lines_read + 1
 		if lines_read > SERIES_LINE_LIMIT then
 			break
 		end
 
-		local text = line:gsub("^%s*<div[^>]*>", "")
-		local series = trimmed(text:match("^%s*SERIES:([^<]*)"))
-		if series then
+		local wrapper = line:match("^%s*<div[^>]*>") or ""
+		local text = line:sub(#wrapper + 1)
+		local first, last, value = text:find("^%s*SERIES:([^<]*)")
+		local series = trimmed(value)
+		if series and first and last then
 			local name, index = series:match("^(.-)%s*%[(%d[%d%.]*)%]$")
 			if name then
-				return trimmed(name), index
+				name = trimmed(name)
+			else
+				name = series
 			end
-			return series
+			local remove_first, remove_last
+			local tail = text:sub(last + 1)
+			-- Only a complete metadata line is safe to remove, never prose around an embedded marker.
+			if metadata_prefix and name and not series:find("[\r\n]") and (not index or tonumber(index))
+				and not tail:gsub("</[%w:_%-]+%s*>", ""):find("%S") then
+				remove_first = line_start + #wrapper + first - 1
+				remove_last = tail == "" and math.min(after_break - 1, #markup)
+					or line_start + #wrapper + last - 1
+			end
+			return name, index, remove_first, remove_last
+		end
+		local field = trimmed(text)
+		if field and (field:find("[\r\n]") or (not field:match("^RATING:") and not field:match("^TAGS:"))) then
+			metadata_prefix = false
 		end
 	end
 	return nil
@@ -268,7 +286,14 @@ function CatalogUtils.getDescription(entry)
 	if type(entry.content) ~= "string" then
 		return ""
 	end
-	return util.htmlToPlainTextIfHtml(entry.content)
+	local content = entry.content
+	local name, index, first, last = seriesFromContent(content)
+	if name and first and last and type(entry.series) == "string"
+		and util.htmlEntitiesToUtf8(name) == util.htmlEntitiesToUtf8(entry.series)
+		and normalizeSeriesIndex(index) == normalizeSeriesIndex(entry.series_index) then
+		content = content:sub(1, first - 1) .. content:sub(last + 1)
+	end
+	return util.htmlToPlainTextIfHtml(content)
 end
 
 return CatalogUtils

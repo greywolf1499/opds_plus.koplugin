@@ -556,5 +556,51 @@ describe("CatalogUtils", function()
 		it("turns HTML that was escaped once more into plain text", function()
 			assert.equals("Hi", CatalogUtils.getDescription({ content = "&lt;p&gt;Hi&lt;/p&gt;" }))
 		end)
+
+		it("removes the matching metadata line without changing the source or surrounding fields", function()
+			local content = '<div xmlns="http://www.w3.org/1999/xhtml">RATING: ****<br />TAGS: Sci-Fi'
+				.. "<br />SERIES: Dune [3.00]<br /><p>Arrakis &amp; <em>spice</em>.</p></div>"
+			local entry = { content = content, series = "Dune", series_index = "3" }
+			assert.equals("RATING: ****\nTAGS: Sci-Fi\n\tArrakis & spice.", CatalogUtils.getDescription(entry))
+			assert.equals(content, entry.content)
+		end)
+
+		it("handles the recognized break forms, escaped names and metadata-only descriptions", function()
+			for _, br in ipairs({ "<br>", "<br/>", "<br />" }) do
+				assert.equals("A cat and a mouse.", CatalogUtils.getDescription({
+					content = "<div>SERIES: Tom &amp; Jerry [2.50]" .. br .. "A cat and a mouse.</div>",
+					series = "Tom & Jerry", series_index = "2.5",
+				}))
+			end
+			assert.equals("", CatalogUtils.getDescription({ content = "SERIES: Dune", series = "Dune" }))
+		end)
+
+		it("keeps mismatched, undisplayed and malformed series metadata", function()
+			for _, entry in ipairs({
+				{ content = "SERIES: Dune [3]", series = "Other", series_index = "3" },
+				{ content = "SERIES: Dune [3]", series = "Dune", series_index = "4" },
+				{ content = "SERIES: Dune [3]", series = "Dune" },
+				{ content = "SERIES: Dune [3]" },
+				{ content = "SERIES: Dune [3..5]", series = "Dune", series_index = "3..5" },
+				{ content = "SERIES: [3]", series = "Dune", series_index = "3" },
+			}) do
+				assert.equals(entry.content, CatalogUtils.getDescription(entry))
+			end
+		end)
+
+		it("does not mistake prose or later fields for a metadata prefix", function()
+			for _, content in ipairs({
+				"A story about SERIES: Dune [3]",
+				"A novel.<br />SERIES: Dune [3]",
+				"RATING: ****\nA novel.<br />SERIES: Dune [3]",
+				"RATING: ****<br />TAGS: Sci-Fi<br />Notes<br />SERIES: Dune [3]",
+				"SERIES: Dune [3]<em> is the topic of this essay.</em>",
+				"SERIES: Dune [3]\nThe story must not disappear.",
+			}) do
+				assert.equals(require("util").htmlToPlainTextIfHtml(content), CatalogUtils.getDescription({
+					content = content, series = "Dune", series_index = "3",
+				}))
+			end
+		end)
 	end)
 end)

@@ -165,6 +165,10 @@ A plugin folder that is a link, or has a `.git` folder in it (Method 2), is a de
 3. Tap a book to view details and download options
 4. Downloaded books are saved to your configured download directory
 
+Development builds also omit a duplicate leading Calibre-style `SERIES:` line from descriptions when its
+name and number match the book's series field. Other metadata and prose stay intact; descriptions already
+saved with downloaded books are not rewritten.
+
 #### Keyboard and D-pad Navigation (New in 1.3.0)
 On devices with hardware keys, you can browse without the touchscreen:
 - **D-pad**: moves the focus from item to item (cell by cell in Grid View). An underline shows where it is

@@ -270,6 +270,11 @@ describe("NavigationHandler.genItemTableFromCatalog", function()
 			assert.equals("4", items[4].series_index)
 		end)
 
+		it("keeps the mapped summary source while presenting only its description text", function()
+			assert.equals("Arrakis, again.", require("utils.catalog_utils").getDescription(items[4]))
+			assert.equals("SERIES: Dune [4]<br />Arrakis, again.", items[4].content)
+		end)
+
 		it("leaves a standalone book without a series", function()
 			assert.is_nil(items[5].series)
 			assert.is_nil(items[5].series_index)

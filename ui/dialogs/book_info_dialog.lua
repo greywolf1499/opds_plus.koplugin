@@ -395,10 +395,8 @@ function BookInfoDialog.build(browser, item)
 	end
 
 	-- Description section
-	local description_text = _("No description available.")
-	if item.content and type(item.content) == "string" then
-		description_text = util.htmlToPlainTextIfHtml(item.content)
-	end
+	local description_text = CatalogUtils.getDescription(item)
+	if not description_text:find("%S") then description_text = _("No description available.") end
 
 	-- Calculate remaining height for description
 	local title_bar_height = Size.padding.large * 3 -- approximate
