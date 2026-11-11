@@ -1,9 +1,9 @@
 local Menu = require("ui/widget/menu")
 local OPDSListMenu = require("ui.menus.list_menu")
 local OPDSGridMenu = require("ui.menus.grid_menu")
-local UIManager = require("ui/uimanager")
 local Debug = require("utils.debug")
 local StateManager = require("core.state_manager")
+local CoverLoader = require("services.cover_loader")
 
 local OPDSCoverMenu = Menu:extend {
     title_shrink_font_to_fit = true,
@@ -19,18 +19,16 @@ function OPDSCoverMenu:_debugLog(...)
     Debug.log("CoverMenu:", ...)
 end
 
-function OPDSCoverMenu:updateItems(select_number)
-    -- Cancel any scheduled cover loading from previous page
-    if self._scheduled_cover_load then
-        UIManager:unschedule(self._scheduled_cover_load)
-        self._scheduled_cover_load = nil
+function OPDSCoverMenu:handleEvent(event)
+    if event.handler == "onKeyPress" or event.handler == "onKeyRepeat"
+        or event.handler == "onGesture" or event.handler == "onFocusMove" then
+        CoverLoader.defer(self)
     end
+    return Menu.handleEvent(self, event)
+end
 
-    -- Cancel any ongoing image loading
-    if self.halt_image_loading then
-        self.halt_image_loading()
-        self.halt_image_loading = nil
-    end
+function OPDSCoverMenu:updateItems(select_number)
+    CoverLoader.stopLoading(self)
 
     -- Check if any items have cover URLs
     local has_covers = false
@@ -123,17 +121,7 @@ function OPDSCoverMenu:updateItems(select_number)
 end
 
 function OPDSCoverMenu:onCloseWidget()
-    -- Cancel any scheduled cover loading
-    if self._scheduled_cover_load then
-        UIManager:unschedule(self._scheduled_cover_load)
-        self._scheduled_cover_load = nil
-    end
-
-    -- Clean up image loading
-    if self.halt_image_loading then
-        self.halt_image_loading()
-        self.halt_image_loading = nil
-    end
+    CoverLoader.stopLoading(self)
 
     -- Check if we have cover-related items
     local has_cover_items = false

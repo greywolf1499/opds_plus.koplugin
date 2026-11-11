@@ -106,6 +106,7 @@ local Constants = {
 	IMAGE_LOADER = {
 		MAX_PARALLEL = 2,
 		POLL_INTERVAL = 0.05,
+		INPUT_QUIET_TIME = 0.25,
 	},
 
 	-- Cache Configuration

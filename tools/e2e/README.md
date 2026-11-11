@@ -7,6 +7,8 @@ run the ones that touch your change before opening a pull request.
 All of them need `xvfb-run`, `python3` and KOReader in `KOREADER_DIR` (default `/usr/lib/koreader`). Each run
 works in a fresh `mktemp` directory under `/tmp/opds_plus_test_*` (its own `KO_HOME`, `HOME` and `TMPDIR`),
 checks that the directory is the one it made before removing it, and leaves the rest of the system alone.
+The catalog driver also redirects `os.tmpname()` into its validated private temporary directory: native
+Lua temporary names do not honor `TMPDIR`.
 
 | Kit | Network | What it checks |
 |-----|---------|----------------|
@@ -33,6 +35,34 @@ server's routes are listed at the top of `mock_opds_server.py`.
 
 The `parandroid` scenario checks both temporary-name exceptions and a missing
 temporary path: covers must still load serially without starting a subprocess.
+
+### Cover scheduling regression
+
+```bash
+tools/e2e/catalog/run.sh inputfairness,covergate,parcovers,parandroid
+tools/e2e/catalog/run.sh nontouch,covers,descsave
+```
+
+`inputfairness` queues high-level key events through KOReader's input loop while six grid covers load,
+adds 80 ms to each real image decode, and verifies that every key moves focus. It requires at most one
+decode/widget update before input is handled and p95 enqueue-to-handler delay below 350 ms.
+The before/after measurements below use the same emulator workload, with `9bcdd21` as the baseline:
+
+| Covers | Before p50 / p95 | After p50 / p95 | Maximum decodes/updates before input |
+| --- | --- | --- | --- |
+| Cached unique URLs | 115 / 180 ms | 85 / 87 ms | 2 → 1 |
+| Cached duplicate URLs | 366 / 560 ms | 82 / 86 ms | 6 → 1 |
+| Cold downloads | 209 / 274 ms | 83 / 84 ms | 2 → 1 |
+
+These are six-key samples with an injected decode cost, **not physical Kindle/e-ink measurements**.
+One slow decode still blocks until it returns, and disabling parallel downloads still makes HTTP
+synchronous. The scheduler yields after repaint before doing the next expensive unit of work;
+`nextTick` alone is not an input yield.
+
+`covergate` also closes a dialog before its delayed cover arrives and verifies cancellation, no late
+decode, no remaining child and no temporary-file leak. `parcovers` checks parallel limits, cancellation
+and stale fallback; `parandroid` checks serial fallback. Deterministic scheduler/ownership regressions
+are in `spec/unit/image_loader_spec.lua`, with fake subprocesses and guarded temporary files.
 
 Some scenarios are explicit (only run when named): `shots`, and `cwapaging` and `cwadownload`, which need a
 Calibre-Web-Automated server (`HARNESS_CWA_URL`, `HARNESS_CWA_USER`, `HARNESS_CWA_PASS`, plus

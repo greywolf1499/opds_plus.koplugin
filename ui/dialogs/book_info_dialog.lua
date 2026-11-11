@@ -34,6 +34,7 @@ local Screen = Device.screen
 local T = require("ffi/util").template
 
 local Constants = require("models.constants")
+local CoverLoader = require("services.cover_loader")
 local OPDSPSE = require("services.kavita")
 local CatalogUtils = require("utils.catalog_utils")
 local UIUtils = require("ui.utils")
@@ -174,6 +175,9 @@ end
 function BookInfoDialog.build(browser, item)
 	local DownloadManager = require("core.download_manager")
 	local ImageLoader = require("services.image_loader")
+	CoverLoader.defer(browser)
+	local dialog, cover_batch, halt_cover_loading
+	local dialog_closed = false
 
 	-- Store custom filename in the browser context for this item
 	-- Initialize with default filename
@@ -260,6 +264,7 @@ function BookInfoDialog.build(browser, item)
 		-- Load high-res cover asynchronously if we have a URL
 		if cover_link then
 			local function updateCoverWidget(content)
+				if dialog_closed or browser.book_info_dialog ~= dialog then return end
 				-- Render at higher resolution for the dialog
 				local target_height = cover_height * 2 -- 2x resolution
 				local target_width = cover_width * 2
@@ -273,6 +278,10 @@ function BookInfoDialog.build(browser, item)
 					)
 				end)
 
+				if dialog_closed or browser.book_info_dialog ~= dialog then
+					if ok and hi_res_bb then hi_res_bb:free() end
+					return
+				end
 				if ok and hi_res_bb then
 					-- Store for cleanup
 					dialog_cover_bb = hi_res_bb
@@ -291,12 +300,12 @@ function BookInfoDialog.build(browser, item)
 					cover_container[1] = new_cover_widget
 
 					-- Refresh the dialog
-					UIManager:setDirty(browser.book_info_dialog, "ui")
+					UIManager:setDirty(dialog, "ui")
 				end
 			end
 
 			-- Start async load
-			ImageLoader:loadImages(
+			cover_batch, halt_cover_loading = ImageLoader:loadImages(
 				{ cover_link },
 				function(loaded_url, content)
 					updateCoverWidget(content)
@@ -612,6 +621,7 @@ function BookInfoDialog.build(browser, item)
 	browser.book_info_dialog = InputContainer:new {
 		ignore_events = { "swipe", "pan", "pan_release" },
 	}
+	dialog = browser.book_info_dialog
 	browser.book_info_dialog.dimen = Geom:new {
 		w = dialog_width,
 		h = dialog_height,
@@ -629,6 +639,15 @@ function BookInfoDialog.build(browser, item)
 
 	-- The dialog did not exist yet where the table was built; FocusManager repaints show_parent.
 	button_table.show_parent = browser.book_info_dialog
+
+	function dialog:handleEvent(event)
+		if event.handler == "onKeyPress" or event.handler == "onKeyRepeat"
+			or event.handler == "onGesture" or event.handler == "onFocusMove" then
+			CoverLoader.defer(browser)
+			if cover_batch then cover_batch:defer() end
+		end
+		return InputContainer.handleEvent(self, event)
+	end
 
 	if Device:hasKeys() then
 		browser.book_info_dialog.key_events = {
@@ -664,8 +683,16 @@ function BookInfoDialog.build(browser, item)
 	end
 
 	function browser.book_info_dialog:onCloseWidget()
+		if dialog_closed then return end
+		dialog_closed = true
+		if halt_cover_loading then
+			halt_cover_loading()
+			halt_cover_loading = nil
+		end
 		-- Clean up custom filename when dialog closes
-		browser._custom_filename = nil
+		if browser.book_info_dialog == self then
+			browser._custom_filename = nil
+		end
 		-- Clean up our high-res dialog cover if we created one
 		if dialog_cover_bb then
 			dialog_cover_bb:free()
