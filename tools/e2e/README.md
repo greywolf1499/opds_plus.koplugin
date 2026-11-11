@@ -124,7 +124,7 @@ tools/e2e/catalog/run.sh catalogprofile  # explicit synchronous stage profiling
 
 `catalogloading` fetches all 5,000 Atom entries from a feed delayed by 1.2 seconds. A 25 ms UI pulse measures
 the largest timer gap, with a 350 ms limit and no truncation allowed. The synchronous baseline at `c4fcb6f`
-had a 1,840 ms gap; background-loading runs measured 77–82 ms, including an isolated cold start at 600×800.
+had a 1,840 ms gap; background-loading runs measured 77–90 ms, including an isolated cold start at 600×800.
 This measures emulator timer responsiveness, **not physical key/e-ink latency or total loading time**.
 One slow render or a user-selected foreground fallback can still block input.
 
