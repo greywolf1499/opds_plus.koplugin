@@ -9,6 +9,7 @@ local logger = require("logger")
 local ltn12 = require("ltn12")
 local RenderImage = require("ui/renderimage")
 local Screen = require("device").screen
+local StreamLoader = require("services.stream_loader")
 local socket = require("socket")
 local socketutil = require("socketutil")
 local UIManager = require("ui/uimanager")
@@ -194,22 +195,16 @@ function OPDSPSE:streamPages(remote_url, count, continue, username, password, la
     end
     local initial_page = CatalogUtils.pageNumber(last_page_read)
     if last_page_read ~= nil and not initial_page then logger.warn("OPDSPSE: invalid resume position") end
-    if not initial_page and provider then
-        local ok, page = pcall(self.getLastPage, self, remote_url, username, password)
-        if ok then
-            initial_page = CatalogUtils.pageNumber(page + 1)
-        else
-            logger.warn("OPDSPSE: progress lookup failed; starting at the first page")
-        end
-    end
+    local lookup_progress = not initial_page and provider ~= nil
     initial_page = initial_page or 1
     if initial_page > count then
         logger.warn("OPDSPSE: resume position exceeds page count")
         initial_page = count
     end
-    -- ImageViewer asks for index 1 during initialization, before we can set its resume cursor.
-    local initializing, closed, loaded_page = true, false, nil
+    if self._viewer then UIManager:close(self._viewer) end
+    local closed, loaded_page = false, nil
     local request_generation = 0
+    local prepared_page, prepared_image = 1, RenderImage:renderImageFile("resources/koreader.png", false)
     local page_table = {image_disposable = true}
     setmetatable(page_table, {__index = function (_pages, key)
         if type(key) ~= "number" then return nil end
@@ -217,9 +212,21 @@ function OPDSPSE:streamPages(remote_url, count, continue, username, password, la
             logger.warn("OPDSPSE: page outside stream bounds")
             return nil
         end
-        local page = initializing and key == 1 and initial_page or key
-        request_generation = request_generation + 1
-        local generation = request_generation
+        if key == prepared_page then
+            local image = prepared_image
+            prepared_image = nil
+            return image
+        end
+    end})
+    local function fetch(page, lookup)
+        if lookup then
+            local ok, progress = pcall(self.getLastPage, self, remote_url, username, password)
+            if ok then
+                page = math.min(CatalogUtils.pageNumber(progress + 1) or 1, count)
+            else
+                logger.warn("OPDSPSE: progress lookup failed; starting at the first page")
+            end
+        end
         local index = string.format("%.0f", page - 1)
         local page_url
         if provider then
@@ -239,18 +246,12 @@ function OPDSPSE:streamPages(remote_url, count, continue, username, password, la
             password = password,
         }))
         socketutil:reset_timeout()
-        local data = info.body or ""
-        local image = code == 200 and headers and RenderImage:renderImageData(data, #data, false)
-        loaded_page = image and page or nil
-        if image then return image end
-        logger.warn("OPDSPSE: page could not be loaded", code, status)
-        UIManager:nextTick(function()
-            if not closed and generation == request_generation then
-                UIManager:show(InfoMessage:new { text = _("Could not load this page. Reading progress was not changed.") })
-            end
-        end)
-        return RenderImage:renderImageFile("resources/koreader.png", false)
-    end})
+        if code ~= 200 or not headers then
+            logger.warn("OPDSPSE: page could not be loaded", code, status)
+            return { error = true }
+        end
+        return { page = page, data = info.body or "" }
+    end
     local ImageViewer = require("ui/widget/imageviewer")
     local viewer = ImageViewer:new{
         image = page_table,
@@ -259,9 +260,61 @@ function OPDSPSE:streamPages(remote_url, count, continue, username, password, la
         image_disposable = false, -- instead set page_table image_disposable to true
         images_list_nb = count,
     }
-    initializing = false
+    self._viewer = viewer
     viewer._images_list_cur = initial_page
     if initial_page ~= 1 then viewer:update() end
+    function viewer:cancelPageRequest()
+        request_generation = request_generation + 1
+        local job = self._page_job
+        self._page_job = nil
+        if job then job:cancel() end
+    end
+    function viewer:switchToImageNum(page, lookup)
+        if closed then return end
+        page = CatalogUtils.pageNumber(page)
+        if not page or page > count then
+            logger.warn("OPDSPSE: page outside stream bounds")
+            return
+        end
+        self:cancelPageRequest()
+        if page == loaded_page and not lookup then return end
+        local generation = request_generation
+        local function failed(reason)
+            UIManager:nextTick(function()
+                if closed or generation ~= request_generation then return end
+                if not loaded_page then UIManager:close(self) end
+                if reason ~= "cancelled" then
+                    local text = reason == "unavailable"
+                        and _("Background page loading is unavailable. Try again or download the book instead.")
+                        or _("Could not load this page. Reading progress was not changed.")
+                    UIManager:show(InfoMessage:new { text = text })
+                end
+            end)
+        end
+        local job = StreamLoader.start(function() return fetch(page, lookup) end, function(packet, reason)
+            if closed or generation ~= request_generation then return end
+            self._page_job = nil
+            if not packet then failed(reason); return end
+            local result_page = CatalogUtils.pageNumber(packet.page)
+            if not result_page or result_page > count or type(packet.data) ~= "string" then
+                logger.warn("OPDSPSE: invalid stream worker response")
+                failed("failed")
+                return
+            end
+            local ok, image = pcall(RenderImage.renderImageData, RenderImage, packet.data, #packet.data, false)
+            if not ok or not image then
+                logger.warn("OPDSPSE: page image could not be decoded")
+                failed("failed")
+                return
+            end
+            prepared_page, prepared_image = result_page, image
+            loaded_page = result_page
+            -- The initial placeholder may already have the requested cursor; native switching skips that case.
+            if self._images_list_cur == result_page then self._images_list_cur = 0 end
+            ImageViewer.switchToImageNum(self, result_page)
+        end)
+        if not job.done then self._page_job = job end
+    end
     local recorded_page
     function viewer:paintTo(...)
         ImageViewer.paintTo(self, ...)
@@ -271,14 +324,18 @@ function OPDSPSE:streamPages(remote_url, count, continue, username, password, la
         end
     end
     function viewer:onSuspend()
+        self:cancelPageRequest()
         if options and options.on_flush then options.on_flush() end
+        if not closed and not loaded_page then UIManager:close(self) end
     end
     function viewer:onCloseWidget()
         closed = true
         self:onSuspend()
+        if OPDSPSE._viewer == self then OPDSPSE._viewer = nil end
         return ImageViewer.onCloseWidget(self)
     end
     UIManager:show(viewer)
+    viewer:switchToImageNum(initial_page, lookup_progress)
     return viewer
 end
 

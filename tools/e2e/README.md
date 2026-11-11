@@ -173,7 +173,7 @@ malformed markers, escaped names, break variants and preserving the raw content/
 ### Streaming resume
 
 ```bash
-EMULATE_READER_W=600 EMULATE_READER_H=800 tools/e2e/catalog/run.sh streamresume,customheaders
+EMULATE_READER_W=600 EMULATE_READER_H=800 tools/e2e/catalog/run.sh streamloading,streamresume,customheaders
 ```
 
 `streamresume` uses actual KOReader image decoding, painting, book/download dialogs and settings storage
@@ -181,7 +181,17 @@ with locally intercepted fixture images. It checks feed identity, one-based PSE/
 zero-based requests, no initial page-1 request, local rewinds, explicit feed resume, validated page
 selection, persistence, and unchanged progress after HTTP/decode failures. `customheaders` verifies that
 the recognized Kavita stream fetches only its resumed image through the read-only reader endpoint while
-retaining scoped headers. No real account's progress is written.
+retaining scoped headers. These two fixture scenarios execute intercepted requests in-process so their
+capture assertions remain visible to the driver; they still use actual KOReader widgets and codecs.
+No real account's progress is written.
+
+`streamloading` uses real subprocesses and a loopback image delayed by 1.2 seconds. With the synchronous
+implementation at `b900296`, the UI pulse stalled for **1,228 ms**. Worker runs measured **79-89 ms** for
+initial loading, page turns and a separately delayed provider lookup, against the same **350 ms** limit.
+This measures emulator timer responsiveness, not physical e-reader latency or faster server responses.
+It checks key/pan cancellation, external loading-widget dismissal, suspend, watchdog timeout, replacement,
+close, initial suspend and fork failure. Previous images/progress survive cancellation; stale results do
+not replace the requested page. All child processes must be collected without temporary image files.
 
 The ImageViewer initialization/painting hooks were checked against KOReader v2025.10 source; native runs
 use the installed emulator. PSE conventions are from the
