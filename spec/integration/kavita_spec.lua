@@ -2,6 +2,7 @@ local helper = require("helper")
 local fake_http = require("support.fake_http")
 local socketutil_stub = require("support.socketutil")
 local ui_stub = require("support.ui")
+local json_shims = require("support.json_shims")
 
 describe("Kavita page streaming", function()
 	local OPDSPSE, HttpClient
@@ -55,6 +56,7 @@ describe("Kavita page streaming", function()
 		end
 
 		local stubs = {
+			rapidjson = json_shims.rapidjson(),
 			["socket.http"] = http,
 			socketutil = socketutil_stub.new(),
 			device = {
@@ -77,6 +79,48 @@ describe("Kavita page streaming", function()
 	after_each(helper.reset)
 
 	describe("getLastPage", function()
+		it("skips non-Kavita and empty URLs without sending a request", function()
+			assert.equals(0, OPDSPSE:getLastPage(OTHER .. "/stream?page={pageNumber}"))
+			assert.equals(0, OPDSPSE:getLastPage(OTHER .. "/stream?next=/api/opds/key/image?chapterId=42"))
+			assert.equals(0, OPDSPSE:getLastPage(""))
+			assert.same({}, http.requests)
+		end)
+
+		it("decodes reordered JSON fields across all response chunks", function()
+			http:on(AUTH, function(request)
+				request.raw.sink('{\n "refreshToken": "REFRESH-1",')
+				request.raw.sink('\n "token": "TOKEN-1" }')
+				return { code = 200 }
+			end)
+			http:on(PROGRESS, { code = 200, body = '{"seriesId":2,\n"pageNum":7}' })
+
+			assert.equals(7, OPDSPSE:getLastPage(STREAM))
+			assert.equals("Bearer TOKEN-1", http.requests[2].headers["Authorization"])
+		end)
+
+		it("does not request progress when the authentication response has no usable token", function()
+			for _, body in ipairs({ "", "{bad", '{"token":null}', '{"token":""}', '{"token":42}' }) do
+				http.routes = {}
+				http.requests = {}
+				http:on(AUTH, { code = 200, body = body })
+
+				assert.equals(0, OPDSPSE:getLastPage(STREAM))
+				assert.equals(1, #http.requests)
+			end
+			assert.is_true(require("logger").logged("warn", "authentication response"))
+		end)
+
+		it("rejects malformed, fractional and negative progress with an explicit warning", function()
+			for _, body in ipairs({ "{bad", '{"pageNum":"seven"}', '{"pageNum":1.5}', '{"pageNum":-1}' }) do
+				http.routes = {}
+				http:on(AUTH, { code = 200, body = SIGN_IN })
+				http:on(PROGRESS, { code = 200, body = body })
+
+				assert.equals(0, OPDSPSE:getLastPage(STREAM))
+			end
+			assert.is_true(require("logger").logged("warn", "progress response"))
+		end)
+
 		it("signs in with the API key and asks for the progress with the token it gets", function()
 			kavita_knows(7)
 
@@ -176,12 +220,15 @@ describe("Kavita page streaming", function()
 	end)
 
 	describe("streamPages", function()
-		it("reports an empty stream URL without opening the viewer or making a request", function()
-			OPDSPSE:streamPages("", 30, false)
+		it("reports invalid stream URLs without opening the viewer or making a request", function()
+			local invalid = { n = 4, nil, "", "http:", "http://" }
+			for index = 1, invalid.n do
+				OPDSPSE:streamPages(invalid[index], 30, false)
+				assert.equals("Invalid stream URL.", ui:last().text)
+			end
 
 			assert.is_nil(viewer)
 			assert.same({}, http.requests)
-			assert.same({ "Invalid stream URL." }, ui:texts())
 		end)
 
 		-- Opens the viewer with no progress known, and gives the pages it was handed

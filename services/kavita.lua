@@ -2,6 +2,7 @@ local http = require("socket.http")
 local HttpClient = require("services.http_client")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
+local JsonDecode = require("utils.json_decode")
 local logger = require("logger")
 local ltn12 = require("ltn12")
 local RenderImage = require("ui/renderimage")
@@ -11,93 +12,82 @@ local socketutil = require("socketutil")
 local UIManager = require("ui/uimanager")
 local url = require("socket.url")
 local _ = require("gettext")
-local T = require("ffi/util").template
 
 local OPDSPSE = {}
 
 -- This function attempts to pull chapter progress from Kavita.
 function OPDSPSE:getLastPage(remote_url, username, password)
-    local last_page = 0
-
-    -- create URL's and reference vars
-    local chapter = string.match(remote_url, "chapterId=(%w+)")
-    local api_key = string.match(remote_url, "opds/(.+)/image")
-    local progress_url = string.match(remote_url, "(.+)/api").."/api/Reader/get-progress?chapterId="..chapter
-    local auth_url = string.match(remote_url, "(.+)/api").."/api/Plugin/authenticate?apiKey="..api_key.."&pluginName=KOReader-OPDS"
+    local parsed = type(remote_url) == "string" and url.parse(remote_url)
+    if not parsed or not parsed.host or (parsed.scheme ~= "http" and parsed.scheme ~= "https") then
+        logger.warn("OPDSPSE:getLastPage: invalid stream URL")
+        return 0
+    end
+    local prefix, api_key = (parsed.path or ""):match("^(.-)/api/opds/([^/]+)/image$")
+    local chapter = parsed.query and ("&" .. parsed.query):match("&chapterId=([^&]+)")
+    if not prefix or not api_key or not chapter or not chapter:match("^%d+$") then
+        logger.dbg("OPDSPSE:getLastPage: no Kavita progress endpoint")
+        return 0
+    end
+    local base = url.build { scheme = parsed.scheme, authority = parsed.authority, path = prefix }
+    local progress_url = base .. "/api/Reader/get-progress?chapterId=" .. chapter
+    local auth_url = base .. "/api/Plugin/authenticate?apiKey=" .. api_key .. "&pluginName=KOReader-OPDS"
 
     -- Do an HTTP POST to get the Bearer Token for authentication of the /api/Reader/get-progress endpoint
-    local auth_parsed = url.parse(auth_url)
     local auth_data = {}
-    local auth_code, auth_headers, auth_status
-    if auth_parsed.scheme == "http" or auth_parsed.scheme == "https" then
-        socketutil:set_timeout(socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT)
-        auth_code, auth_headers, auth_status = socket.skip(1, http.request {
-            method = "POST",
-            url         = auth_url,
-            headers     = HttpClient.withCustomHeaders(auth_url, {
-                ["Accept-Encoding"] = "identity",
-                ["Authentication"] = api_key,
-            }),
-            sink        = ltn12.sink.table(auth_data),
-            user        = username,
-            password    = password,
-        })
-        socketutil:reset_timeout()
-    else
-        UIManager:show(InfoMessage:new {
-            text = T(_("Invalid protocol:\n%1"), auth_parsed.scheme),
-        })
+    socketutil:set_timeout(socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT)
+    local auth_code = socket.skip(1, http.request {
+        method = "POST",
+        url = auth_url,
+        redirect = false,
+        headers = HttpClient.withCustomHeaders(auth_url, {
+            ["Accept-Encoding"] = "identity",
+            ["Authentication"] = api_key,
+        }),
+        sink = ltn12.sink.table(auth_data),
+        user = username,
+        password = password,
+    })
+    socketutil:reset_timeout()
+    if auth_code ~= 200 then
+        logger.warn("OPDSPSE:getLastPage: authentication request failed")
+        return 0
     end
 
-    if auth_code == 200 then
-        -- if http request for bearer token was successful, pull bearer token from response and
-        -- attempt to pull progress for chapterId in remote_url
-        local bearer_token = auth_data[1]:match("\"token\":\"(.+)\",\"refresh")
-
-        -- Do HTTP GET request for chapter progress
-        local progress_parsed = url.parse(progress_url)
-        local progress_body
-        local progress_code, progress_headers, progress_status
-        if progress_parsed.scheme == "http" or progress_parsed.scheme == "https" then
-            socketutil:set_timeout(socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT)
-            local progress_info
-            -- The token and the credentials only go to this server, however the request is redirected
-            progress_code, progress_headers, progress_status, progress_info = socket.skip(1, HttpClient.request({
-                url         = progress_url,
-                headers     = {
-                    ["Accept-Encoding"] = "identity",
-                    ["Authorization"] = "Bearer "..bearer_token,
-                },
-                user        = username,
-                password    = password,
-            }))
-            progress_body = progress_info.body
-            socketutil:reset_timeout()
-        else
-            UIManager:show(InfoMessage:new {
-                text = T(_("Invalid protocol:\n%1"), progress_parsed.scheme),
-            })
-        end
-
-        if progress_code == 200 then
-            -- if HTTP GET was successful, pull page number from response
-            last_page = progress_body:match("\"pageNum\":(.+),\"seriesId") or 0
-        else
-            logger.dbg("OPDSPSE:getLastPage: Progress Request failed:", progress_status or progress_code)
-            logger.dbg("OPDSPSE:getLastPage: Progress Response headers:", progress_headers)
-        end
-    else
-        logger.dbg("OPDSPSE:getLastPage: Authentication Request failed:", auth_status or auth_code)
-        logger.dbg("OPDSPSE:getLastPage: Authentication Response headers:", auth_headers)
+    local auth = JsonDecode.decode(table.concat(auth_data))
+    if type(auth) ~= "table" or type(auth.token) ~= "string" or auth.token == "" then
+        logger.warn("OPDSPSE:getLastPage: invalid authentication response")
+        return 0
     end
 
-    -- returns page number. If the HTTP Requests were unsuccessful, defaults to 0.
-    return last_page;
+    socketutil:set_timeout(socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT)
+    -- HttpClient keeps the token and credentials on their original server across redirects.
+    local code, headers, status, info = socket.skip(1, HttpClient.request({
+        url = progress_url,
+        headers = {
+            ["Accept-Encoding"] = "identity",
+            ["Authorization"] = "Bearer " .. auth.token,
+        },
+        user = username,
+        password = password,
+    }))
+    socketutil:reset_timeout()
+    if not headers or code ~= 200 then
+        logger.warn("OPDSPSE:getLastPage: progress request failed:", status or code)
+        return 0
+    end
+    local progress = JsonDecode.decode(info.body)
+    local page = type(progress) == "table" and progress.pageNum
+    if type(page) ~= "number" or page < 0 or page % 1 ~= 0 then
+        logger.warn("OPDSPSE:getLastPage: invalid progress response")
+        return 0
+    end
+    return page
 end
 
 function OPDSPSE:streamPages(remote_url, count, continue, username, password, last_page_read)
     local stream_address = type(remote_url) == "string" and url.parse(remote_url)
-    if not stream_address or (stream_address.scheme ~= "http" and stream_address.scheme ~= "https") then
+    if not stream_address or not stream_address.host or
+        (stream_address.scheme ~= "http" and stream_address.scheme ~= "https") then
         logger.warn("OPDSPSE:streamPages: invalid stream URL")
         UIManager:show(InfoMessage:new { text = _("Invalid stream URL.") })
         return
@@ -123,25 +113,17 @@ function OPDSPSE:streamPages(remote_url, count, continue, username, password, la
             local page_data
 
             logger.dbg("Streaming page from", page_url)
-            local parsed = url.parse(page_url)
-
             local code, headers, status
-            if parsed.scheme == "http" or parsed.scheme == "https" then
-                socketutil:set_timeout(socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT)
-                local info
-                code, headers, status, info = socket.skip(1, HttpClient.request({
-                    url         = page_url,
-                    headers     = { ["Accept-Encoding"] = "identity" },
-                    user        = username,
-                    password    = password,
-                }))
-                page_data = info.body
-                socketutil:reset_timeout()
-            else
-                UIManager:show(InfoMessage:new {
-                    text = T(_("Invalid protocol:\n%1"), parsed.scheme),
-                })
-            end
+            socketutil:set_timeout(socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT)
+            local info
+            code, headers, status, info = socket.skip(1, HttpClient.request({
+                url         = page_url,
+                headers     = { ["Accept-Encoding"] = "identity" },
+                user        = username,
+                password    = password,
+            }))
+            page_data = info.body
+            socketutil:reset_timeout()
 
             local data = page_data or ""
             if code == 200 then

@@ -82,7 +82,9 @@ function JsonDecode.decode(text)
 	if not backend then
 		return nil, "no JSON decoder available"
 	end
-	local ok, decoded, decode_err = pcall(backend.decode, text)
+	local ok, decoded, decode_err = pcall(function()
+		return backend.decode(text)
+	end)
 	if not ok then
 		return nil, tostring(decoded)
 	end
