@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ### Fixed
 
+- **Decoded Cover Memory**: Keep an 8 MiB least-recently-used cover budget instead of retaining every visited page. Visible and dialog-borrowed images stay pinned, even when they exceed that budget. Release high-resolution dialog images and widget-scaled copies when their users close or are rebuilt.
 - **Cover Loading and Keys**: Yield between cover decodes and widget updates, including cache hits and repeated cover URLs. Key and touch activity postpones expensive cover work without killing and restarting downloads. Thanks to @iav for the input-deferral work behind issue #117; neighboring-page cover prefetch remains a separate follow-up.
 - **Closing Book Details**: Cancel a pending high-resolution cover when its dialog closes, instead of decoding it later or repainting a replacement dialog.
 - **Invalid Book Addresses**: Empty download, cover and page-stream addresses report an error instead of crashing or opening a broken viewer. An invalid download address leaves any existing destination file untouched.

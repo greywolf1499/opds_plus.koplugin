@@ -192,7 +192,7 @@ describe("ImageLoader scheduling", function()
 			["ui/renderimage"] = {
 				renderImageData = function()
 					rendered = rendered + 1
-					return { free = function() end }
+					return { stride = 100, h = 150, free = function() end }
 				end,
 			},
 		})
@@ -203,7 +203,8 @@ describe("ImageLoader scheduling", function()
 				widget = { update = function() updated = updated + 1 end },
 			}
 		end
-		local callback = CoverLoader.createRenderCallback({ A = items }, 100, 150, function() return current end)
+		local callback = CoverLoader.createRenderCallback({ A = items }, 100, 150,
+			function() return current end, CoverLoader.getMemory({}))
 		local more = callback("A", "bytes")
 		assert.equals(1, rendered)
 		assert.equals(1, updated)
@@ -228,7 +229,7 @@ describe("ImageLoader scheduling", function()
 		local entry = { lazy_load_cover = true }
 		local callback = CoverLoader.createRenderCallback({
 			A = { { entry = entry, widget = { update = function() updated = updated + 1 end } } },
-		}, 100, 150, function() return current end)
+		}, 100, 150, function() return current end, CoverLoader.getMemory({}))
 		callback("A", "bytes")
 		assert.equals(1, freed)
 		assert.equals(0, updated)

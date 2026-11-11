@@ -209,6 +209,11 @@ Access settings from: **OPDS Plus Catalog → Settings**
   - Cache TTL (minutes)
   - Clear Cover Cache
 
+Development builds also limit retained decoded covers to 8 MiB per browser, independently of the disk
+cache size. Visible images and open dialogs keep their buffers even if they exceed that budget.
+Evicted covers are decoded again from the disk cache, or fetched again if disk caching is disabled.
+This is not a limit on KOReader's total RAM use.
+
 #### Grid View Settings
 - **Grid Layout**:
   - Compact: 4 columns, more books visible
@@ -337,6 +342,7 @@ opds_plus.koplugin/
 ├── services/
 │   ├── cover_cache.lua
 │   ├── cover_loader.lua
+│   ├── cover_memory.lua
 │   ├── http_client.lua
 │   ├── image_loader.lua
 │   ├── kavita.lua

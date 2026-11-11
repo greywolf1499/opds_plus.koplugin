@@ -218,20 +218,21 @@ function BookInfoDialog.build(browser, item)
 
 	-- Build cover widget - make it tappable
 	local cover_container
-	local dialog_cover_bb = nil -- Track our high-res cover for cleanup
+	local cover_memory = CoverLoader.getMemory(browser)
+	local low_res_cover = cover_memory:get(item)
 
-	if item.cover_bb or cover_link then
+	if low_res_cover or cover_link then
 		-- Create the image widget (start with low-res if available, or placeholder)
 		local initial_cover_widget
-		if item.cover_bb then
-			initial_cover_widget = ImageWidget:new {
-				image = item.cover_bb,
+		if low_res_cover then
+			initial_cover_widget = CoverLoader.pinWidget(cover_memory, ImageWidget:new {
+				image = low_res_cover,
 				width = cover_width,
 				height = cover_height,
 				scale_factor = 0,
 				alpha = true,
 				image_disposable = false, -- Don't free the menu's cover_bb
-			}
+			})
 		else
 			-- Placeholder while loading
 			initial_cover_widget = CenterContainer:new {
@@ -283,21 +284,22 @@ function BookInfoDialog.build(browser, item)
 					return
 				end
 				if ok and hi_res_bb then
-					-- Store for cleanup
-					dialog_cover_bb = hi_res_bb
+					local release = cover_memory:add(nil, hi_res_bb)
 
 					-- Create new high-res image widget
-					local new_cover_widget = ImageWidget:new {
+					local new_cover_widget = CoverLoader.pinWidget(cover_memory, ImageWidget:new {
 						image = hi_res_bb,
 						width = cover_width,
 						height = cover_height,
 						scale_factor = 0,
 						alpha = true,
-						image_disposable = false, -- We'll free it ourselves
-					}
+						image_disposable = false,
+					})
 
 					-- Update the container
+					cover_container:clear()
 					cover_container[1] = new_cover_widget
+					release()
 
 					-- Refresh the dialog
 					UIManager:setDirty(dialog, "ui")
@@ -693,11 +695,7 @@ function BookInfoDialog.build(browser, item)
 		if browser.book_info_dialog == self then
 			browser._custom_filename = nil
 		end
-		-- Clean up our high-res dialog cover if we created one
-		if dialog_cover_bb then
-			dialog_cover_bb:free()
-			dialog_cover_bb = nil
-		end
+		if cover_container then cover_container:clear() end
 		UIManager:setDirty(nil, "ui")
 	end
 

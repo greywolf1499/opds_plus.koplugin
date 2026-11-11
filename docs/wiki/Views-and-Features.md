@@ -49,6 +49,11 @@ Under **Cover Settings**:
 - **Thumbnails on Navigation Entries** (on by default): show thumbnails for entries such as a series or an
   author, when the server provides them.
 
+Development builds retain up to 8 MiB of decoded covers per browser, separate from the disk cache.
+Images still used on screen or by a dialog are never evicted, so they can exceed that budget.
+Older, unused covers are decoded again from disk when needed (or downloaded if disk caching is off).
+Replacing the listing or closing its browser releases unused images. This does not cap KOReader's total RAM.
+
 ## Catalogs
 
 - **Add catalog** is in the menu at the top left of the list of catalogs. Inside a catalog, the same menu's

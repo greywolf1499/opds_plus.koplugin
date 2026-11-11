@@ -114,6 +114,7 @@ local Constants = {
 
 	-- Cover Cache Configuration
 	COVER_CACHE = {
+		DECODED_MAX_BYTES = 8 * 1024 * 1024,
 		DEFAULT_MAX_MB = 64,
 		DEFAULT_TTL_MINUTES = 720, -- 12 hours
 		MIN_MAX_MB = 8,

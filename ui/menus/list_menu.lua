@@ -124,15 +124,17 @@ function OPDSListMenuItem:init()
     local inner_cover_widget
 
     -- Check if we should use real cover or placeholder
-    if self.entry.cover_bb then
-        inner_cover_widget = ImageWidget:new {
-            image = self.entry.cover_bb,
+    local memory = CoverLoader.getMemory(self.menu)
+    local cover_bb = memory:get(self.entry)
+    if cover_bb then
+        inner_cover_widget = CoverLoader.pinWidget(memory, ImageWidget:new {
+            image = cover_bb,
             width = self.cover_width,
             height = self.cover_height,
             alpha = true,
-            -- The entry keeps the bitmap for the next page or view; ImageWidget would free it when it rescales it
+            -- The decoded cache owns the source; the widget owns only its scaled copy.
             image_disposable = false,
-        }
+        })
     elseif self.entry.cover_url and self.entry.lazy_load_cover then
         inner_cover_widget = UIUtils.createPlaceholderCover(self.cover_width, self.cover_height, "loading")
     elseif self.entry.cover_url and self.entry.cover_failed then
@@ -313,6 +315,7 @@ end
 
 function OPDSListMenuItem:update()
     -- Re-initialize with updated entry data
+    self:clear()
     self:init()
     UIManager:setDirty(self.show_parent, function()
         return "ui", self.dimen
@@ -335,10 +338,6 @@ function OPDSListMenuItem:onHoldSelect(arg, ges)
         return true
     end
     return false
-end
-
-function OPDSListMenuItem:free()
-    -- Nothing to free for dynamic placeholders
 end
 
 -- Main OPDS List Menu that extends the standard Menu

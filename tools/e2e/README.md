@@ -68,6 +68,32 @@ Some scenarios are explicit (only run when named): `shots`, and `cwapaging` and 
 Calibre-Web-Automated server (`HARNESS_CWA_URL`, `HARNESS_CWA_USER`, `HARNESS_CWA_PASS`, plus
 `HARNESS_CWA_TOTAL` for `cwapaging`; see the comments above them in `driver.lua`).
 
+### Decoded cover memory
+
+```bash
+tools/e2e/catalog/run.sh covermemory
+```
+
+At the harness's default 1264×1680 / 300 dpi, `covermemory` browses sixteen grid pages and measures each
+retained source bitmap's actual `stride * h`, including padding and pixel format. Against the merged
+`e287a7c` baseline:
+
+| Page | Before, bytes | After, bytes |
+| --- | --- | --- |
+| 1 | 1,114,470 | 1,114,470 |
+| 8 | 8,915,760 | 8,358,525 |
+| 16 | 17,831,520 | 8,358,525 |
+
+The decoded cache stays below its production 8 MiB (8,388,608 byte) budget. It may exceed the budget
+only for buffers that still have users; the bound is the larger of the budget and pinned source bytes.
+This measures retained decoded pixels, **not process RSS**. KOReader's additional visible-widget scaling
+buffers are not part of this cache; they are explicitly freed on widget replacement and close.
+
+The scenario also forces a 256 KiB budget while a dialog borrows an off-screen cover, checks disk-only
+redecoding and list/grid reuse, verifies actual freeing of high-resolution and scaled bitmaps, and paints
+a dialog after its underlying menu closes. Catalog replacement and the final close leave no owned buffers
+or stale-entry registry. Fake-buffer eviction and pinning tests live in `spec/unit/cover_memory_spec.lua`.
+
 ### Screenshots
 
 ```bash
