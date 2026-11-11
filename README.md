@@ -78,7 +78,7 @@
 |                       **Book Details**                        |                      **Updates**                       |
 | :-----------------------------------------------------------: | :----------------------------------------------------: |
 |    ![Book Details](.github/screenshots/book_details.png)     | ![Update Available](.github/screenshots/update_available.png) |
-|         *Author, series, language, formats and more*          |        *Release notes, then install in one tap*        |
+|         *Author, series, language, formats and more*          |        *Formatted notes (development builds)*        |
 
 |                     **OPDS 2.0 Shelves**                      |                   **Facets**                    |
 | :-----------------------------------------------------------: | :---------------------------------------------: |
@@ -136,6 +136,11 @@ updating, and setting up Calibre-Web, Kavita and Komga.
 ### Updating (New in 1.4.0)
 
 From 1.4.0 on, OPDS Plus updates itself: open **OPDS Plus Catalog → Settings → Updates** and tap **Check for updates**. It shows what is new and installs it when you tap **Install**; restart KOReader when asked. **Roll back to previous version** puts the version before the update back. Versions before 1.4.0 can't update themselves, so install 1.4.0 by hand once, as above.
+
+Development builds format release notes with headings, lists and emphasis, including on KOReader v2025.10.
+Use page keys or touch scrolling for long notes. **Install**, **Skip this version** and **Later** work as before.
+If formatting fails, choose **View as plain text** to read the original notes. Links and remote images in notes
+are not opened or fetched.
 
 A plugin folder that is a link, or has a `.git` folder in it (Method 2), is a development install: update it with `git pull` instead.
 

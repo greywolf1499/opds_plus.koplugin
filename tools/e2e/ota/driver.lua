@@ -198,6 +198,152 @@ local function start()
 			check("installed version", versionIn(plugin_dir) == OLD, versionIn(plugin_dir))
 		end)
 
+		local Device = require("device")
+		local Event = require("ui/event")
+		local Key = require("device/key")
+		local FocusManager = require("ui/widget/focusmanager")
+		local TextViewer = require("ui/widget/textviewer")
+		local notes = "# Release highlights\n\n"
+			.. "- **Readable notes** with headings and lists.\n"
+			.. "- Keep the `Install`, `Skip this version` and `Later` controls.\n\n"
+			.. "[Release page](" .. BASE .. "/notes-resource-link)\n\n"
+			.. "![Remote image](" .. BASE .. "/notes-resource.png)\n\n"
+			.. string.rep("## More changes\n\nLong notes remain complete and can be read with the page keys.\n\n", 40)
+			.. "End of release notes.\n"
+		local release = { version = NEW, notes = notes }
+		local notes_updater = assert(UpdateDialog.newUpdater(plugin))
+
+		local function withNotesUI(mode, run)
+			local formats = TextViewer.html_text_formats
+			local text_types = G_reader_settings:readSetting("textviewer_text_types")
+			local keys, dpad, touch = Device.hasKeys, Device.hasDPad, Device.isTouchDevice
+			local focus = FocusManager.FOCUS_ONLY_ON_NT
+			Device.hasKeys, Device.hasDPad = function() return true end, function() return true end
+			Device.isTouchDevice = function() return false end
+			FocusManager.FOCUS_ONLY_ON_NT = 0
+			local key_mapper = FocusManager:new {}
+			key_mapper:onPhysicalKeyboardConnected()
+			if mode == "compat" then
+				TextViewer.html_text_formats = nil
+				G_reader_settings:saveSetting("textviewer_text_types", {
+					general = { font_size = 21, justified = true, monospace_font = true },
+				})
+			end
+			local ok, err = pcall(run)
+			TextViewer.html_text_formats = formats
+			G_reader_settings:saveSetting("textviewer_text_types", text_types)
+			Device.hasKeys, Device.hasDPad, Device.isTouchDevice = keys, dpad, touch
+			FocusManager.FOCUS_ONLY_ON_NT = focus
+			key_mapper:onPhysicalKeyboardDisconnected()
+			assert(ok, err)
+		end
+		local function key(viewer, name)
+			return viewer:handleEvent(Event:new("KeyPress", Key:new(name, {})))
+		end
+		local function pageText(box, number)
+			local page = box.document:openPage(number)
+			local lines = page:getPageText()
+			page:close()
+			local words = {}
+			for _, line in ipairs(lines) do
+				for _, word in ipairs(line) do words[#words + 1] = word.word end
+			end
+			return table.concat(words, " ")
+		end
+
+		for _, mode in ipairs({ "native", "compat" }) do
+			step("release notes " .. mode, function()
+				withNotesUI(mode, function()
+					UpdateDialog.showRelease(plugin, notes_updater, release)
+					local viewer = topmost("buttons_table")
+					local box = assert(viewer.scroll_widget.htmlbox_widget, "not an HTML viewer")
+					local text = pageText(box, 1)
+					check(mode .. " Markdown text", text:find("Release highlights", 1, true)
+						and text:find("Readable notes", 1, true) and not text:find("**", 1, true), text)
+					check(mode .. " long notes", box.page_count > 5
+						and pageText(box, box.page_count):find("End of release notes.", 1, true), box.page_count)
+					check(mode .. " links inactive", not box.html_link_tapped_callback
+						and not viewer.scroll_widget.html_resource_directory)
+					if mode == "compat" then
+						check("compat font preferences", viewer.scroll_widget.default_font_size == Device.screen:scaleBySize(21)
+							and viewer.scroll_widget.css:find("monospace", 1, true)
+							and viewer.scroll_widget.css:find("justify", 1, true))
+					end
+					for index = #UIManager._window_stack, 1, -1 do
+						local widget = UIManager._window_stack[index].widget
+						if type(widget.text) == "string" and widget.text:find("Documents will be rendered", 1, true) then
+							UIManager:close(widget)
+						end
+					end
+					UIManager:forceRePaint()
+					check(mode .. " fits screen", viewer.frame.dimen.y >= 0
+						and viewer.frame.dimen.y + viewer.frame.dimen.h <= Device.screen:getHeight())
+					Device.screen:shot(WORK .. "/release_notes_" .. mode .. ".png")
+					key(viewer, Device.input.group.PgFwd[1])
+					check(mode .. " keyboard forward", box.page_number == 2, box.page_number)
+					key(viewer, Device.input.group.PgBack[1])
+					check(mode .. " keyboard backward", box.page_number == 1, box.page_number)
+					press(viewer, "Later")
+					check(mode .. " Later keeps version", not plugin:getSetting(UpdateDialog.SKIPPED)
+						and versionIn(plugin_dir) == OLD)
+
+					UpdateDialog.showRelease(plugin, notes_updater, release)
+					viewer = topmost("buttons_table")
+					UIManager:forceRePaint()
+					viewer.button_table:moveFocusTo(1, #viewer.button_table.layout)
+					key(viewer, "Right")
+					check(mode .. " keyboard focus moves", viewer.button_table.selected.x == 2,
+						viewer.button_table.selected.x)
+					key(viewer, "Press")
+					check(mode .. " keyboard Skip", plugin:getSetting(UpdateDialog.SKIPPED) == NEW)
+					plugin:saveSetting(UpdateDialog.SKIPPED, nil)
+
+					local install, installed = UpdateDialog.install, false
+					UpdateDialog.install = function(p, u, r)
+						installed = p == plugin and u == notes_updater and r == release
+					end
+					local ok, err = pcall(function()
+						UpdateDialog.showRelease(plugin, notes_updater, release)
+						press(topmost("buttons_table"), "Install")
+					end)
+					UpdateDialog.install = install
+					assert(ok, err)
+					check(mode .. " Install dispatch", installed)
+					check(mode .. " dispatch test changes nothing", versionIn(plugin_dir) == OLD)
+
+					UpdateDialog.showRelease(plugin, notes_updater, release)
+					viewer = topmost("buttons_table")
+					key(viewer, "Back")
+					local closed = true
+					for _, entry in ipairs(UIManager._window_stack) do
+						if entry.widget == viewer then closed = false end
+					end
+					check(mode .. " Back closes", closed)
+				end)
+			end)
+
+			step("release notes error " .. mode, function()
+				withNotesUI(mode, function()
+					local Converter = require("apps/filemanager/filemanagerconverter")
+					local convert = Converter.mdToHtml
+					Converter.mdToHtml = function() error("injected Markdown rendering failure") end
+					local ok, err = pcall(UpdateDialog.showRelease, plugin, notes_updater, release)
+					Converter.mdToHtml = convert
+					assert(ok, err)
+					local confirm = topmost("ok_callback")
+					check(mode .. " render failure explained", confirm and confirm.text:find("could not be formatted"))
+					confirm.ok_callback()
+					UIManager:close(confirm)
+					local viewer = topmost("buttons_table")
+					check(mode .. " explicit plain text", viewer.force_txt and viewer.text == notes
+						and viewer.scroll_widget.text_widget and not viewer.scroll_widget.htmlbox_widget)
+					UIManager:forceRePaint()
+					if mode == "native" then Device.screen:shot(WORK .. "/release_notes_plain.png") end
+					press(viewer, "Later")
+				end)
+			end)
+		end
+
 		step("up to date", function()
 			setMode("same")
 			UpdateDialog.checkNow(plugin)

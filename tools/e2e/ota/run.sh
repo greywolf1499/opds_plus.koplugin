@@ -83,5 +83,14 @@ for phase in update rollback rolled_back; do
 		break
 	fi
 done
+if [[ ! -s "$WORK/requests.jsonl" ]]; then
+	echo "FAIL missing request log for release notes"
+	status=1
+elif grep -q '/notes-resource' "$WORK/requests.jsonl"; then
+	echo "FAIL release notes fetched a remote resource"
+	status=1
+else
+	echo "PASS release notes made no resource requests"
+fi
 curl -s -o /dev/null "http://127.0.0.1:$PORT/__quit" || true
 exit $status
