@@ -186,7 +186,8 @@ function FeedFetcher.parseFeed(item_url, username, password, debug_callback, sta
 	-- One request per feed: a server that tags or dates its feeds answers "not modified" when the copy
 	-- kept here is still current, and one that does not just sends the feed.
 	item_url = UrlUtils.stripFragment(item_url)
-	local key = "opds|catalog|" .. item_url
+	if basic_auth_origin == nil and state then basic_auth_origin = state.basic_auth_origin end
+	local key = "opds|catalog|" .. HttpClient.cacheKey(item_url, username, password, basic_auth_origin)
 	local cached = CatalogCache:check(key)
 	local feed, headers = FeedFetcher.fetchFeed(item_url, false, username, password, cached, state, basic_auth_origin)
 	local content_type = headers and headers["content-type"]

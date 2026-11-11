@@ -39,6 +39,8 @@ temporary path: covers must still load serially without starting a subprocess.
 `customheaders` also checks initial cross-origin Basic credential withholding using the real HTTP
 transport, same-origin Basic and custom-header precedence, and subcatalog credential-copy boundaries.
 All credentials in this scenario are synthetic and requests stay on loopback.
+It also verifies that removing authentication headers cannot reuse a protected cover's cached bytes,
+including an older unscoped cache entry. The resulting refused image request is intentional.
 
 ### Cover scheduling regression
 

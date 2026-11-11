@@ -61,6 +61,34 @@ function HttpClient.basicCredentialsFor(url, origin, username, password)
     return nil, nil
 end
 
+function HttpClient.cacheKey(url, username, password, basic_auth_origin)
+    local parts = { "request-cache-v2" }
+    -- Length prefixes distinguish missing/empty values and delimiters inside credentials.
+    local function add(value)
+        parts[#parts + 1] = value == nil and "-" or (#value .. ":" .. value)
+    end
+    if basic_auth_origin == nil then basic_auth_origin = url end
+    add(url)
+    add(RequestHeaders.originKey(basic_auth_origin))
+    add(username)
+    add(password)
+    -- Redirects can use headers from any configured destination, not just the first URL.
+    for __, catalog in ipairs(type(catalogs) == "table" and catalogs or {}) do
+        local origin = type(catalog) == "table" and RequestHeaders.originKey(catalog.url)
+        if origin and type(catalog.headers) == "table" and #catalog.headers > 0 then
+            add(origin)
+            for ___, header in ipairs(catalog.headers) do
+                if type(header) == "table" and RequestHeaders.validate(header.name, header.value) then
+                    add(header.name:lower())
+                    add(header.value)
+                end
+            end
+            add(nil)
+        end
+    end
+    return "request-v2:" .. require("ffi/sha2").sha256(table.concat(parts))
+end
+
 -- Statuses a redirect is followed for. LuaSocket follows all of them but 308.
 local REDIRECT_STATUSES = {
     [Constants.HTTP_STATUS.MOVED_PERMANENTLY] = true,

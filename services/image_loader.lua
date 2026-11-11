@@ -142,10 +142,10 @@ function Batch:loadImages(urls)
         end
     end
 
-    local function finish(url, content, stale_content)
+    local function finish(url, content, stale_content, cache_key)
         if content then
-            if self.cover_cache_enabled ~= false then
-                if not CoverCache.put(url, content, max_bytes) then
+            if cache_key then
+                if not CoverCache.put(cache_key, content, max_bytes) then
                     Debug.error("ImageLoader:", "Failed to cache cover")
                 end
             end
@@ -202,29 +202,37 @@ function Batch:loadImages(urls)
             end
         elseif #ready > 0 then
             local job = table.remove(ready, 1)
-            finish(job.url, not job.failed and readFetch(job) or nil, job.stale_content)
+            finish(job.url, not job.failed and readFetch(job) or nil, job.stale_content, job.cache_key)
         elseif #jobs + #ready < Constants.IMAGE_LOADER.MAX_PARALLEL
             and (pending_fetch or next_index <= #urls) then
             if not pending_fetch then
                 local url = urls[next_index]
                 next_index = next_index + 1
-                local cached = self.cover_cache_enabled ~= false and CoverCache.get(url, ttl_seconds)
+                pending_fetch = { url = url }
+            end
+            local fetch = pending_fetch
+            local cache_key = self.cover_cache_enabled ~= false
+                and HttpClient.cacheKey(fetch.url, self.username, self.password, self.basic_auth_origin)
+            -- Credentials may change while this batch waits for another batch's worker slot.
+            if fetch.cache_key ~= cache_key then
+                fetch.cache_key = cache_key
+                local cached = cache_key and CoverCache.get(cache_key, ttl_seconds)
+                fetch.stale_content = cached and cached.content or nil
                 if cached and not cached.stale then
-                    Debug.log("ImageLoader:", "Cover cache hit:", url)
-                    deliver(url, cached.content)
-                else
-                    pending_fetch = { url = url, stale_content = cached and cached.content or nil }
+                    pending_fetch = nil
+                    Debug.log("ImageLoader:", "Cover cache hit:", fetch.url)
+                    deliver(fetch.url, cached.content)
                 end
             end
             -- Contention is not a fork failure: wait rather than performing blocking HTTP.
             if pending_fetch and active_jobs < Constants.IMAGE_LOADER.MAX_PARALLEL then
-                local fetch = pending_fetch
                 pending_fetch = nil
                 Debug.log("ImageLoader:", "Fetching cover with auth:", self.username and "yes" or "no")
                 local job = self.parallel_downloads ~= false
                     and startFetch(fetch.url, self.username, self.password, self.basic_auth_origin)
                 if job then
                     job.stale_content = fetch.stale_content
+                    job.cache_key = fetch.cache_key
                     table.insert(jobs, job)
                 elseif self.prefetch then
                     Debug.error("ImageLoader:", "Skipping cover prefetch: subprocess unavailable")
@@ -240,7 +248,7 @@ function Batch:loadImages(urls)
                         self.password,
                         self.basic_auth_origin
                     )
-                    finish(fetch.url, success and content or nil, fetch.stale_content)
+                    finish(fetch.url, success and content or nil, fetch.stale_content, fetch.cache_key)
                     -- The fetch blocked the UI: end this tick so it can run before the next cover.
                     blocked = true
                 end

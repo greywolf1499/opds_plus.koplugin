@@ -22,6 +22,7 @@ describe("FeedFetcher", function()
 			socketutil = socketutil,
 			cache = Cache,
 			["document/documentregistry"] = registry_stub.new(),
+			["ffi/sha2"] = require("support.sha256_stub"),
 		}
 		for name, stand_in in pairs(ui.stubs) do
 			stubs[name] = stand_in
@@ -483,7 +484,27 @@ describe("FeedFetcher", function()
 	end)
 
 	describe("parseFeed", function()
-		local KEY = "opds|catalog|" .. URL
+		local KEY
+		before_each(function() KEY = "opds|catalog|" .. HttpClient.cacheKey(URL) end)
+
+		it("keeps authenticated feed validators and bodies separate between accounts", function()
+			route(URL, function(request)
+				local etag = '"' .. request.user .. '"'
+				if request.headers["If-None-Match"] == etag then
+					return { code = 304 }
+				end
+				return {
+					code = 200, body = "<feed><title>" .. request.user .. "</title></feed>",
+					headers = { ETag = etag },
+				}
+			end)
+			FeedFetcher.parseFeed(URL, "ann", "secret")
+			FeedFetcher.parseFeed(URL, "bob", "pw")
+			local again = FeedFetcher.parseFeed(URL, "ann", "secret")
+			assert.is_nil(http.requests[2].headers["If-None-Match"])
+			assert.equals('"ann"', http.requests[3].headers["If-None-Match"])
+			assert.equals("ann", again.feed.title)
+		end)
 
 		it("returns the parsed feed", function()
 			route(URL, { code = 200, body = FEED })

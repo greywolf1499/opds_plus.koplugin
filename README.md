@@ -338,6 +338,11 @@ inherit the source login, and saving it as a subcatalog does not copy that login
 custom headers still apply. Older download-queue entries without a saved catalog origin withhold
 Basic credentials and show a notice; remove and re-add any entries that need authentication.
 
+Feed and cover caches in development builds are separated by authentication context. Changing a
+login or custom headers can trigger fresh requests; old unscoped cover entries are no longer read.
+Header changes can invalidate caches for other catalogs too, because redirected requests may use
+those headers. Cache limits and cleanup remain unchanged, and credentials are not stored in cache names.
+
 ## 🔧 Technical Details
 
 ### Requirements

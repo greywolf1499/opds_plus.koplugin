@@ -119,6 +119,12 @@ local function open_browser()
     return p.opds_browser
 end
 
+-- Older runtime copies use unscoped keys during before/after measurements.
+local function cover_cache_key(url, username, password, origin)
+    local client = require("services.http_client")
+    return client.cacheKey and client.cacheKey(url, username, password, origin) or url
+end
+
 local function find_item(b, text)
     for _, item in ipairs(b.item_table) do
         if item.text and item.text:find(text, 1, true) then
@@ -1280,7 +1286,7 @@ local function inputfairness_steps()
                     text = "Input test " .. index, title = "Input test " .. index, author = "Harness",
                     cover_url = address, lazy_load_cover = true, acquisitions = {},
                 }
-                if case.cached then assert(CoverCache.put(address, bytes, 0)) end
+                if case.cached then assert(CoverCache.put(cover_cache_key(address, nil, nil, false), bytes, 0)) end
             end
             local b = open_browser()
             b:switchItemTable("Input fairness", items)
@@ -1423,7 +1429,7 @@ local function covermemory_steps()
                 text = "Memory " .. index, title = "Memory " .. index, author = "Harness",
                 cover_url = url, image = url, lazy_load_cover = true, acquisitions = {},
             }
-            assert(CoverCache.put(url, bytes, 0))
+            assert(CoverCache.put(cover_cache_key(url, nil, nil, false), bytes, 0))
         end
         b = open_browser()
         b:switchItemTable("Cover memory", items)
@@ -1650,13 +1656,13 @@ local function parcovers_steps()
             local stale_url = BASE .. "/cover/500.png?fail=1"
             local bare_url = BASE .. "/cover/501.png?fail=1"
             remove_cache_files()
-            CoverCache.put(stale_url, "STALE-COVER", 0)
+            CoverCache.put(cover_cache_key(stale_url), "STALE-COVER", 0)
             -- A negative TTL makes every cached entry stale.
             run_batch({ urls = { stale_url, bare_url }, cache = true, ttl = -1 }, function(r)
                 local first = r.got[1]
                 c.check("failed_download_serves_stale_cover", r.count == 1 and first.url == stale_url
                     and first.content == "STALE-COVER", r.count)
-                local kept = CoverCache.get(stale_url, 1e9)
+                local kept = CoverCache.get(cover_cache_key(stale_url), 1e9)
                 c.check("failed_download_keeps_stale_cover", kept and kept.content == "STALE-COVER")
                 remove_cache_files()
                 advance()
@@ -1757,7 +1763,9 @@ local function coverprefetch_steps()
         assert(perpage >= 3 and perpage * 3 <= #items, "fixture needs three display pages")
         items[perpage + 2].cover_url = items[perpage + 1].cover_url
         items[perpage + 2].image = items[perpage + 1].image
-        for index = 1, perpage + 1 do assert(CoverCache.put(items[index].cover_url, bytes, 0)) end
+        for index = 1, perpage + 1 do
+            assert(CoverCache.put(cover_cache_key(items[index].cover_url, nil, nil, false), bytes, 0))
+        end
         server_stats(true)
         watch_forks()
         wait_for(loaded, 10, function(ready)
@@ -1802,11 +1810,12 @@ local function coverprefetch_steps()
             c.check("skips_fresh_cache", server_stats(false).requests == perpage - 2, server_stats(false).requests)
             local cached, undecoded = true, true
             for index = perpage + 1, perpage * 2 do
-                if not CoverCache.get(items[index].cover_url) then cached = false end
+                if not CoverCache.get(cover_cache_key(items[index].cover_url, nil, nil, false)) then cached = false end
                 if items[index].cover_bb then undecoded = false end
             end
             c.check("neighbor_cached_but_not_decoded", cached and undecoded)
-            c.check("does_not_warm_further_pages", CoverCache.get(items[perpage * 2 + 1].cover_url) == nil)
+            c.check("does_not_warm_further_pages",
+                CoverCache.get(cover_cache_key(items[perpage * 2 + 1].cover_url, nil, nil, false)) == nil)
             toggle()
             c.check("toggle_persists_off", p:getSetting("cover_prefetch_enabled") == false and not entry.checked_func())
             server_stats(true)
@@ -1887,7 +1896,7 @@ local function coverprefetch_steps()
                 c.check("shared_budget_uses_subprocesses", #fork_pids - first + 1 == 6)
                 c.check("shared_budget_reaps_all_workers", alive_children(first) == 0 and count_lua_tmp() == 0)
                 local cached = true
-                for _, url in ipairs(urls) do if not CoverCache.get(url) then cached = false end end
+                for _, url in ipairs(urls) do if not CoverCache.get(cover_cache_key(url)) then cached = false end end
                 c.check("shared_budget_warms_cache", cached)
                 advance()
             end)
@@ -3305,6 +3314,7 @@ local function customheaders_steps()
     local ALL = ID_LINE .. "\n" .. SECRET_LINE .. "\nX-Test-Note: " .. NOTE_VALUE
     local OTHER = BASE:gsub("127%.0%.0%.1", "localhost")
     local RequestHeaders, HttpClient, LuaSettings
+    local protected_cache_key, protected_cover_url
     local p, b, edit, editor, dir, sync_dir, previous_dir, previous_sync_dir, previous_vk, first_fork, servers_before
 
     local function server_named(title)
@@ -3592,6 +3602,9 @@ local function customheaders_steps()
                 c.check("with.parallel_covers_load", ok, have .. "/" .. want)
                 c.check("with.parallel_covers_use_subprocesses", #fork_pids - first_fork + 1 > 0,
                     #fork_pids - first_fork + 1)
+                protected_cover_url = assert(find_item(b, "Book 0001")).cover_url
+                protected_cache_key = cover_cache_key(protected_cover_url,
+                    b.root_catalog_username, b.root_catalog_password, b.root_catalog_url or false)
                 advance()
             end)
             return "async"
@@ -3810,6 +3823,22 @@ local function customheaders_steps()
             local ok = HttpClient.getUrlContent(BASE .. "/cf/cover/1.png")
             c.check("clear.cover_is_refused_again", ok == false)
             close_browser(p)
+        end,
+        function(advance)
+            local CoverCache = require("services.cover_cache")
+            local previous = CoverCache.get(protected_cache_key)
+            c.check("cache.protected_cover_was_cached", previous ~= nil)
+            -- Also model an older release's unscoped disk entry.
+            if previous then assert(CoverCache.put(protected_cover_url, previous.content, 0)) end
+            local deliveries = 0
+            local batch = require("services.image_loader"):loadImages({ protected_cover_url },
+                function() deliveries = deliveries + 1 end, nil, nil, true, nil, nil, true, BASE)
+            wait_for(function() return not batch.loading end, 10, function(done)
+                c.check("cache.removed_credentials_finish", done)
+                c.check("cache.removed_credentials_cannot_reuse_private_or_legacy_bytes", deliveries == 0, deliveries)
+                advance()
+            end)
+            return "async"
         end,
         -- Kavita's own requests, captured before they reach LuaSocket: the plugin's own headers win.
         function()
