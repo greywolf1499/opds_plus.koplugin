@@ -6,6 +6,7 @@ local AtomMapper = require("core.mappers.atom")
 local Opds2Mapper = require("core.mappers.opds2")
 local OPDSParser = require("core.parser")
 local BrowserContext = require("core.browser_context")
+local _ = require("gettext")
 
 local NavigationHandler = {}
 
@@ -16,10 +17,19 @@ local NavigationHandler = {}
 -- @param debug_callback function Optional debug logging callback
 -- @return table Item table suitable for menu display
 function NavigationHandler.genItemTableFromCatalog(catalog, item_url, browser_context, debug_callback)
+	local items, facets, search
 	if OPDSParser.isOpds2(catalog) then
-		return Opds2Mapper.map(catalog, item_url, browser_context, debug_callback)
+		items, facets, search = Opds2Mapper.map(catalog, item_url, browser_context, debug_callback)
+	else
+		items, facets, search = AtomMapper.map(catalog, item_url, browser_context, debug_callback)
 	end
-	return AtomMapper.map(catalog, item_url, browser_context, debug_callback)
+	if type(catalog) == "table" and catalog._opdsplus_authentication then
+		items[#items + 1] = {
+			text = _("Authentication information"), url = catalog._opdsplus_authentication.url,
+			authentication = catalog._opdsplus_authentication,
+		}
+	end
+	return items, facets, search
 end
 
 -- Update catalog display with new URL
@@ -56,7 +66,7 @@ end
 function NavigationHandler.applyCatalog(menu_table, facets, search, item_url, browser, paths_updated)
 	-- Count how many have covers
 	local cover_count = 0
-	for _, item in ipairs(menu_table) do
+	for __, item in ipairs(menu_table) do
 		if item.cover_url then
 			cover_count = cover_count + 1
 		end
@@ -181,7 +191,7 @@ function NavigationHandler.getBreadcrumbs(browser)
 		})
 	end
 
-	for _, path in ipairs(browser.paths) do
+	for __, path in ipairs(browser.paths) do
 		table.insert(breadcrumbs, {
 			title = path.title,
 			url = path.url,

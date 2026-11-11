@@ -43,5 +43,28 @@ KOReader restarts. A catalog's own **Accept** header, set under its custom heade
 - **A shelf is empty**: the catalog changed since its start page was opened. Go back and open the start page again.
 - **A book has no download button**: the catalog lists it without a file KOReader can open (an audiobook, or a
   book that can only be read in the browser).
-- **Login keeps failing**: OPDS Plus sends a username and password (Basic authentication). Catalogs that need an
-  OPDS 2.0 authentication document or OAuth are not supported yet.
+- **Login keeps failing**: check the catalog's Basic credentials or custom headers. Development builds
+  explain authentication documents as described below, but OAuth login remains unsupported.
+
+## Authentication discovery in development builds
+
+An OPDS authentication document is information about a catalog's login methods, not a catalog of books.
+Development builds recognize it in a `401` response or at its direct address. Provider title/description,
+Basic username/password labels and unsupported methods are shown in a scrollable information window.
+Edit the catalog's existing username and password fields to use Basic authentication.
+
+An advertised authentication-document link in an HTTP header, Atom feed or OPDS 2 feed becomes an
+**Authentication information** entry without hiding the public catalog. Opening it uses the usual
+cancellable background loader and leaves the current listing/history unchanged. A `401` response
+advertising only a document link loads that document before explaining the available methods.
+
+Linked discovery requires HTTPS on the exact source origin (scheme, host and port), verifies the
+certificate chain and hostname with KOReader's CA bundle, and sends **no catalog credentials or custom
+headers**. Redirects and cross-origin linked documents are refused rather than implicitly trusted.
+Missing CA bundles, failed verification and malformed documents are explained. Existing catalog
+requests, including Basic/self-signed setups, retain their current behavior.
+
+This is **discovery, not automatic login**. Provider text is untrusted information; logos, registration,
+help and token endpoints are not automatically opened. OAuth remains unimplemented pending a concrete,
+verified provider/flow/storage decision. The old OPDS draft's password and implicit grants are not used
+as compatibility shortcuts; see [RFC 9700](https://www.rfc-editor.org/rfc/rfc9700.html).

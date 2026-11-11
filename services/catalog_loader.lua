@@ -16,6 +16,14 @@ function CatalogLoader.prepare(url, context)
 	local state = FeedFetcher.newRequestState(context.basic_auth_origin or false)
 	context.fetch_state = state
 	local result = Result.wrapPcall(function()
+		if context.authentication then
+			local document, err = require("services.authentication").fetch(url, context.authentication.source)
+			state.errors[#state.errors + 1] = {
+				text = document and require("utils.auth_document").describe(document) or err,
+				authentication = document ~= nil,
+			}
+			return { items = {}, state = state }
+		end
 		local items, facets, search = FeedFetcher.genItemTableFromURL(url, context.username, context.password,
 			nil, function(catalog, address)
 				return NavigationHandler.genItemTableFromCatalog(catalog, address, context)

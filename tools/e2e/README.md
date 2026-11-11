@@ -176,6 +176,19 @@ prefix to a book with a valid EPUB download and checks the actual saved custom d
 while embedded descriptions and reader edits remain untouched. Unit cases also cover mismatched indices,
 malformed markers, escaped names, break variants and preserving the raw content/summary source.
 
+### Authentication discovery
+
+```bash
+EMULATE_READER_W=600 EMULATE_READER_H=800 tools/e2e/catalog/run.sh authentication,catalogloading,customheaders
+```
+
+`authentication` uses intercepted public-document fixtures and real subprocesses to verify the
+scrollable 401 information viewer, Basic labels, unsupported OAuth explanations, explicit linked
+discovery without hiding public entries, unchanged navigation and cancellation/child reaping.
+The linked request must use the chain/hostname-verified TLS factory and omit credentials.
+No login or token endpoint is contacted. The real TLS verification mechanism remains covered by
+the existing TLS/OTA contracts; this fixture does not simulate a real remote certificate handshake.
+
 ### Streaming resume
 
 ```bash

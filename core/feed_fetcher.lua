@@ -19,6 +19,8 @@ local RequestHeaders = require("utils.request_headers")
 local UrlUtils = require("utils.url_utils")
 local FileUtils = require("utils.file_utils")
 local Result = require("utils.result")
+local AuthDocument = require("utils.auth_document")
+local url = require("socket.url")
 
 local FeedFetcher = {}
 
@@ -34,6 +36,10 @@ local refuses_accept = {}
 local function reportError(message, state)
 	if state then
 		state.errors[#state.errors + 1] = message
+	elseif message.authentication then
+		UIManager:show(require("ui/widget/textviewer"):new {
+			title = _("Authentication information"), text = message.text,
+		})
 	else
 		UIManager:show(InfoMessage:new(message))
 	end
@@ -74,6 +80,8 @@ end
 -- @param state table|nil Collect changes and messages for a background reader
 -- @return string|table XML content or headers, nil on error
 -- @return table|nil Response headers of a GET
+-- @return string|nil Final response URL
+-- @return boolean|nil Whether authentication information was handled
 function FeedFetcher.fetchFeed(item_url, headers_only, username, password, cached, state, basic_auth_origin)
 	item_url = UrlUtils.stripFragment(item_url)
 	if basic_auth_origin == nil and state then basic_auth_origin = state.basic_auth_origin end
@@ -118,12 +126,29 @@ function FeedFetcher.fetchFeed(item_url, headers_only, username, password, cache
 	end
 
 	if cached and code == Constants.HTTP_STATUS.NOT_MODIFIED then
-		return cached.xml, headers
+		return cached.xml, headers, cached.response_url
+	end
+
+	if code == Constants.HTTP_STATUS.OK or code == Constants.HTTP_STATUS.UNAUTHORIZED then
+		local document, recognized, err = AuthDocument.parse(info.body, headers and headers["content-type"])
+		if not recognized and code == Constants.HTTP_STATUS.UNAUTHORIZED then
+			local link = AuthDocument.headerLink(headers and headers.link)
+			if link then
+				recognized = true
+				document, err = require("services.authentication").fetch(url.absolute(info.url, link), info.url)
+			end
+		end
+		if recognized then
+			logger.info("OPDS: authentication discovery response")
+			reportError({ text = document and AuthDocument.describe(document) or err,
+				authentication = document ~= nil }, state)
+			return nil, nil, nil, true
+		end
 	end
 
 	if code == Constants.HTTP_STATUS.OK then
 		local xml = info.body
-		return xml ~= "" and xml, headers
+		return xml ~= "" and xml, headers, info.url
 	end
 
 	-- Handle errors
@@ -182,6 +207,7 @@ end
 -- @param password string|nil Optional HTTP auth password
 -- @param debug_callback function|nil Optional debug logging callback
 -- @return table Parsed feed or nil on error
+-- @return boolean|nil Whether authentication information was handled instead of a catalog
 function FeedFetcher.parseFeed(item_url, username, password, debug_callback, state, basic_auth_origin)
 	-- One request per feed: a server that tags or dates its feeds answers "not modified" when the copy
 	-- kept here is still current, and one that does not just sends the feed.
@@ -189,11 +215,14 @@ function FeedFetcher.parseFeed(item_url, username, password, debug_callback, sta
 	if basic_auth_origin == nil and state then basic_auth_origin = state.basic_auth_origin end
 	local key = "opds|catalog|" .. HttpClient.cacheKey(item_url, username, password, basic_auth_origin)
 	local cached = CatalogCache:check(key)
-	local feed, headers = FeedFetcher.fetchFeed(item_url, false, username, password, cached, state, basic_auth_origin)
+	local feed, headers, response_url, authentication = FeedFetcher.fetchFeed(
+		item_url, false, username, password, cached, state, basic_auth_origin)
 	local content_type = headers and headers["content-type"]
+	local authentication_link = AuthDocument.headerLink(headers and headers.link)
 
 	if feed and cached and feed == cached.xml then
 		content_type = cached.content_type or content_type
+		authentication_link = authentication_link or cached.authentication_link
 		if debug_callback then
 			debug_callback("Cache hit for", item_url)
 		end
@@ -203,13 +232,15 @@ function FeedFetcher.parseFeed(item_url, username, password, debug_callback, sta
 			etag = headers["etag"],
 			last_modified = headers["last-modified"],
 			content_type = content_type,
+			authentication_link = authentication_link,
+			response_url = response_url ~= item_url and response_url or nil,
 		}
 		CatalogCache:insert(key, entry)
 		if state then state.cache[key] = entry end
 	end
 
 	if not feed then
-		return nil
+		return nil, authentication
 	end
 
 	if FeedFetcher.isWebPage(feed) then
@@ -221,7 +252,13 @@ function FeedFetcher.parseFeed(item_url, username, password, debug_callback, sta
 		return nil
 	end
 
-	return OPDSParser:parse(feed, content_type)
+	local parsed = OPDSParser:parse(feed, content_type)
+	authentication_link = authentication_link or AuthDocument.feedLink(parsed)
+	parsed._opdsplus_authentication = authentication_link and {
+		url = url.absolute(response_url or item_url, authentication_link),
+		source = response_url or item_url,
+	} or nil
+	return parsed
 end
 
 -- Parse feed with Result-based error handling
@@ -231,11 +268,16 @@ end
 -- @param debug_callback function|nil Optional debug logging callback
 -- @return Result Result with parsed feed or error
 function FeedFetcher.parseFeedResult(item_url, username, password, debug_callback, state, basic_auth_origin)
-	local result = Result.wrapPcall(FeedFetcher.parseFeed)(
-		item_url, username, password, debug_callback, state, basic_auth_origin)
+	local authentication
+	local result = Result.wrapPcall(function()
+		local feed
+		feed, authentication = FeedFetcher.parseFeed(item_url, username, password, debug_callback, state, basic_auth_origin)
+		return feed
+	end)()
 
 	-- Convert nil success to error
 	if result:isOk() and result.value == nil then
+		if authentication then return Result.err("Authentication information displayed", "AUTH_DOCUMENT") end
 		return Result.err("Failed to fetch or parse feed")
 	end
 
@@ -310,6 +352,7 @@ function FeedFetcher.genItemTableFromURL(item_url, username, password, debug_cal
 	local result = FeedFetcher.parseFeedResult(item_url, username, password, debug_callback, state, basic_auth_origin)
 
 	local catalog = result:unwrapOrElse(function(err)
+		if result.code == "AUTH_DOCUMENT" then return nil end
 		logger.info("Cannot get catalog info from", item_url, err)
 		reportError({
 			text = T(_("Cannot get catalog info from %1"), (item_url and BD.url(item_url) or "nil")),

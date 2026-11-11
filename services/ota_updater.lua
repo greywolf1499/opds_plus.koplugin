@@ -207,9 +207,7 @@ end
 -- TLS settings for every request: verify the chain against the CA bundle, and the host against the
 -- certificate
 function OtaUpdater:tlsOptions()
-	local tls = { verify = "peer", cafile = self.ca_file }
-	tls.create = TlsHostname.create(tls)
-	return tls
+	return TlsHostname.options(self.ca_file)
 end
 
 local function classifyNetworkError(err)

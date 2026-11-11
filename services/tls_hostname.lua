@@ -10,6 +10,12 @@ TlsHostname.SAN_OID = "2.5.29.17"
 TlsHostname.DEFAULT_OPTIONS = { "all", "no_sslv2", "no_sslv3", "no_tlsv1" }
 TlsHostname.TIMEOUT = 60
 
+function TlsHostname.options(ca_file)
+	local options = { verify = "peer", cafile = ca_file }
+	options.create = TlsHostname.create(options)
+	return options
+end
+
 --- Whether a name from a certificate covers a host
 -- @param pattern string A dNSName from the certificate, such as "*.example.org"
 -- @param host string The host connected to

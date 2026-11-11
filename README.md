@@ -457,8 +457,9 @@ travels unencrypted. [SECURITY.md](SECURITY.md) has the details and explains how
 
 - Covers show only when the catalog provides image URLs; some feeds have none
 - Large catalogs may take time to load initially, and Grid View performance varies with the device
-- OPDS 2.0 catalogs that need an authentication document or OAuth are not supported; only username and
-  password (Basic) logins are
+- Development builds recognize OPDS authentication documents and explain available methods without
+  sending credentials to advertised login endpoints. Existing Basic and custom-header access remains
+  supported. OAuth login is not implemented; see [authentication discovery](docs/wiki/OPDS-2.0.md#authentication-discovery-in-development-builds).
 - v1.5.0 has no two-way progress synchronization. Development builds support local/PSE resume and
   [opt-in Kavita/Komga page-stream synchronization](docs/wiki/Kavita.md#two-way-progress-in-development-builds).
   Downloaded books are not synchronized, and the server APIs cannot guarantee atomic conflict detection.
