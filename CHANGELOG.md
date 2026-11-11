@@ -13,6 +13,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 ### Changed
 
 - **Screenshots**: The README shows the book details, the update dialog and an OPDS 2.0 catalog's shelves and facets, all taken from a mock catalog of public-domain classics.
+- **Editor Diagnostics**: Add a reproducible LuaLS check with accurate Busted assertions and KOReader module resolution, without disabling production warnings.
+
+### Fixed
+
+- **Invalid Book Addresses**: Empty download, cover and page-stream addresses report an error instead of crashing or opening a broken viewer. An invalid download address leaves any existing destination file untouched.
+- **Update Validation**: If the staged version file becomes unreadable during validation, the update reports the failure and keeps the installed plugin instead of throwing a Lua error.
+- **Kavita Resume**: Read complete JSON responses regardless of field order or network chunk boundaries. Invalid tokens and page numbers are reported without crashing, and generic page streams no longer attempt Kavita authentication.
 
 ## [1.5.0] - 2026-11-10
 

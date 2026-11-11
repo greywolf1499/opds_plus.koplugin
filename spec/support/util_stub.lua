@@ -112,7 +112,7 @@ local function replaceSlashChar(str)
 end
 
 -- Replaced by the original with a parse of `mount`; see the header.
-function util.getFilesystemType()
+function util.getFilesystemType(_path)
 	return "ext4"
 end
 

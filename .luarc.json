@@ -1,0 +1,16 @@
+{
+  "runtime.version": "LuaJIT",
+  "runtime.path": ["?.lua", "?/init.lua", "spec/?.lua", "spec/vendor/?.lua"],
+  "runtime.pathStrict": true,
+  "workspace.library": [
+    "${3rd}/busted/library",
+    "${3rd}/luassert/library",
+    ".lua_env/koreader/frontend",
+    ".lua_env/koreader/common",
+    ".lua_env/koreader"
+  ],
+  "workspace.ignoreDir": [".git", ".lua_env", ".tools", "dist", "spec/vendor"],
+  "workspace.checkThirdParty": false,
+  "diagnostics.globals": ["G_reader_settings", "G_defaults"],
+  "telemetry.enable": false
+}

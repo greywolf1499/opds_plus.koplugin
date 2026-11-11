@@ -353,6 +353,31 @@ describe("OTA updater", function()
 			assert.matches("broken.lua", detail)
 		end)
 
+		it("reports a version-file reread failure without changing the installed plugin", function()
+			serve(zipbuilder.plugin(plugin_files("1.4.0")))
+			local ota = updater()
+			local original_loadfile = loadfile
+			local reads = 0
+			helper.global("loadfile", function(path)
+				if path == ota.staging_dir .. "/opds_plus_version.lua" then
+					reads = reads + 1
+					if reads == 2 then
+						return nil, "injected read failure"
+					end
+				end
+				return original_loadfile(path)
+			end)
+
+			local installed, err, detail = check_and_install(ota)
+
+			assert.is_nil(installed)
+			assert.equal(OtaUpdater.Errors.VALIDATION_FAILED, err)
+			assert.equal("injected read failure", detail)
+			assert.matches('"1.3.1"', read(plugin_dir .. "/opds_plus_version.lua"))
+			assert.is_nil(mode(ota.staging_dir))
+			assert.is_false(OtaUpdater.restart_pending)
+		end)
+
 		it("refuses a release missing a required file", function()
 			serve(zipbuilder.plugin(plugin_files("1.4.0", { ["_meta.lua"] = false })))
 			local _, err, detail = check_and_install(updater())

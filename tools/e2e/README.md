@@ -31,6 +31,9 @@ plugin and installs `driver.lua` as a KOReader user patch. The driver works thro
 exits 1 when a scenario fails or the run does not finish. The scenario list is at the end of `driver.lua`; the
 server's routes are listed at the top of `mock_opds_server.py`.
 
+The `parandroid` scenario checks both temporary-name exceptions and a missing
+temporary path: covers must still load serially without starting a subprocess.
+
 Some scenarios are explicit (only run when named): `shots`, and `cwapaging` and `cwadownload`, which need a
 Calibre-Web-Automated server (`HARNESS_CWA_URL`, `HARNESS_CWA_USER`, `HARNESS_CWA_PASS`, plus
 `HARNESS_CWA_TOTAL` for `cwapaging`; see the comments above them in `driver.lua`).

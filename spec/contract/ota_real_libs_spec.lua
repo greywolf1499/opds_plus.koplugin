@@ -101,10 +101,11 @@ describe("OTA real LuaSec", function()
 	it("exposes certificate names the way services/tls_hostname.lua reads them", function()
 		-- ssl.so needs KOReader's own OpenSSL, which is not on the loader's path
 		local ffi = require("ffi")
+		local libraries = {}
 		for _, prefix in ipairs({ "libcrypto.so.", "libssl.so." }) do
 			for name in lfs.dir(KOREADER .. "/libs") do
 				if name:sub(1, #prefix) == prefix then
-					ffi.load(KOREADER .. "/libs/" .. name, true)
+					libraries[#libraries + 1] = ffi.load(KOREADER .. "/libs/" .. name, true)
 				end
 			end
 		end
@@ -115,6 +116,7 @@ describe("OTA real LuaSec", function()
 		local x509 = ok and require("ssl.x509")
 		package.path, package.cpath = saved_path, saved_cpath
 		assert(ok, ssl)
+		assert(x509, "LuaSec X509 module did not load")
 		assert.is_function(ssl.wrap)
 
 		local TlsHostname = require("services.tls_hostname")
@@ -123,5 +125,7 @@ describe("OTA real LuaSec", function()
 		assert.is_true(TlsHostname.certificateMatches(cert, "example.org"))
 		assert.is_true(TlsHostname.certificateMatches(cert, "cdn.example.net"))
 		assert.is_false(TlsHostname.certificateMatches(cert, "example.com"))
+		-- Keep the dlopen handles alive until after LuaSec has finished using OpenSSL.
+		assert.is_true(#libraries > 0)
 	end)
 end)

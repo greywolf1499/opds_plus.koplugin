@@ -348,6 +348,20 @@ describe("DownloadManager", function()
 	end)
 
 	describe("downloadFile", function()
+		it("reports invalid URLs before opening the destination or making a request", function()
+			local target = dir .. "/untouched.epub"
+			fs.write(target, "keep this file")
+
+			local invalid = { n = 4, nil, "", "http:", "http://" }
+			for index = 1, invalid.n do
+				assert.is_false(DownloadManager.downloadFile(new_browser(), target, invalid[index]))
+				assert.equals("keep this file", fs.read(target))
+				assert.equals("Invalid download URL.", ui:last().text)
+			end
+
+			assert.same({}, http.requests)
+		end)
+
 		local browser, target
 
 		before_each(function()

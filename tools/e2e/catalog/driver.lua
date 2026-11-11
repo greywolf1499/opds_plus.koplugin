@@ -7,6 +7,7 @@
 -- HARNESS_NO_DPAD and HARNESS_NO_KEYBOARD (see below).
 --
 -- Some scenarios replace os.rename and os.tmpname for a moment to simulate failures.
+-- The marked duplicate-field exceptions below are temporary hooks, restored after each check.
 -- luacheck: ignore 122
 
 local UIManager = require("ui/uimanager")
@@ -28,7 +29,7 @@ end
 local shots_dir = os.getenv("HARNESS_SHOTS")
 local wanted = os.getenv("HARNESS_SCENARIOS")
 if wanted == "" then wanted = nil end
-local out = io.open(out_path, "w")
+local out = assert(io.open(out_path, "w"))
 
 local function emit(key, value)
     out:write(key, "=", tostring(value):gsub("[\r\n]+", " "), "\n")
@@ -80,7 +81,7 @@ local function toast_has(fragment)
     return false
 end
 
-local function plugin()
+local function find_plugin()
     local FileManager = require("apps/filemanager/filemanager")
     local fm = FileManager.instance
     if not fm then return nil end
@@ -90,6 +91,10 @@ local function plugin()
     for _, child in ipairs(fm) do
         if type(child) == "table" and child.onShowOPDSPlusCatalog then return child end
     end
+end
+
+local function plugin()
+    return assert(find_plugin(), "OPDS Plus plugin is not loaded")
 end
 
 local function open_browser()
@@ -333,6 +338,7 @@ local function cachelib_steps()
 
             check("normal", function() return roundtrip(fresh()) end)
 
+            ---@diagnostic disable-next-line: duplicate-set-field
             DataStorage.getFullDataDir = function() return nil end
             check("full_data_dir_nil", function() return roundtrip(fresh()) end)
 
@@ -341,6 +347,7 @@ local function cachelib_steps()
 
             local tmp = make_temp_dir()
             lfs.chdir(tmp)
+            ---@diagnostic disable-next-line: duplicate-set-field
             DataStorage.getDataDir = function() return "./relkoha" end
             check("relative_data_dir", function()
                 local res = roundtrip(fresh())
@@ -358,6 +365,7 @@ local function cachelib_steps()
             check("failed_write_keeps_old", function()
                 local CC = fresh()
                 if not CC.put("http://example.test/b.png", "old-content", 0) then return "seed put failed" end
+                ---@diagnostic disable-next-line: duplicate-set-field
                 os.rename = function() return nil, "simulated rename failure" end
                 local put_new = CC.put("http://example.test/b.png", "new-content", 0)
                 os.rename = orig_rename
@@ -488,6 +496,7 @@ local function count_feed_fetches()
     local FeedFetcher = require("core.feed_fetcher")
     local orig = FeedFetcher.genItemTableFromURL
     local state = { n = 0 }
+    ---@diagnostic disable-next-line: duplicate-set-field
     FeedFetcher.genItemTableFromURL = function(...)
         state.n = state.n + 1
         return orig(...)
@@ -575,6 +584,7 @@ local function syncgesture_steps()
         function()
             local FeedFetcher = require("core.feed_fetcher")
             local orig = FeedFetcher.genItemTableFromURL
+            ---@diagnostic disable-next-line: duplicate-set-field
             FeedFetcher.genItemTableFromURL = function() error("simulated feed failure") end
             local b = open_browser()
             reset_toasts()
@@ -1062,6 +1072,7 @@ local function watch_forks()
     local FFIUtil = require("ffi/util")
     if real_run_in_subprocess then return end
     real_run_in_subprocess = FFIUtil.runInSubProcess
+    ---@diagnostic disable-next-line: duplicate-set-field
     FFIUtil.runInSubProcess = function(...)
         local pid, fd = real_run_in_subprocess(...)
         if pid then fork_pids[#fork_pids + 1] = pid end
@@ -1247,6 +1258,7 @@ local function parcovers_steps()
         function(advance)
             local FFIUtil = require("ffi/util")
             local counting_run = FFIUtil.runInSubProcess
+            ---@diagnostic disable-next-line: duplicate-set-field
             FFIUtil.runInSubProcess = function() return nil end
             run_batch({ urls = slow_cover_urls(400, 5, 0), cache = false }, function(r)
                 FFIUtil.runInSubProcess = counting_run
@@ -1326,6 +1338,7 @@ local function covergate_steps()
 
     -- Record what every caller passes as the switch (8th argument) and keep hold of the batch it started.
     local function spy_on()
+        ---@diagnostic disable-next-line: duplicate-set-field
         ImageLoader.loadImages = function(self, urls, callback, user, pass, cache, max_mb, ttl, parallel)
             calls[#calls + 1] = { count = #urls, parallel = parallel }
             local batch, halt = real_load_images(self, urls, callback, user, pass, cache, max_mb, ttl, parallel)
@@ -1475,6 +1488,7 @@ local function parandroid_steps()
         function(advance)
             current = "parandroid"
             watch_forks()
+            ---@diagnostic disable-next-line: duplicate-set-field
             os.tmpname = function() error("unable to generate a unique filename") end
             run_batch({ urls = slow_cover_urls(700, 5, 0), cache = false }, function(r)
                 os.tmpname = real_tmpname
@@ -1484,6 +1498,19 @@ local function parandroid_steps()
                 c.check("starts_no_subprocess", r.forks == 0, r.forks)
                 c.check("fetches_one_at_a_time", r.server.max_inflight == 1, r.server.max_inflight)
                 c.check("yields_between_covers", r.min_gap >= 0.19, r.min_gap)
+                advance()
+            end)
+            return "async"
+        end,
+        function(advance)
+            watch_forks()
+            ---@diagnostic disable-next-line: duplicate-set-field
+            os.tmpname = function() return nil end
+            run_batch({ urls = slow_cover_urls(710, 2, 0), cache = false }, function(r)
+                os.tmpname = real_tmpname
+                unwatch_forks()
+                c.check("nil_path_delivers_every_cover", r.completed and r.count == 2 and r.pngs == 2, r.count)
+                c.check("nil_path_starts_no_subprocess", r.forks == 0, r.forks)
                 c.finish()
                 advance()
             end)
@@ -2205,7 +2232,7 @@ local function descsave_steps()
                 missing = dir .. "/missing.epub",
                 garbage_pdf = dir .. "/garbage.pdf",
             }
-            local file = io.open(fixtures.garbage_pdf, "w")
+            local file = assert(io.open(fixtures.garbage_pdf, "w"))
             file:write("%PDF-1.4\nthis is not a pdf\n")
             file:close()
             for name, path in pairs(fixtures) do
@@ -2258,6 +2285,7 @@ local function descsave_steps()
             reset_toasts()
             local original = DownloadManager.downloadPendingSyncs
             local queued = {}
+            ---@diagnostic disable-next-line: duplicate-set-field
             DownloadManager.downloadPendingSyncs = function(browser, list)
                 for _, record in ipairs(list) do queued[#queued + 1] = { file = record.file, info = record.info } end
                 return original(browser, list)
@@ -3969,7 +3997,7 @@ local function run_all()
 end
 
 UIManager:scheduleIn(3, function()
-    if not plugin() then
+    if not find_plugin() then
         emit("fatal", "opdsplus plugin instance not found on FileManager")
         out:close()
         UIManager:quit(1)

@@ -484,7 +484,9 @@ function OtaUpdater:extract(checked)
 	if not reader:open(self.download_path) then
 		return nil, E.INVALID_ARCHIVE, reader.err
 	end
-	local ok, err, detail = true, nil, nil
+	---@type boolean?
+	local ok = true
+	local err, detail
 	for entry in reader:iterate() do
 		local known = by_path[entry.path]
 		if not known or known.mode ~= entry.mode then
@@ -540,7 +542,10 @@ function OtaUpdater:validateStaged(release)
 			return nil, E.VALIDATION_FAILED, err
 		end
 	end
-	local chunk = loadfile(self.staging_dir .. "/opds_plus_version.lua")
+	local chunk, err = loadfile(self.staging_dir .. "/opds_plus_version.lua")
+	if not chunk then
+		return nil, E.VALIDATION_FAILED, err
+	end
 	setfenv(chunk, {})
 	local ok, staged = pcall(chunk)
 	if not ok or type(staged) ~= "table" or Semver.compare(staged.VERSION, release.version) ~= 0 then

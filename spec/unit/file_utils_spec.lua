@@ -286,6 +286,8 @@ describe("FileUtils", function()
 			helper.reset()
 			touched = {}
 			live_remove = os.remove
+			-- Refusal tests use only this recorder; after_each restores the guarded API.
+			---@diagnostic disable-next-line: duplicate-set-field
 			os.remove = function(path) -- luacheck: ignore 122
 				touched[#touched + 1] = "os.remove " .. tostring(path)
 				return true

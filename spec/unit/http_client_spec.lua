@@ -54,8 +54,9 @@ describe("HttpClient", function()
 		end)
 
 		it("rejects URLs that are not http or https without sending anything", function()
-			for _, bad in ipairs({ "ftp://example.org/feed", "file:///etc/passwd", "example.org/feed" }) do
-				local result = HttpClient.fetch(bad)
+			local invalid = { n = 7, nil, "", "http:", "http://", "ftp://example.org/feed", "file:///etc/passwd", "example.org/feed" }
+			for index = 1, invalid.n do
+				local result = HttpClient.fetch(invalid[index])
 
 				assert.is_true(result:isErr())
 				assert.equals(HttpClient.ErrorCodes.UNSUPPORTED_PROTOCOL, result.code)

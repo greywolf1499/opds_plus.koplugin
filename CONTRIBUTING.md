@@ -330,6 +330,38 @@ spec/
 
 **End-to-end kits.** `tools/e2e/` drives the plugin inside a real, headless KOReader: catalog browsing against a mock OPDS server (`tools/e2e/catalog/run.sh`), the self-updater against a mock of GitHub (`tools/e2e/ota/run.sh`) and a smoke run against real catalogs (`tools/e2e/opds/live.sh`). CI does not run them either; see [tools/e2e/README.md](tools/e2e/README.md) for what each one checks and when to run it. `tools/e2e/catalog/screenshots.sh` regenerates the README screenshots.
 
+### Editor Diagnostics (LuaLS)
+
+The tracked `.luarc.json` configures LuaJIT, exact module roots and the bundled
+Busted/Luassert metadata. Supplemental declarations in `tools/lua-ls/` describe
+missing assertion aliases, callable assertions and the binary LuaSec X509 API;
+they are editor-only and never enter the release archive. Tests and E2E drivers
+remain checked. A few intentional test replacements have documented,
+single-line diagnostic exceptions; production warnings are not disabled.
+
+Use LuaLS 3.19.2 or newer (the Lua VS Code extension includes an executable).
+Point `LUA_LANGUAGE_SERVER` at that executable if it is not on `PATH`:
+
+```bash
+LUA_LANGUAGE_SERVER=/path/to/lua-language-server scripts/check_lua.sh
+# Optional: include informational/unused-local hints in the report
+LUA_LANGUAGE_SERVER=/path/to/lua-language-server scripts/check_lua.sh --hints
+```
+
+The checker uses `KOREADER_DIR` (default `/usr/lib/koreader`) and creates the
+ignored `.lua_env/koreader` symlink, which is also the editor's library path.
+It refuses to replace an existing, differently configured path. This avoids
+committing machine-specific editor settings or modifying `.vscode/settings.json`.
+Run it once after cloning, then restart the Lua language server if the editor
+has not picked up the libraries. Configuration is passed by absolute path so
+CLI and editor checks use the same settings.
+
+Generated reports and logs stay in `.tools/luals/`. The normal check fails for
+errors/warnings; `--hints` also exits nonzero when hints exist. Unused parameters
+in callback signatures are expected hints, not runtime failures. Do not disable
+whole diagnostic categories to reduce the Problems count.
+This is a local gate: CI does not currently install KOReader or LuaLS.
+
 ### Continuous Integration
 
 `.github/workflows/ci.yml` runs on every pull request and every push to `main`:

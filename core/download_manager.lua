@@ -133,7 +133,12 @@ end
 function DownloadManager.downloadFile(browser, local_path, remote_url, username, password, caller_callback, options)
 	logger.dbg("Downloading file", local_path, "from", remote_url)
 	local code, headers, status, info
-	local parsed = url.parse(remote_url)
+	local parsed = type(remote_url) == "string" and url.parse(remote_url)
+	if not parsed or not parsed.host then
+		logger.warn("DownloadManager:downloadFile: invalid download URL")
+		UIManager:show(InfoMessage:new { text = _("Invalid download URL.") })
+		return false
+	end
 
 	if parsed.scheme == "http" or parsed.scheme == "https" then
 		-- Create the file before asking the server, so that a place we can't write to fails at once, without a request
@@ -160,6 +165,7 @@ function DownloadManager.downloadFile(browser, local_path, remote_url, username,
 			password = password,
 		}, {
 			sink = function()
+				---@type file*?
 				local handle = file
 				if not first_request then
 					local reopen_error

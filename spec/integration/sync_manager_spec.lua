@@ -30,6 +30,8 @@ describe("SyncManager", function()
 		SyncManager = helper.load("core.sync_manager", stubs)
 		Constants = require("models.constants")
 		DownloadManager = require("core.download_manager")
+		-- helper.reset unloads this module and its per-test replacement.
+		---@diagnostic disable-next-line: duplicate-set-field
 		DownloadManager.downloadPendingSyncs = function(browser, dl_list)
 			local snapshot = {}
 			for index, item in ipairs(dl_list) do
