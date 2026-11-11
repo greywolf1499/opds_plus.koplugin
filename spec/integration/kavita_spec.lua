@@ -97,7 +97,120 @@ describe("Kavita page streaming", function()
 
 	after_each(helper.reset)
 
+	describe("opt-in server progress", function()
+		local browser, item, acquisition, remote_page, writes
+		before_each(function()
+			remote_page, writes = 2, {}
+			browser = {
+				settings = {}, root_catalog_url = SERVER .. "/api/opds/" .. API_KEY .. "/",
+				root_catalog_stream_sync = true, _manager = { saveSetting = function() end },
+			}
+			item, acquisition = { id = "book" }, { href = STREAM, count = 20 }
+			http:on(AUTH, { body = SIGN_IN })
+			http:on(SERVER .. "/api/Reader/chapter-info?chapterId=42&extractPdf=true", {
+				body = '{"pages":20,"volumeId":1,"seriesId":2,"libraryId":1}',
+			})
+			http:on(PROGRESS, function() return { body = progress_of(remote_page) } end)
+			http:on(SERVER .. "/api/Reader/progress", function(request)
+				assert.equals("POST", request.method)
+				remote_page = require("utils.json_decode").decode(request.body).pageNum
+				writes[#writes + 1] = remote_page
+				return { body = "true" }
+			end)
+			for _, page in ipairs({ 0, 2, 4, 19 }) do
+				http:on(page_url(page), { body = "PAGE" })
+			end
+		end)
+
+		it("pulls before reading and writes only painted rewinds and completion, not speculative pages", function()
+			OPDSPSE:openBook(browser, item, acquisition)
+			assert.equals(3, viewer._images_list_cur)
+			viewer:paintTo()
+			ui:run_scheduled()
+			assert.same({}, writes)
+			viewer:switchToImageNum(5)
+			ui:run_scheduled()
+			assert.same({}, writes)
+			viewer:paintTo()
+			ui:run_scheduled()
+			assert.same({ 4 }, writes)
+			viewer:switchToImageNum(1)
+			viewer:paintTo()
+			ui:run_scheduled()
+			viewer:switchToImageNum(20)
+			viewer:paintTo()
+			ui:run_scheduled()
+			assert.same({ 4, 0, 20 }, writes)
+			viewer:onCloseWidget()
+			assert.same({}, http.unmatched)
+		end)
+
+		it("retains unsent close progress and reconciles before sending it on reopening", function()
+			OPDSPSE:openBook(browser, item, acquisition)
+			viewer:paintTo()
+			viewer:switchToImageNum(5)
+			viewer:paintTo()
+			viewer:onCloseWidget()
+			ui:run_scheduled()
+			assert.same({}, writes)
+			OPDSPSE:openBook(browser, item, acquisition)
+			assert.equals(5, viewer._images_list_cur)
+			viewer:paintTo()
+			ui:run_scheduled()
+			assert.same({ 4 }, writes)
+		end)
+
+		it("requires a fresh conflict choice after custom authentication changes", function()
+			OPDSPSE:openBook(browser, item, acquisition)
+			viewer:paintTo()
+			viewer:switchToImageNum(5)
+			viewer:paintTo()
+			viewer:onCloseWidget()
+			HttpClient.setCatalogs({ {
+				url = browser.root_catalog_url, headers = { { name = "Authorization", value = "Bearer other" } },
+			} })
+			OPDSPSE:openBook(browser, item, acquisition)
+			assert.equals("ButtonDialog", ui:last().kind)
+			assert.same({}, writes)
+			ui:press(ui:last(), "Use server page 3")
+			viewer:paintTo()
+			ui:run_scheduled()
+			assert.same({}, writes)
+		end)
+
+		it("invalidates an unfinished sync lookup when a local-only stream replaces it", function()
+			local jobs = {}
+			---@diagnostic disable-next-line: duplicate-set-field
+			require("services.stream_loader").start = function(work, callback)
+				local job = { work = work, callback = callback }
+				function job:cancel() self.cancelled = true end
+				jobs[#jobs + 1] = job
+				return job
+			end
+			OPDSPSE:openBook(browser, item, acquisition)
+			local previous = OPDSPSE._sync
+			OPDSPSE:openBook(browser, { id = "other" }, {
+				href = OTHER .. "/pages/{pageNumber}", count = 20, last_read = 3,
+			})
+			local replacement = OPDSPSE._viewer
+			assert.is_true(jobs[1].cancelled)
+			assert.is_true(previous.stopped)
+			jobs[1].callback(jobs[1].work())
+			assert.equals(replacement, OPDSPSE._viewer)
+			assert.equals(2, #jobs)
+		end)
+	end)
+
 	describe("getLastPage", function()
+		it("rejects decoded API keys that cannot safely become authentication headers", function()
+			for _, key in ipairs({ "secret%0D%0AX-Test%3A%20value", "secret%00", "%20%20" }) do
+				http.requests = {}
+				assert.equals(0, OPDSPSE:getLastPage(SERVER .. "/api/opds/" .. key .. "/image?chapterId=42"))
+				assert.same({}, http.requests)
+			end
+			assert.is_true(require("logger").logged("warn", "Invalid Kavita API key"))
+		end)
+
 		it("withholds foreign catalog Basic credentials but retains the provider's own API key and token", function()
 			kavita_knows(7)
 			assert.equals(7, OPDSPSE:getLastPage(STREAM, "reader", "secret", OTHER .. "/opds"))
@@ -129,7 +242,10 @@ describe("Kavita page streaming", function()
 		end)
 
 		it("does not request progress when the authentication response has no usable token", function()
-			for _, body in ipairs({ "", "{bad", '{"token":null}', '{"token":""}', '{"token":42}' }) do
+			for _, body in ipairs({
+				"", "{bad", '{"token":null}', '{"token":""}', '{"token":42}', '{"token":"  "}',
+				'{"token":"secret\\r\\nX-Test: value"}',
+			}) do
 				http.routes = {}
 				http.requests = {}
 				http:on(AUTH, { code = 200, body = body })

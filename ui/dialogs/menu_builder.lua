@@ -288,7 +288,7 @@ function OPDSMenuBuilder.buildCatalogEditDialog(browser, item)
 	-- Edited here and only kept when the catalog is saved
 	local headers = RequestHeaders.copy(item and item.headers) or {}
 
-	local dialog, check_button_raw_names, check_button_sync_catalog
+	local dialog, check_button_raw_names, check_button_sync_catalog, check_button_stream_sync
 
 	-- Kept short: it shares the row with Cancel and Save, and a longer label is cut off once a count is added
 	local function headersButtonText()
@@ -389,8 +389,20 @@ function OPDSMenuBuilder.buildCatalogEditDialog(browser, item)
 						new_fields[5] = check_button_raw_names.checked or nil
 						new_fields[6] = check_button_sync_catalog.checked or nil
 						new_fields[7] = headers
-						browser:editCatalogFromInput(new_fields, item)
-						UIManager:close(dialog)
+						new_fields[8] = check_button_stream_sync.checked or nil
+						local function save()
+							browser:editCatalogFromInput(new_fields, item)
+							UIManager:close(dialog)
+						end
+						if new_fields[8] then
+							UIManager:show(require("ui/widget/confirmbox"):new {
+								text = _("Enable two-way reading progress for supported Kavita and Komga page streams?\n\nChanges to painted pages are sent to the server. Rewinding can reset progress; Kavita's first page can mark a chapter unread. Sending the final page marks a book complete. Conflicts ask which position to use.\n\nClosing or suspending cancels requests and keeps pending changes locally until reopening. These servers cannot guarantee atomic conflict detection. Downloaded books are not synchronized."),
+								ok_text = _("Save and enable"),
+								ok_callback = save,
+							})
+						else
+							save()
+						end
 					end,
 				},
 			},
@@ -406,8 +418,14 @@ function OPDSMenuBuilder.buildCatalogEditDialog(browser, item)
 		checked = item and item.sync,
 		parent = dialog,
 	}
+	check_button_stream_sync = CheckButton:new {
+		text = _("Sync streaming progress"),
+		checked = item and item.stream_sync == true,
+		parent = dialog,
+	}
 	dialog:addWidget(check_button_raw_names)
 	dialog:addWidget(check_button_sync_catalog)
+	dialog:addWidget(check_button_stream_sync)
 
 	return dialog
 end

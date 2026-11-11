@@ -7,15 +7,17 @@ local JsonDecode = require("utils.json_decode")
 local logger = require("logger")
 local ltn12 = require("ltn12")
 local RenderImage = require("ui/renderimage")
+local RequestHeaders = require("utils.request_headers")
 local Screen = require("device").screen
 local StreamLoader = require("services.stream_loader")
+local StreamProgress = require("core.stream_progress")
 local socket = require("socket")
 local socketutil = require("socketutil")
 local UIManager = require("ui/uimanager")
 local url = require("socket.url")
 local _ = require("gettext")
 
-local OPDSPSE = { MAX_SAVED_STREAMS = 500 }
+local OPDSPSE = { MAX_SAVED_STREAMS = StreamProgress.MAX_SAVED_STREAMS }
 
 -- This function attempts to pull chapter progress from Kavita.
 function OPDSPSE:getLastPage(remote_url, username, password, basic_auth_origin)
@@ -53,7 +55,8 @@ function OPDSPSE:getLastPage(remote_url, username, password, basic_auth_origin)
     end
 
     local auth = JsonDecode.decode(table.concat(auth_data))
-    if type(auth) ~= "table" or type(auth.token) ~= "string" or auth.token == "" then
+    if type(auth) ~= "table" or type(auth.token) ~= "string" or not auth.token:find("%S")
+        or not RequestHeaders.validate("Authorization", "Bearer " .. auth.token) then
         logger.warn("OPDSPSE:getLastPage: invalid authentication response")
         return 0
     end
@@ -98,53 +101,81 @@ function OPDSPSE:openBook(browser, item, acquisition, choose_page, use_feed_posi
         logger.warn("OPDSPSE: invalid local resume storage")
         settings.stream_progress = nil
     end
-    local records = settings.stream_progress or {}
     local identity = type(item.id) == "string" and item.id ~= "" and item.id or acquisition.href
     local key = require("ffi/sha2").sha256(table.concat({
         browser.root_catalog_url or acquisition.href, browser.root_catalog_username or "", identity,
     }, "\0"))
-    local saved = records[key]
-    local position = acquisition.last_read
-    if not use_feed_position and type(saved) == "table" then
-        local saved_page = CatalogUtils.pageNumber(saved.page)
-        if not saved_page then logger.warn("OPDSPSE: invalid saved stream position") end
-        position = saved_page or position
+    local catalog_url, username, password =
+        browser.root_catalog_url, browser.root_catalog_username, browser.root_catalog_password
+    local provider, scope
+    local function streamScope()
+        return HttpClient.cacheKey(acquisition.href, username, password, catalog_url) .. ":" .. provider.count
     end
-    local dirty = false
+    if browser.root_catalog_stream_sync == true then
+        local result = require("services.stream_provider").new(acquisition.href,
+            CatalogUtils.pageNumber(acquisition.count), catalog_url, username, password)
+        if result.success then
+            provider = result.value
+            scope = streamScope()
+        else
+            UIManager:show(InfoMessage:new {
+                text = result.error .. "\n\n" .. _("This stream will use local progress only."),
+            })
+        end
+    end
+    local progress = StreamProgress.new(settings, key, acquisition.count, function(records)
+        if browser._manager then
+            browser._manager:saveSetting("stream_progress", records)
+        else
+            logger.warn("OPDSPSE: local progress could not be flushed without a settings manager")
+        end
+    end, scope)
+    local position = acquisition.last_read
+    if not use_feed_position then position = progress:page() or position end
+    if provider then
+        local function start(explicit_page)
+            if self._viewer then UIManager:close(self._viewer) end
+            if self._sync then self._sync:stop() end
+            local sync = require("core.stream_sync").new(progress, provider, function()
+                if browser.root_catalog_stream_sync ~= true
+                    or browser.root_catalog_url ~= catalog_url
+                    or browser.root_catalog_username ~= username or browser.root_catalog_password ~= password
+                    or streamScope() ~= scope then return false end
+                if browser.servers then
+                    local server = require("core.catalog_manager").findCatalogByUrl(browser.servers, catalog_url)
+                    return server ~= nil and server.stream_sync == true
+                        and server.username == username and server.password == password
+                end
+                return true
+            end)
+            self._sync = sync
+            local open
+            open = function(page)
+                return self:streamPages(acquisition.href, acquisition.count, false, username, password, page, {
+                    basic_auth_origin = catalog_url,
+                    sync_owner = sync,
+                    on_page = function(painted) sync:onPage(painted) end,
+                    on_flush = function() sync:pause() end,
+                    on_resume = function() sync:start(open, progress:page()) end,
+                    on_close = function()
+                        sync:stop()
+                        if self._sync == sync then self._sync = nil end
+                    end,
+                })
+            end
+            sync:start(open, position, explicit_page)
+            return sync.viewer
+        end
+        if choose_page then
+            return self:jumpToPage(nil, acquisition.count, start)
+        end
+        return start(use_feed_position and CatalogUtils.pageNumber(acquisition.last_read) or nil)
+    end
     return self:streamPages(acquisition.href, acquisition.count, choose_page,
         browser.root_catalog_username, browser.root_catalog_password, position, {
             basic_auth_origin = browser.root_catalog_url or false,
-            on_page = function(page)
-                records[key] = { page = page, updated = os.time() }
-                settings.stream_progress = records
-                dirty = true
-                local size = 0
-                for record_key in pairs(records) do
-                    if record_key ~= key then size = size + 1 end
-                end
-                while size >= self.MAX_SAVED_STREAMS do
-                    local oldest, oldest_time
-                    for record_key, record in pairs(records) do
-                        local stamp = type(record) == "table" and tonumber(record.updated) or 0
-                        stamp = stamp or 0
-                        if record_key ~= key and (not oldest or stamp < oldest_time) then
-                            oldest, oldest_time = record_key, stamp
-                        end
-                    end
-                    records[oldest] = nil
-                    size = size - 1
-                end
-            end,
-            on_flush = function()
-                if dirty then
-                    if browser._manager then
-                        browser._manager:saveSetting("stream_progress", records)
-                    else
-                        logger.warn("OPDSPSE: local progress could not be flushed without a settings manager")
-                    end
-                    dirty = false
-                end
-            end,
+            on_page = function(page) progress:recordPage(page) end,
+            on_flush = function() progress:flush() end,
         })
 end
 
@@ -186,6 +217,10 @@ function OPDSPSE:streamPages(remote_url, count, continue, username, password, la
     if initial_page > count then
         logger.warn("OPDSPSE: resume position exceeds page count")
         initial_page = count
+    end
+    if self._sync and self._sync ~= (options and options.sync_owner) then
+        self._sync:stop()
+        self._sync = nil
     end
     if self._viewer then UIManager:close(self._viewer) end
     local closed, loaded_page = false, nil
@@ -303,6 +338,11 @@ function OPDSPSE:streamPages(remote_url, count, continue, username, password, la
         if not job.done then self._page_job = job end
     end
     local recorded_page
+    function viewer:adoptStreamPage(page)
+        recorded_page = nil
+        self:switchToImageNum(page)
+        UIManager:setDirty(self, "ui")
+    end
     function viewer:paintTo(...)
         ImageViewer.paintTo(self, ...)
         if options and options.on_page and loaded_page == self._images_list_cur and recorded_page ~= loaded_page then
@@ -315,9 +355,13 @@ function OPDSPSE:streamPages(remote_url, count, continue, username, password, la
         if options and options.on_flush then options.on_flush() end
         if not closed and not loaded_page then UIManager:close(self) end
     end
+    function viewer:onResume()
+        if not closed and options and options.on_resume then options.on_resume() end
+    end
     function viewer:onCloseWidget()
         closed = true
         self:onSuspend()
+        if options and options.on_close then options.on_close() end
         if OPDSPSE._viewer == self then OPDSPSE._viewer = nil end
         return ImageViewer.onCloseWidget(self)
     end

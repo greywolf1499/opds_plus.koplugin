@@ -5,6 +5,7 @@ local util = require("util")
 local logger = require("logger")
 local socket_url = require("socket.url")
 local UriTemplate = require("utils.uri_template")
+local RequestHeaders = require("utils.request_headers")
 
 local CatalogUtils = {}
 
@@ -29,6 +30,7 @@ function CatalogUtils.buildRootEntry(server)
 		headers    = server.headers,
 		searchable = server.url and server.url:match("%%s") and true or false,
 		sync       = server.sync,
+		stream_sync = server.stream_sync,
 	}
 end
 
@@ -279,13 +281,17 @@ function CatalogUtils.parseKavitaStream(remote_url)
 	end
 	local prefix, api_key = (parsed.path or ""):match("^(.-)/api/opds/([^/]+)/image$")
 	if not prefix then return nil end
+	local decoded_key = socket_url.unescape(api_key)
+	if not RequestHeaders.validate("Authentication", decoded_key) then
+		return nil, "Invalid Kavita API key"
+	end
 	local chapter = parsed.query and ("&" .. parsed.query):match("&chapterId=([^&]+)")
 	if not chapter or not chapter:match("^%d+$") or not CatalogUtils.pageNumber(chapter) then
 		return nil, "Invalid Kavita chapter identity"
 	end
 	return {
 		base = socket_url.build { scheme = parsed.scheme, authority = parsed.authority, path = prefix },
-		api_key = UriTemplate.expand("{key}", { key = socket_url.unescape(api_key) }),
+		api_key = UriTemplate.expand("{key}", { key = decoded_key }),
 		chapter = chapter,
 	}
 end

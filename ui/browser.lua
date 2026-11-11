@@ -298,6 +298,7 @@ function OPDSBrowser:updateCatalog(item_url, paths_updated, options)
             self.root_catalog_username = options.root.username
             self.root_catalog_password = options.root.password
             self.root_catalog_raw_names = options.root.raw_names
+            self.root_catalog_stream_sync = options.root.stream_sync
         end
         self.catalog_title = options.title or self.catalog_title
         NavigationHandler.applyCatalog(packet.items, packet.facets, packet.search, item_url, self, paths_updated)
@@ -388,6 +389,7 @@ function OPDSBrowser:openCatalog(item)
                 self.root_catalog_username = item.username
                 self.root_catalog_password = item.password
                 self.root_catalog_raw_names = item.raw_names
+                self.root_catalog_stream_sync = item.stream_sync
             end
             self:searchCatalog(item.url)
         end

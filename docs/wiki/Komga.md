@@ -28,5 +28,7 @@ page show for it too. In v1.5.0, use the explicit **Resume ...** button for a PS
 
 Development builds also use standard PSE `lastRead` and local saved positions for the default stream
 action. Local rewinds, validated page selection and persistence are described in the
-[streaming guide](Kavita#resume-in-development-builds). This does not yet write progress back to Komga
-or add page streaming to OPDS 2.0 feeds that provide no PSE stream.
+[streaming guide](Kavita#resume-in-development-builds). Development builds also offer
+[opt-in two-way progress](Kavita#two-way-progress-in-development-builds) for Komga's OPDS 1.2 page streams.
+This does not add page streaming to OPDS 2.0 feeds without a PSE stream or synchronize downloaded books.
+Sending the final page marks the book complete; rewinding can mark it in progress again.

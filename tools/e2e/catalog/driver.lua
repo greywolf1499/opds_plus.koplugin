@@ -5013,6 +5013,242 @@ local function streamresume_steps()
     }
 end
 
+local function streamsync_steps()
+    local c = checker("streamsync")
+    local Json = require("rapidjson")
+    local PSE = require("services.kavita")
+    local http = require("socket.http")
+    local p, b, server, viewer, previous, real_request, first_fork
+    local address = BASE .. "/stream-sync"
+    local state_path = tmp_root .. "/stream-sync.json"
+    local function state()
+        local handle = assert(io.open(state_path, "rb"))
+        local data = handle:read("*a")
+        handle:close()
+        return Json.decode(data)
+    end
+    local function save(value)
+        local handle = assert(io.open(state_path .. ".new", "wb"))
+        handle:write(Json.encode(value))
+        handle:close()
+        assert(os.rename(state_path .. ".new", state_path))
+    end
+    local function record()
+        local records = p.settings.stream_progress or {}
+        local key = next(records)
+        return key and records[key]
+    end
+    local item = { id = "urn:fixture:progress" }
+    local acquisition = { href = address .. "/opds/v1.2/books/book/pages/{pageNumber}", count = 20 }
+    local function opened(page, advance)
+        wait_for(function()
+            viewer = PSE._viewer
+            return viewer and record() and record().page == page and viewer._images_list_cur == page
+        end, 10, function(done) c.check("painted_page_" .. page, done); advance() end)
+        return "async"
+    end
+    local function written(page, advance)
+        wait_for(function() return state().page == page and record().sync.local_page == page end, 10, function(done)
+            c.check("acknowledged_page_" .. page, done)
+            advance()
+        end)
+        return "async"
+    end
+    return {
+        function()
+            current = "streamsync"
+            mark("streamsync")
+            p, b = plugin(), open_browser()
+            previous = p.settings.stream_progress
+            p.settings.stream_progress = nil
+            save({ page = 3, revision = 1, writes = 0 })
+            local handle = assert(io.open("resources/koreader.png", "rb"))
+            local png = handle:read("*a")
+            handle:close()
+            real_request = http.request
+            -- Only this fixture namespace is intercepted. State is shared with real forked workers.
+            http.request = function(request)
+                if request.url:sub(1, #address + 1) ~= address .. "/" then return real_request(request) end
+                local value = state()
+                if value.offline and request.url:find(address .. "/api/", 1, true) then
+                    return nil, "fixture offline"
+                end
+                local body, code = png, 200
+                if request.url == address .. "/api/v1/books/book" then
+                    body = Json.encode({
+                        id = "book", media = { pagesCount = 20 },
+                        readProgress = { page = value.page, completed = value.page == 20,
+                            lastModified = tostring(value.revision) },
+                    })
+                elseif request.url == address .. "/api/v1/books/book/read-progress" then
+                    assert(request.method == "PATCH", "unexpected fixture write method")
+                    local chunks = {}
+                    while true do
+                        local chunk = request.source()
+                        if not chunk then break end
+                        chunks[#chunks + 1] = chunk
+                    end
+                    if value.delay then require("socket").sleep(value.delay) end
+                    value.page = Json.decode(table.concat(chunks)).page
+                    value.writes, value.revision = value.writes + 1, value.revision + 1
+                    save(value)
+                    code, body = 204, ""
+                else
+                    assert(request.url:find("/opds/v1.2/books/book/pages/", 1, true), "unexpected fixture endpoint")
+                    if value.bad_image then body = "invalid image" end
+                end
+                if request.sink then
+                    if code ~= 204 then request.sink(body) end
+                    request.sink(nil)
+                end
+                return 1, code, {}, "HTTP/1.1 fixture"
+            end
+            watch_forks(true)
+            first_fork = #fork_pids + 1
+            local dialog = require("ui.dialogs.menu_builder").buildCatalogEditDialog(b)
+            UIManager:show(dialog)
+            dialog.input_fields[1]:setText("Progress fixture")
+            dialog.input_fields[2]:setText(address .. "/opds/v1.2/")
+            local checkbox = dialog._added_widgets[3][1]
+            c.check("setting_defaults_off", checkbox.text == "Sync streaming progress" and not checkbox.checked)
+            checkbox:toggleCheck()
+            c.check("save_requires_confirmation", press_button(dialog, "Save")
+                and window_has_text("Enable two-way reading progress"))
+            UIManager:forceRePaint()
+            shot("stream_sync_opt_in")
+            c.check("confirmation_explains_completion", window_has_text("final page marks a book complete"))
+            c.check("confirmation_enables_catalog", press_button(UIManager:getTopmostVisibleWidget(), "Save and enable"))
+            server = p.servers[#p.servers]
+            c.check("opt_in_persists", server.stream_sync == true and not server.sync)
+            local entry = require("utils.catalog_utils").buildRootEntry(server)
+            c.check("root_entry_carries_opt_in", entry.stream_sync == true)
+            b.root_catalog_url, b.root_catalog_stream_sync = entry.url, entry.stream_sync
+            b.root_catalog_username, b.root_catalog_password = nil, nil
+            PSE:openBook(b, item, acquisition)
+        end,
+        function(advance) return opened(3, advance) end,
+        function()
+            c.check("initial_read_does_not_write", state().writes == 0)
+            viewer:switchToImageNum(5)
+        end,
+        function(advance) return opened(5, advance) end,
+        function(advance) return written(5, advance) end,
+        function()
+            local value = state()
+            value.page, value.revision = 8, value.revision + 1
+            save(value)
+            viewer:switchToImageNum(4)
+        end,
+        function(advance)
+            wait_for(function() return PSE._sync and PSE._sync.dialog end, 10, function(done)
+                c.check("concurrent_changes_ask", done and state().page == 8 and state().writes == 1)
+                shot("stream_sync_conflict")
+                local value = state()
+                value.bad_image = true
+                save(value)
+                c.check("server_choice", press_button(PSE._sync.dialog, "Use server page 8"))
+                advance()
+            end)
+            return "async"
+        end,
+        function(advance)
+            wait_for(function() return window_has_text("Reading progress was not changed") end, 10, function(done)
+                c.check("failed_adoption_keeps_local", done and record().page == 4 and state().page == 8)
+                close_window_with_text("Reading progress was not changed")
+                local value = state()
+                value.bad_image = nil
+                save(value)
+                UIManager:close(viewer)
+                PSE:openBook(b, item, acquisition)
+                advance()
+            end)
+            return "async"
+        end,
+        function(advance)
+            wait_for(function() return PSE._sync and PSE._sync.dialog end, 10, function(done)
+                c.check("reopen_preserves_conflict", done)
+                press_button(PSE._sync.dialog, "Use device page 4")
+                advance()
+            end)
+            return "async"
+        end,
+        function(advance) return opened(4, advance) end,
+        function(advance) return written(4, advance) end,
+        function()
+            local value = state()
+            value.offline = true
+            save(value)
+            UIManager:close(viewer)
+            PSE:openBook(b, item, acquisition)
+        end,
+        function(advance)
+            wait_for(function() return window_has_text("Progress is saved locally") end, 10, function(done)
+                c.check("offline_error_is_visible", done)
+                close_window_with_text("Progress is saved locally")
+                local value = state()
+                value.offline = nil
+                save(value)
+                advance()
+            end)
+            return "async"
+        end,
+        function(advance) return opened(4, advance) end,
+        function()
+            viewer:switchToImageNum(6)
+        end,
+        function(advance) return opened(6, advance) end,
+        function()
+            c.check("offline_session_keeps_pending", record().sync.local_page == 4 and state().page == 4)
+            UIManager:close(viewer)
+            local disk = assert(loadfile(p.opds_settings_file))()
+            local saved = disk.stream_progress[next(disk.stream_progress)]
+            c.check("pending_survives_close", saved.page == 6 and saved.sync.local_page == 4)
+            PSE:openBook(b, item, acquisition)
+        end,
+        function(advance) return opened(6, advance) end,
+        function(advance) return written(6, advance) end,
+        function()
+            local value = state()
+            value.delay = 1.2
+            save(value)
+            viewer:switchToImageNum(7)
+        end,
+        function(advance) return opened(7, advance) end,
+        function(advance)
+            wait_for(function() return PSE._sync and PSE._sync.job end, 5, function(done)
+                c.check("nonmodal_write_started", done)
+                local job = PSE._sync.job
+                local traps = false
+                for _, window in ipairs(UIManager._window_stack) do
+                    if window.widget == job.widget then traps = true end
+                end
+                c.check("writes_do_not_trap_input", not traps)
+                viewer:onSuspend()
+                c.check("suspend_cancels_write", job.cancelled and record().page == 7
+                    and record().sync.local_page == 6)
+                UIManager:close(viewer)
+                advance()
+            end)
+            return "async"
+        end,
+        function(advance)
+            wait_for(function() return alive_children(first_fork) == 0 end, 10, function(done)
+                c.check("all_workers_collected", done)
+                http.request = real_request
+                unwatch_forks()
+                for index, value in ipairs(p.servers) do
+                    if value == server then table.remove(p.servers, index); break end
+                end
+                p:saveSetting("stream_progress", previous)
+                close_browser(p)
+                c.finish()
+                advance()
+            end)
+            return "async"
+        end,
+    }
+end
+
 local function streamloading_steps()
     local c = checker("streamloading")
     local gettime = require("socket").gettime
@@ -5066,6 +5302,42 @@ local function streamloading_steps()
         function(advance)
             return measure("turn", function() viewer:onShowNextImage() end,
                 function() return position() == 8 and viewer._images_list_cur == 8 end, advance)
+        end,
+        function(advance)
+            local background_job, completed
+            return measure("background", function()
+                background_job = require("services.stream_loader").start(function()
+                    require("socket").sleep(1.2)
+                    return { progress = 7 }
+                end, function(packet, reason)
+                    completed = packet and packet.progress == 7 and reason == nil
+                end, { background = true })
+                local traps_input = false
+                for _, window in ipairs(UIManager._window_stack) do
+                    if window.widget == background_job.widget then traps_input = true end
+                end
+                c.check("background.has_no_input_trap", not traps_input)
+                UIManager:scheduleIn(0.1, function() viewer:onShowNextImage() end)
+            end, function()
+                return completed and background_job.done and not background_job.cancelled and position() == 9
+            end, advance)
+        end,
+        function(advance)
+            local first = #fork_pids + 1
+            local job = require("services.stream_loader").start(function()
+                require("socket").sleep(1.2)
+                return { progress = 8 }
+            end, function(packet, reason)
+                c.check("background.cancel_rejects_result", packet == nil and reason == "cancelled")
+            end, { background = true })
+            UIManager:scheduleIn(0.1, function() job:cancel() end)
+            wait_for(function() return job.done and alive_children(first) == 0 end, 10, function(done)
+                c.check("background.cancel_reaps_worker", done)
+                c.check("background.cancel_keeps_viewer", require("services.kavita")._viewer == viewer
+                    and position() == 9)
+                advance()
+            end)
+            return "async"
         end,
     }
     for _, action in ipairs({ "key", "pan", "suspend", "dismiss", "timeout", "replace", "close" }) do
@@ -5188,6 +5460,7 @@ local EXTRA = {
     { name = "catalogprofile", steps = catalogprofile_steps, explicit = true },
     { name = "catalogloading", steps = catalogloading_steps },
     { name = "streamloading", steps = streamloading_steps },
+    { name = "streamsync", steps = streamsync_steps },
     { name = "cwapaging", steps = cwapaging_steps, explicit = true },
     { name = "cwadownload", steps = cwadownload_steps, explicit = true },
     { name = "filenames", steps = filenames_steps },
