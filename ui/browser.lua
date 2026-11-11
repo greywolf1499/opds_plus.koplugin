@@ -293,6 +293,7 @@ function OPDSBrowser:updateCatalog(item_url, paths_updated, options)
         if options.paths then self.paths = options.paths end
         if options.root then
             self.root_catalog_title = options.root.text
+            self.root_catalog_url = options.root.url
             self.root_catalog_username = options.root.username
             self.root_catalog_password = options.root.password
             self.root_catalog_raw_names = options.root.raw_names
@@ -379,6 +380,7 @@ function OPDSBrowser:openCatalog(item)
             if self._catalog_generation ~= generation then return end
             if root then
                 self.root_catalog_title = item.text
+                self.root_catalog_url = item.url
                 self.root_catalog_username = item.username
                 self.root_catalog_password = item.password
                 self.root_catalog_raw_names = item.raw_names

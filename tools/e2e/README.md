@@ -170,6 +170,28 @@ prefix to a book with a valid EPUB download and checks the actual saved custom d
 while embedded descriptions and reader edits remain untouched. Unit cases also cover mismatched indices,
 malformed markers, escaped names, break variants and preserving the raw content/summary source.
 
+### Streaming resume
+
+```bash
+EMULATE_READER_W=600 EMULATE_READER_H=800 tools/e2e/catalog/run.sh streamresume,customheaders
+```
+
+`streamresume` uses actual KOReader image decoding, painting, book/download dialogs and settings storage
+with locally intercepted fixture images. It checks feed identity, one-based PSE/local positions,
+zero-based requests, no initial page-1 request, local rewinds, explicit feed resume, validated page
+selection, persistence, and unchanged progress after HTTP/decode failures. `customheaders` verifies that
+the recognized Kavita stream fetches only its resumed image through the read-only reader endpoint while
+retaining scoped headers. No real account's progress is written.
+
+The ImageViewer initialization/painting hooks were checked against KOReader v2025.10 source; native runs
+use the installed emulator. PSE conventions are from the
+[v1.2 specification](https://github.com/anansi-project/opds-pse/blob/master/v1.2.md).
+Kavita's image-read side effect and reader API were verified in
+[OPDSController](https://github.com/Kareadita/Kavita/blob/a9cdf1cad9ae14f88a295c3a6fc7993f9823d59d/Kavita.Server/Controllers/OPDSController.cs#L679)
+and [ReaderController](https://github.com/Kareadita/Kavita/blob/a9cdf1cad9ae14f88a295c3a6fc7993f9823d59d/Kavita.Server/Controllers/ReaderController.cs#L91),
+and the read-only endpoint also exists in v0.8.8. In the inspected current source, `saveProgress=false`
+does not reliably suppress the OPDS endpoint's write, so this is not used as an opt-out.
+
 ### Screenshots
 
 ```bash

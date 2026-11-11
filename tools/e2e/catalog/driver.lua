@@ -3845,6 +3845,8 @@ local function customheaders_steps()
                     and reqt.headers["Accept-Encoding"] == "identity"
             end
             c.check("kavita.pages_carry_the_headers", all_pages, #pages)
+            c.check("kavita.only_resumed_read_only_image", #pages == 1 and pages[1].url
+                == BASE .. "/cf/api/Reader/image?chapterId=77&page=2&apiKey=KEY123&extractPdf=true")
             c.check("kavita.authorization_applies_where_the_plugin_sets_none", #pages > 0
                 and pages[1].headers["authorization"] == "Basic custom")
             saved.headers = nil
@@ -4782,6 +4784,142 @@ local function catalogloading_steps()
     return steps
 end
 
+local function streamresume_steps()
+    local c = checker("streamresume")
+    local p, b, item, viewer, saved_key, previous, real_request
+    local seen = {}
+    local function stream_viewer()
+        for index = #UIManager._window_stack, 1, -1 do
+            local widget = UIManager._window_stack[index].widget
+            if widget.images_list_nb == 20 and type(widget.switchToImageNum) == "function" then return widget end
+        end
+        error("no streaming image viewer")
+    end
+    local function position()
+        local records = p.settings.stream_progress or {}
+        saved_key = saved_key or next(records)
+        return saved_key and records[saved_key] and records[saved_key].page
+    end
+    return {
+        function()
+            current = "streamresume"
+            mark("streamresume")
+            p, b = plugin(), open_browser()
+            previous = p.settings.stream_progress
+            p.settings.stream_progress = nil
+            b.root_catalog_url = BASE .. "/stream-fixture/feed"
+            local http = require("socket.http")
+            real_request = http.request
+            local handle = assert(io.open("resources/koreader.png", "rb"))
+            local png = handle:read("*a")
+            handle:close()
+            http.request = function(request)
+                if not request.url:find(BASE .. "/stream-fixture/", 1, true) then return real_request(request) end
+                seen[#seen + 1] = request.url
+                local failed = request.url:find("/page/7?", 1, true)
+                local malformed = request.url:find("/page/9?", 1, true)
+                if request.sink then
+                    request.sink(failed and "" or (malformed and "not an image" or png))
+                    request.sink(nil)
+                end
+                return 1, failed and 404 or 200, {}, "HTTP/1.1 fixture"
+            end
+            local entries = b:genItemTableFromCatalog({ entry = {{
+                id = "urn:fixture:stream", title = "Streaming fixture", author = { name = "Fixture" },
+                link = {{
+                    rel = b.stream_rel, type = "image/png",
+                    href = BASE .. "/stream-fixture/page/{pageNumber}?width={maxWidth}",
+                    ["pse:count"] = "20", ["pse:lastRead"] = "7",
+                }},
+            }} }, b.root_catalog_url)
+            item = entries[1]
+            c.check("keeps_feed_identity_and_position", item.id == "urn:fixture:stream"
+                and item.acquisitions[1].last_read == 7)
+            b:onMenuSelect(item)
+        end,
+        function()
+            c.check("book_default_stream_action", press_button(b.book_info_dialog, "Stream"))
+            viewer = stream_viewer()
+            c.check("first_fetch_is_only_resume_page", #seen == 1 and seen[1]:find("/page/6?", 1, true))
+            c.check("not_recorded_before_paint", position() == nil)
+        end,
+        function()
+            c.check("displayed_page_is_recorded", position() == 7 and viewer._images_list_cur == 7)
+            viewer:onShowNextImage()
+        end,
+        function()
+            c.check("failed_page_does_not_advance", position() == 7)
+            c.check("page_failure_is_visible", window_has_text("Reading progress was not changed"))
+            close_window_with_text("Reading progress was not changed")
+            viewer:switchToImageNum(5)
+        end,
+        function()
+            c.check("rewind_is_recorded", position() == 5)
+            shot("stream_resume")
+            UIManager:close(viewer)
+            local disk = assert(loadfile(p.opds_settings_file))()
+            c.check("close_persists_position", disk.stream_progress[saved_key].page == 5)
+            b:showDownloads(item)
+        end,
+        function()
+            c.check("download_default_stream_action", press_button(b.download_dialog, "Page stream"))
+            viewer = stream_viewer()
+            c.check("default_prefers_local_rewind", viewer._images_list_cur == 5
+                and seen[#seen]:find("/page/4?", 1, true))
+        end,
+        function()
+            UIManager:close(viewer)
+            b:showDownloads(item)
+        end,
+        function()
+            c.check("explicit_feed_resume_action", press_button(b.download_dialog, "Resume stream from page"))
+            viewer = stream_viewer()
+            c.check("explicit_resume_uses_feed_position", viewer._images_list_cur == 7)
+        end,
+        function()
+            UIManager:close(viewer)
+            b:showDownloads(item)
+        end,
+        function()
+            local before = #seen
+            c.check("page_chooser_action", press_button(b.download_dialog, "Stream from page"))
+            c.check("chooser_does_not_fetch", #seen == before)
+            local dialog
+            for index = #UIManager._window_stack, 1, -1 do
+                local widget = UIManager._window_stack[index].widget
+                if widget.title == "Enter page number" and type(widget.setInputText) == "function" then
+                    dialog = widget
+                    break
+                end
+            end
+            assert(dialog, "no stream page chooser")
+            dialog:setInputText("1.5")
+            press_button(dialog, "Stream")
+            c.check("invalid_input_does_not_fetch", #seen == before)
+            close_window_with_text("whole page number")
+            dialog:setInputText("9")
+            press_button(dialog, "Stream")
+            viewer = stream_viewer()
+            c.check("valid_choice_fetches_only_selected_page", #seen == before + 1
+                and viewer._images_list_cur == 9 and seen[#seen]:find("/page/8?", 1, true))
+        end,
+        function()
+            c.check("chosen_page_recorded_after_paint", position() == 9)
+            viewer:switchToImageNum(10)
+        end,
+        function()
+            c.check("decode_failure_keeps_position", position() == 9)
+            c.check("decode_failure_is_visible", window_has_text("Reading progress was not changed"))
+            close_window_with_text("Reading progress was not changed")
+            UIManager:close(viewer)
+            require("socket.http").request = real_request
+            p:saveSetting("stream_progress", previous)
+            close_browser(p)
+            c.finish()
+        end,
+    }
+end
+
 local EXTRA = {
     { name = "shots", steps = shots_steps, explicit = true },
     { name = "opds2", steps = opds2_steps },
@@ -4811,6 +4949,7 @@ local EXTRA = {
     { name = "series", steps = series_steps },
     { name = "pdflinks", steps = pdflinks_steps },
     { name = "customheaders", steps = customheaders_steps },
+    { name = "streamresume", steps = streamresume_steps },
     { name = "delsettings", steps = delsettings_steps },
     { name = "parandroid", steps = parandroid_steps },
 }

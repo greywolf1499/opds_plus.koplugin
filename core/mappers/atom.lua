@@ -98,6 +98,7 @@ function AtomMapper.map(catalog, item_url, browser_context, debug_callback)
 	-- Process feed entries (books/sub-catalogs)
 	for __, entry in ipairs(feed.entry or {}) do
 		local item = {}
+		item.id = type(entry.id) == "string" and entry.id or nil
 		item.acquisitions = {}
 
 		if entry.link then

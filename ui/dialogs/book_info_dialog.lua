@@ -438,16 +438,14 @@ function BookInfoDialog.build(browser, item)
 				text = Constants.ICONS.STREAM_START .. " " .. _("Stream"),
 				callback = function()
 					UIManager:close(browser.book_info_dialog)
-					OPDSPSE:streamPages(pse_acquisition.href, pse_acquisition.count, false,
-						browser.root_catalog_username, browser.root_catalog_password)
+					OPDSPSE:openBook(browser, item, pse_acquisition)
 				end,
 			},
 			{
 				text = _("Stream from page") .. " " .. Constants.ICONS.STREAM_NEXT,
 				callback = function()
 					UIManager:close(browser.book_info_dialog)
-					OPDSPSE:streamPages(pse_acquisition.href, pse_acquisition.count, true,
-						browser.root_catalog_username, browser.root_catalog_password)
+					OPDSPSE:openBook(browser, item, pse_acquisition, true)
 				end,
 			},
 		}
@@ -458,9 +456,7 @@ function BookInfoDialog.build(browser, item)
 				text = Constants.ICONS.STREAM_RESUME .. " " .. _("Resume") .. " (" .. pse_acquisition.last_read .. ")",
 				callback = function()
 					UIManager:close(browser.book_info_dialog)
-					OPDSPSE:streamPages(pse_acquisition.href, pse_acquisition.count, false,
-						browser.root_catalog_username, browser.root_catalog_password,
-						pse_acquisition.last_read)
+					OPDSPSE:openBook(browser, item, pse_acquisition, false, true)
 				end,
 			})
 		else

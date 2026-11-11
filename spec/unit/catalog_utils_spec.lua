@@ -509,6 +509,18 @@ describe("CatalogUtils", function()
 			assert.is_nil(last_read)
 		end)
 
+		it("rejects unusable counts and bounds whole-number resume positions", function()
+			for _, count in ipairs({ 0, -1, 1.5, math.huge, "many" }) do
+				assert.is_nil(CatalogUtils.extractPSEStreamInfo({ ["pse:count"] = count }))
+			end
+			assert.same({ 12, 12 }, { CatalogUtils.extractPSEStreamInfo({
+				["pse:count"] = "12", ["pse:lastRead"] = "99",
+			}) })
+			assert.same({ 12 }, { CatalogUtils.extractPSEStreamInfo({
+				["pse:count"] = 12, ["pse:lastRead"] = 2.5,
+			}) })
+		end)
+
 		it("returns nil for a last page read that is zero or negative", function()
 			local count, last_read = CatalogUtils.extractPSEStreamInfo({ ["pse:count"] = "12", ["pse:lastRead"] = "0" })
 			assert.equals(12, count)

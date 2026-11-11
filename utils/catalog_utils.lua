@@ -2,6 +2,7 @@
 -- Handles catalog entry construction and formatting
 
 local util = require("util")
+local logger = require("logger")
 
 local CatalogUtils = {}
 
@@ -262,21 +263,37 @@ function CatalogUtils.parseEntrySeries(entry)
 	return name, normalizeSeriesIndex(index)
 end
 
---- Extract count and last_read from PSE stream link attributes
--- @param link table Link object with PSE attributes
--- @return number|nil, number|nil count, last_read values
+--- Return an exactly representable positive page number, or nil.
+function CatalogUtils.pageNumber(value)
+	local number = (type(value) == "number" or type(value) == "string") and tonumber(value)
+	-- Above this limit, incrementing a Lua number may no longer change the page.
+	return number and number >= 1 and number <= 9007199254740991 and number % 1 == 0 and number or nil
+end
+
+--- Extract a valid count and bounded one-based last_read from PSE attributes.
 function CatalogUtils.extractPSEStreamInfo(link)
 	local count, last_read
 
 	for k, v in pairs(link) do
-		if k:sub(-6) == ":count" then
-			count = tonumber(v)
-		elseif k:sub(-9) == ":lastRead" then
-			last_read = tonumber(v)
+		if type(k) == "string" then
+			if k:sub(-6) == ":count" then
+				count = CatalogUtils.pageNumber(v)
+				if not count then logger.warn("OPDS+ invalid PSE page count") end
+			elseif k:sub(-9) == ":lastRead" then
+				last_read = CatalogUtils.pageNumber(v)
+				if not last_read and tonumber(v) ~= 0 then
+					logger.warn("OPDS+ invalid PSE resume position")
+				end
+			end
 		end
 	end
 
-	return count, (last_read and last_read > 0 and last_read or nil)
+	if not count then return nil end
+	if last_read and last_read > count then
+		logger.warn("OPDS+ PSE resume position exceeds page count")
+		last_read = count
+	end
+	return count, last_read
 end
 
 --- Get the description of an entry as plain text

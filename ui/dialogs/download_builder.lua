@@ -43,16 +43,14 @@ function DownloadDialogBuilder.buildDownloadDialog(browser, item, filename, crea
 					{
 						text = Constants.ICONS.STREAM_START .. " " .. _("Page stream"),
 						callback = function()
-							OPDSPSE:streamPages(acquisition.href, acquisition.count, false,
-								browser.root_catalog_username, browser.root_catalog_password)
+							OPDSPSE:openBook(browser, item, acquisition)
 							UIManager:close(browser.download_dialog)
 						end,
 					},
 					{
 						text = _("Stream from page") .. " " .. Constants.ICONS.STREAM_NEXT,
 						callback = function()
-							OPDSPSE:streamPages(acquisition.href, acquisition.count, true,
-								browser.root_catalog_username, browser.root_catalog_password)
+							OPDSPSE:openBook(browser, item, acquisition, true)
 							UIManager:close(browser.download_dialog)
 						end,
 					},
@@ -65,9 +63,7 @@ function DownloadDialogBuilder.buildDownloadDialog(browser, item, filename, crea
 						text = Constants.ICONS.STREAM_RESUME .. " " ..
 							_("Resume stream from page") .. " " .. acquisition.last_read,
 						callback = function()
-							OPDSPSE:streamPages(acquisition.href, acquisition.count, false,
-								browser.root_catalog_username, browser.root_catalog_password,
-								acquisition.last_read)
+							OPDSPSE:openBook(browser, item, acquisition, false, true)
 							UIManager:close(browser.download_dialog)
 						end,
 					},
