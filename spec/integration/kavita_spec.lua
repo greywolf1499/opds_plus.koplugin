@@ -56,12 +56,22 @@ describe("Kavita page streaming", function()
 			return viewer
 		end
 		function image_viewer:switchToImageNum(number)
+			if self.image and self.image.free then self.image:free() end
 			self.image = self._images_list[number]
 			self._images_list_cur = number
 		end
 		function image_viewer:update() end
 		function image_viewer:paintTo() end
-		function image_viewer:onCloseWidget() end
+		function image_viewer:onCloseWidget()
+			if self.image and self.image.free then self.image:free() end
+		end
+		local close = ui.UIManager.close
+		-- Invoke close hooks for image-ownership assertions, unlike the recording-only shared fake.
+		---@diagnostic disable-next-line: duplicate-set-field
+		ui.UIManager.close = function(manager, widget)
+			close(manager, widget)
+			if widget.onCloseWidget then widget:onCloseWidget() end
+		end
 
 		local stubs = {
 			rapidjson = json_shims.rapidjson(),
@@ -304,15 +314,18 @@ describe("Kavita page streaming", function()
 		local function open(last_page_read)
 			http:on(AUTH, { code = 401 })
 			OPDSPSE:streamPages(STREAM, 30, false, "reader", "s3cret", last_page_read)
-			return viewer._images_list
+			return setmetatable({}, { __index = function(_pages, page)
+				viewer:switchToImageNum(page)
+				return viewer.image
+			end })
 		end
 
 		it("shows the pages in a viewer that starts after the page Kavita says was read", function()
 			kavita_knows(7)
+			http:on(page_url(7), { code = 200, body = "EIGHT" })
 
 			OPDSPSE:streamPages(STREAM, 30, false, "reader", "s3cret")
 
-			assert.equals(viewer, ui:last())
 			assert.equals(30, viewer.images_list_nb)
 			assert.equals(8, viewer._images_list_cur)
 		end)
@@ -453,8 +466,8 @@ describe("Kavita page streaming", function()
 			local key, saved = next(browser.settings.stream_progress)
 			assert(saved)
 			assert.equals(7, saved.page)
-			local speculative = viewer._images_list[11]
-			assert.equals("ELEVEN", speculative.page)
+			assert.is_nil(viewer._images_list[11])
+			assert.equals(1, #http.requests)
 			assert.equals(7, browser.settings.stream_progress[key].page)
 			viewer:switchToImageNum(5)
 			assert.equals(7, browser.settings.stream_progress[key].page)
@@ -474,6 +487,7 @@ describe("Kavita page streaming", function()
 			OPDSPSE:openBook(browser, item, acquisition)
 			viewer:paintTo()
 			local key = next(browser.settings.stream_progress)
+			local original = viewer.image
 			http.routes = {}
 			http:on(OTHER .. "/pages/4?width=600", { code = 200, body = "INVALID" })
 			viewer:switchToImageNum(5)
@@ -481,6 +495,8 @@ describe("Kavita page streaming", function()
 			viewer:switchToImageNum(6)
 			viewer:paintTo()
 			assert.equals(7, browser.settings.stream_progress[key].page)
+			assert.equals(original, viewer.image)
+			assert.equals(7, viewer._images_list_cur)
 			ui:run_scheduled()
 			assert.matches("progress was not changed", ui:last().text)
 		end)
@@ -503,15 +519,22 @@ describe("Kavita page streaming", function()
 		end)
 
 		it("discards deferred page errors after a newer page or viewer close", function()
+			local function errors()
+				local messages = {}
+				for _, widget in ipairs(ui.shown) do
+					if widget.kind == "InfoMessage" then messages[#messages + 1] = widget.text end
+				end
+				return messages
+			end
 			OPDSPSE:openBook(browser, item, acquisition)
 			viewer:switchToImageNum(6)
 			viewer:switchToImageNum(11)
 			ui:run_scheduled()
-			assert.same({}, ui:texts())
+			assert.same({}, errors())
 			viewer:switchToImageNum(6)
 			viewer:onCloseWidget()
 			ui:run_scheduled()
-			assert.same({}, ui:texts())
+			assert.same({}, errors())
 		end)
 
 		it("bounds remembered books by evicting the oldest record", function()
@@ -527,6 +550,101 @@ describe("Kavita page streaming", function()
 			local count = 0
 			for _ in pairs(records) do count = count + 1 end
 			assert.equals(OPDSPSE.MAX_SAVED_STREAMS, count)
+		end)
+
+		describe("asynchronous ownership", function()
+			local jobs
+			local function complete(index, reason)
+				local job = jobs[index]
+				job.done = true
+				job.callback(not reason and job.request() or nil, reason)
+			end
+			before_each(function()
+				jobs = {}
+				local loader = require("services.stream_loader")
+				---@diagnostic disable-next-line: duplicate-set-field
+				loader.start = function(request, callback)
+					local job = { request = request, callback = callback }
+					function job:cancel() self.cancelled = true end
+					jobs[#jobs + 1] = job
+					return job
+				end
+			end)
+
+			it("keeps the displayed source until a current result replaces it and is painted", function()
+				OPDSPSE:openBook(browser, item, acquisition)
+				assert.same({}, http.requests)
+				viewer:paintTo()
+				assert.is_nil(browser.settings.stream_progress)
+				complete(1)
+				assert.is_nil(browser.settings.stream_progress)
+				viewer:paintTo()
+				local key = next(browser.settings.stream_progress)
+				local original, freed = viewer.image, 0
+				original.free = function() freed = freed + 1 end
+				viewer:switchToImageNum("5")
+				assert.equals(original, viewer.image)
+				assert.equals(0, freed)
+				viewer:switchToImageNum(11)
+				assert.is_true(jobs[2].cancelled)
+				complete(2)
+				assert.equals(original, viewer.image)
+				assert.equals(0, freed)
+				complete(3)
+				assert.equals(1, freed)
+				assert.equals(7, browser.settings.stream_progress[key].page)
+				viewer:paintTo()
+				assert.equals(11, browser.settings.stream_progress[key].page)
+			end)
+
+			it("cancels on suspend and close, flushes painted progress, and rejects late results", function()
+				OPDSPSE:openBook(browser, item, acquisition)
+				complete(1)
+				viewer:paintTo()
+				local original = viewer.image
+				viewer:switchToImageNum(5)
+				viewer:onSuspend()
+				assert.is_true(jobs[2].cancelled)
+				assert.equals(1, flushed)
+				complete(2)
+				assert.equals(original, viewer.image)
+				viewer:switchToImageNum(11)
+				viewer:onCloseWidget()
+				assert.is_true(jobs[3].cancelled)
+				complete(3)
+				assert.equals(original, viewer.image)
+				assert.equals(1, flushed)
+			end)
+
+			it("does provider lookup only in the worker and decodes the chosen page in the parent", function()
+				kavita_knows(7)
+				http:on(page_url(7), { code = 200, body = "EIGHT" })
+				OPDSPSE:streamPages(STREAM, 30)
+				assert.same({}, http.requests)
+				complete(1)
+				assert.equals(3, #http.requests)
+				assert.equals(8, viewer._images_list_cur)
+				assert.equals("EIGHT", viewer.image.page)
+			end)
+
+			it("closes an initial placeholder on cancellation without saving fictitious progress", function()
+				OPDSPSE:openBook(browser, item, acquisition)
+				complete(1, "cancelled")
+				ui:run_scheduled()
+				assert.equals(viewer, ui.closed[#ui.closed])
+				assert.is_nil(OPDSPSE._viewer)
+				assert.is_nil(browser.settings.stream_progress)
+				assert.same({}, http.requests)
+			end)
+
+			it("surfaces worker startup failure without silently blocking in the foreground", function()
+				OPDSPSE:openBook(browser, item, acquisition)
+				complete(1, "unavailable")
+				ui:run_scheduled()
+				assert.matches("Background page loading is unavailable", ui:last().text)
+				assert.same({}, http.requests)
+				assert.is_nil(OPDSPSE._viewer)
+			end)
 		end)
 	end)
 end)

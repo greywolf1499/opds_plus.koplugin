@@ -3800,6 +3800,11 @@ local function customheaders_steps()
             local png = png_file and png_file:read("*a") or ""
             if png_file then png_file:close() end
             local seen = {}
+            -- Header capture stays in-process; streamloading exercises the real worker boundary.
+            local Trapper = require("ui/trapper")
+            local real_run = Trapper.dismissableRunInSubprocess
+            ---@diagnostic disable-next-line: duplicate-set-field
+            Trapper.dismissableRunInSubprocess = function(_self, task) return true, task() end
             http.request = function(reqt)
                 seen[#seen + 1] = reqt
                 local body = png
@@ -3819,6 +3824,7 @@ local function customheaders_steps()
                     .. "&w={maxWidth}", 3, false, "reader", "secret")
             end)
             http.request = real_request
+            Trapper.dismissableRunInSubprocess = real_run
             c.check("kavita.streams_pages", ok, err)
             local auth, progress, pages = nil, nil, {}
             for _, reqt in ipairs(seen) do
@@ -4786,7 +4792,7 @@ end
 
 local function streamresume_steps()
     local c = checker("streamresume")
-    local p, b, item, viewer, saved_key, previous, real_request
+    local p, b, item, viewer, saved_key, previous, real_request, real_run
     local seen = {}
     local function stream_viewer()
         for index = #UIManager._window_stack, 1, -1 do
@@ -4807,6 +4813,11 @@ local function streamresume_steps()
             p, b = plugin(), open_browser()
             previous = p.settings.stream_progress
             p.settings.stream_progress = nil
+            -- These deterministic request fixtures still use the real viewer/codec; worker timing has its own scenario.
+            local Trapper = require("ui/trapper")
+            real_run = Trapper.dismissableRunInSubprocess
+            ---@diagnostic disable-next-line: duplicate-set-field
+            Trapper.dismissableRunInSubprocess = function(_self, task) return true, task() end
             b.root_catalog_url = BASE .. "/stream-fixture/feed"
             local http = require("socket.http")
             real_request = http.request
@@ -4913,11 +4924,180 @@ local function streamresume_steps()
             close_window_with_text("Reading progress was not changed")
             UIManager:close(viewer)
             require("socket.http").request = real_request
+            require("ui/trapper").dismissableRunInSubprocess = real_run
             p:saveSetting("stream_progress", previous)
             close_browser(p)
             c.finish()
         end,
     }
+end
+
+local function streamloading_steps()
+    local c = checker("streamloading")
+    local gettime = require("socket").gettime
+    local p, b, viewer, previous
+    local first_fork
+    local acquisition = { href = BASE .. "/cover/{pageNumber}.png?delay=1.2", count = 20, last_read = 7 }
+    local function position()
+        local records = p.settings.stream_progress or {}
+        local key = next(records)
+        return key and records[key].page
+    end
+    local function measure(label, operation, ready, advance)
+        local last, max_gap, ticks = gettime(), 0, 0
+        local pulse
+        pulse = function()
+            local now = gettime()
+            max_gap = math.max(max_gap, now - last)
+            last, ticks = now, ticks + 1
+            UIManager:scheduleIn(0.025, pulse)
+        end
+        UIManager:scheduleIn(0.025, pulse)
+        UIManager:scheduleIn(0.05, operation)
+        wait_for(ready, 10, function(done)
+            max_gap = math.max(max_gap, gettime() - last)
+            UIManager:unschedule(pulse)
+            emit("streamloading." .. label .. "_ui_max_gap_ms", math.floor(max_gap * 1000))
+            c.check(label .. ".displays_requested_page", done)
+            c.check(label .. ".ui_remains_responsive", max_gap < 0.35 and ticks > 3, max_gap)
+            advance()
+        end)
+        return "async"
+    end
+    local steps = {
+        function()
+            current = "streamloading"
+            mark("streamloading")
+            p, b = plugin(), open_browser()
+            close_window_with_text("rendered in color")
+            close_window_with_text("cache database")
+            previous = p.settings.stream_progress
+            p.settings.stream_progress = nil
+            b.root_catalog_url = BASE .. "/stream-loading"
+            watch_forks(true)
+            first_fork = #fork_pids + 1
+        end,
+        function(advance)
+            return measure("initial", function()
+                viewer = require("services.kavita"):openBook(b, { id = "urn:fixture:slow-stream" }, acquisition)
+            end, function() return position() == 7 and viewer._images_list_cur == 7 end, advance)
+        end,
+        function(advance)
+            return measure("turn", function() viewer:onShowNextImage() end,
+                function() return position() == 8 and viewer._images_list_cur == 8 end, advance)
+        end,
+    }
+    for _, action in ipairs({ "key", "pan", "suspend", "dismiss", "timeout", "replace", "close" }) do
+        steps[#steps + 1] = function(advance)
+            local first = #fork_pids + 1
+            local old_page, old_image = position(), viewer.image
+            local Loader = require("services.stream_loader")
+            local timeout = Loader.TIMEOUT
+            if action == "timeout" then Loader.TIMEOUT = 0.15 end
+            if action == "key" then shot("stream_before_loading") end
+            viewer:switchToImageNum(old_page + 1)
+            Loader.TIMEOUT = timeout
+            c.check(action .. ".keeps_source_while_loading", viewer.image == old_image)
+            UIManager:scheduleIn(0.1, function()
+                if action == "key" then shot("stream_loading") end
+                local start = gettime()
+                if action == "key" then
+                    UIManager:handleInputEvent(require("ui/event"):new("KeyPress", require("device/key"):new("Back", {})))
+                elseif action == "pan" then
+                    UIManager:handleInputEvent(require("ui/event"):new("Gesture", { ges = "pan" }))
+                elseif action == "suspend" then
+                    viewer:onSuspend()
+                elseif action == "dismiss" then
+                    UIManager:close(viewer._page_job.widget)
+                elseif action == "replace" then
+                    viewer:switchToImageNum(old_page + 2)
+                elseif action == "close" then
+                    UIManager:close(viewer)
+                end
+                c.check(action .. ".input_returns_promptly", gettime() - start < 0.35)
+                wait_for(function() return alive_children(first) == 0 and not viewer._page_job end, 10, function(done)
+                    c.check(action .. ".reaps_workers", done)
+                    c.check(action .. ".no_temporary_images", count_lua_tmp() == 0)
+                    if action == "replace" then
+                        c.check("replace.rejects_obsolete_result", position() == old_page + 2
+                            and viewer._images_list_cur == old_page + 2)
+                    else
+                        c.check(action .. ".does_not_advance_progress", position() == old_page)
+                        if action ~= "close" then
+                            c.check(action .. ".keeps_displayed_image", viewer.image == old_image)
+                            viewer:update()
+                        else
+                            c.check("close.no_late_viewer", require("services.kavita")._viewer == nil)
+                        end
+                    end
+                    if action == "timeout" then
+                        c.check("timeout.is_visible", window_has_text("Reading progress was not changed"))
+                        close_window_with_text("Reading progress was not changed")
+                    end
+                    advance()
+                end)
+            end)
+            return "async"
+        end
+    end
+    steps[#steps + 1] = function(advance)
+        p.settings.stream_progress = nil
+        return measure("progress", function()
+            local PSE = require("services.kavita")
+            local http = require("socket.http")
+            local real_lookup, real_request = PSE.getLastPage, http.request
+            ---@diagnostic disable-next-line: duplicate-set-field
+            PSE.getLastPage = function() require("socket").sleep(1.2); return 4 end
+            http.request = function(request)
+                if request.url:find("/api/Reader/image?", 1, true) then request.url = BASE .. "/cover/4.png" end
+                return real_request(request)
+            end
+            viewer = PSE:openBook(b, { id = "urn:fixture:slow-progress" }, {
+                href = BASE .. "/api/opds/fixture/image?chapterId=7&pageNumber={pageNumber}", count = 20,
+            })
+            PSE.getLastPage, http.request = real_lookup, real_request
+        end, function() return position() == 5 and viewer._images_list_cur == 5 end, advance)
+    end
+    steps[#steps + 1] = function(advance)
+        UIManager:close(viewer)
+        local FFIUtil = require("ffi/util")
+        local real_fork = FFIUtil.runInSubProcess
+        ---@diagnostic disable-next-line: duplicate-set-field
+        FFIUtil.runInSubProcess = function() return nil end
+        viewer = require("services.kavita"):openBook(b, { id = "urn:fixture:failed-stream" }, acquisition)
+        FFIUtil.runInSubProcess = real_fork
+        wait_for(function() return require("services.kavita")._viewer == nil end, 3, function(done)
+            c.check("fork_failure.closes_placeholder", done)
+            c.check("fork_failure.is_visible", window_has_text("Background page loading is unavailable"))
+            c.check("fork_failure.keeps_progress", position() == 5)
+            close_window_with_text("Background page loading is unavailable")
+            advance()
+        end)
+        return "async"
+    end
+    steps[#steps + 1] = function(advance)
+        viewer = require("services.kavita"):openBook(b, { id = "urn:fixture:suspended-stream" }, acquisition)
+        UIManager:scheduleIn(0.1, function()
+            assert(viewer, "no viewer for initial suspend")
+            viewer:onSuspend()
+            c.check("initial_suspend.closes_placeholder", require("services.kavita")._viewer == nil)
+            c.check("initial_suspend.keeps_progress", position() == 5)
+            advance()
+        end)
+        return "async"
+    end
+    steps[#steps + 1] = function(advance)
+        wait_for(function() return alive_children(first_fork) == 0 end, 10, function(done)
+            c.check("all_workers_collected", done)
+            unwatch_forks()
+            p:saveSetting("stream_progress", previous)
+            close_browser(p)
+            c.finish()
+            advance()
+        end)
+        return "async"
+    end
+    return steps
 end
 
 local EXTRA = {
@@ -4926,6 +5106,7 @@ local EXTRA = {
     { name = "condget", steps = condget_steps },
     { name = "catalogprofile", steps = catalogprofile_steps, explicit = true },
     { name = "catalogloading", steps = catalogloading_steps },
+    { name = "streamloading", steps = streamloading_steps },
     { name = "cwapaging", steps = cwapaging_steps, explicit = true },
     { name = "cwadownload", steps = cwadownload_steps, explicit = true },
     { name = "filenames", steps = filenames_steps },

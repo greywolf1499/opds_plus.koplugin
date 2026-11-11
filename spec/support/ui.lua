@@ -73,6 +73,9 @@ function M.new()
 
 	ui.UIManager = UIManager
 	ui.InfoMessage = widget_class("InfoMessage")
+	ui.TrapWidget = widget_class("TrapWidget")
+	function ui.TrapWidget:handleEvent() end
+	function ui.TrapWidget:onCloseWidget() end
 	ui.ConfirmBox = widget_class("ConfirmBox")
 	ui.SpinWidget = widget_class("SpinWidget")
 	ui.InputDialog = widget_class("InputDialog", {
@@ -121,6 +124,7 @@ function M.new()
 	ui.stubs = {
 		["ui/uimanager"] = UIManager,
 		["ui/widget/infomessage"] = ui.InfoMessage,
+		["ui/widget/trapwidget"] = ui.TrapWidget,
 		["ui/widget/confirmbox"] = ui.ConfirmBox,
 		["ui/widget/spinwidget"] = ui.SpinWidget,
 		["ui/widget/inputdialog"] = ui.InputDialog,

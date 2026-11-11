@@ -48,3 +48,14 @@ instead use its read-only `/api/Reader/image` endpoint, including PDF image extr
 back to the writing endpoint. A failed page is reported and does not advance local progress.
 Explicit two-way server synchronization is a separate, not-yet-implemented feature. These changes do
 not synchronize downloaded EPUBs or other local documents.
+
+Page-image requests and fallback Kavita progress lookup run in a cancellable background process.
+While **Loading page...** is shown, a tap, gesture or key cancels that request; the cancellation input
+is consumed, not passed through to the viewer. An already displayed image remains usable until its
+replacement is decoded. Cancelling or suspending before the first image returns to the browser.
+Requests have a 60-second overall watchdog. Close/suspend cancels pending work, and late results cannot
+replace a newer page or advance progress. If a worker cannot start, the plugin explains the failure
+rather than silently freezing input with a foreground retry; downloading the book remains an alternative.
+Image decoding and drawing still happen on the UI thread, so this is not a guarantee against slow rendering.
+
+![Cancellable loading over a synthetic page in the emulator](https://raw.githubusercontent.com/greywolf1499/opds_plus.koplugin/main/.github/screenshots/stream_loading.png)
