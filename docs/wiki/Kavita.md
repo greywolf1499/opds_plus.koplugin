@@ -48,8 +48,7 @@ this is not encryption of the settings file or catalog credentials.
 Kavita's OPDS image endpoint itself can update progress when an image is fetched. Development builds
 instead use its read-only `/api/Reader/image` endpoint, including PDF image extraction, without falling
 back to the writing endpoint. A failed page is reported and does not advance local progress.
-Explicit two-way server synchronization is a separate, not-yet-implemented feature. These changes do
-not synchronize downloaded EPUBs or other local documents.
+Server writes require the separate opt-in below. Downloaded EPUBs and other local documents are not synchronized.
 
 Page-image requests and fallback Kavita progress lookup run in a cancellable background process.
 While **Loading page...** is shown, a tap, gesture or key cancels that request; the cancellation input
@@ -61,3 +60,42 @@ rather than silently freezing input with a foreground retry; downloading the boo
 Image decoding and drawing still happen on the UI thread, so this is not a guarantee against slow rendering.
 
 ![Cancellable loading over a synthetic page in the emulator](https://raw.githubusercontent.com/greywolf1499/opds_plus.koplugin/main/.github/screenshots/stream_loading.png)
+
+### Two-way progress in development builds
+
+Long-press the catalog, choose **Edit**, enable **Sync streaming progress**, and save. This is **off by
+default** and separate from **Sync catalog**, which downloads books. Saving an enabled catalog asks
+for confirmation explaining the server-side effects. Imported catalogs do not inherit this permission.
+
+Supported links are Kavita's chapter PSE streams and Komga's OPDS 1.2 book-page streams, on the same
+server and application path as the catalog. Kavita's API key must match the catalog's key. Generic or
+foreign linked streams remain local-only, with an explanation. The provider verifies book/chapter
+identity and page count; a changed count requires refreshing the catalog.
+
+- Opening checks the server before choosing a position. A change on just one side is reconciled using
+  the last acknowledged state; changes on both sides ask which to keep. Existing local positions
+  without a baseline also ask when they differ. Explicit page choices ask if they differ from the
+  current server position. **Read locally without syncing** leaves server state alone for this session.
+- A selected remote or device position takes effect only after its image is actually painted.
+  Failed or cancelled image loads retain the previous saved position.
+- New painted-page changes are saved locally and coalesced for two seconds before sending. Server
+  requests do not trap page-turn input. An older acknowledgement cannot clear a newer pending page.
+- Sending the final page marks a book complete on either provider. Sending Kavita's first page can
+  mark the chapter unread. Rewinds are allowed. Merely reopening the server's current position
+  preserves its state, including unread or not-yet-completed status.
+- Closing or suspending cancels pending requests, including writes. There is no hidden close-time
+  upload. The latest pending page survives in settings and is reconciled on reopening (or resume).
+  An unavailable progress API pauses synchronization with a visible message; it does not prevent
+  local reading if images are still accessible. Page images are not an offline download cache.
+- A cancelled or timed-out write may already have reached the server. Reopening checks before retrying,
+  avoiding duplicate writes when the server already has the desired position.
+- Changes to credentials, configured headers, stream links or page counts invalidate synchronization
+  baselines, **not local saved pages**. A differing local position needs a fresh conflict choice.
+  The header fingerprint is conservative: changing another catalog's headers may also require this.
+  Baselines contain only positions, completion state, a bounded server revision and an opaque scope;
+  they do not store API tokens or credentials.
+
+These APIs do **not** offer atomic compare-and-swap. OPDS Plus reads immediately before writing and
+confirms afterward, but another reader can still update between those requests. Do not use this as
+a guarantee against simultaneous edits. Validation uses fake endpoints and the KOReader emulator;
+no unauthorized progress writes are made to public/demo servers.

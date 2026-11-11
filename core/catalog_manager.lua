@@ -29,7 +29,7 @@ end
 -- @param servers table List of server configurations
 -- @param item_table table Current item table
 -- @param fields table Input fields: [1]=title, [2]=url, [3]=username, [4]=password, [5]=raw_names, [6]=sync,
--- [7]=custom HTTP headers (a list of { name, value }, copied; none when empty or nil)
+-- [7]=custom HTTP headers (a list of { name, value }, copied; none when empty or nil), [8]=stream progress sync
 -- @param item table|nil Existing item to update (nil for new)
 -- @param no_refresh boolean Don't refresh item table if true
 -- @return number, number New index, item number for refresh
@@ -43,6 +43,7 @@ function CatalogManager.editCatalogFromInput(servers, item_table, fields, item, 
 		raw_names = fields[5],
 		sync      = fields[6],
 		headers   = headers and #headers > 0 and headers or nil,
+		stream_sync = fields[8] == true or nil,
 	}
 
 	local new_item = CatalogUtils.buildRootEntry(new_server)

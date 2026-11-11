@@ -116,6 +116,19 @@ describe("CatalogManager", function()
 	end)
 
 	describe("editCatalogFromInput when adding a catalog", function()
+		it("keeps stream progress writes off unless explicitly enabled, independently of download sync", function()
+			local servers, menu = library({})
+			CatalogManager.editCatalogFromInput(servers, menu, dialogFields({ [6] = true }))
+			assert.is_nil(servers[1].stream_sync)
+			CatalogManager.editCatalogFromInput(servers, menu, dialogFields({ [8] = true }))
+			assert.is_true(servers[2].stream_sync)
+			assert.is_true(menu[3].stream_sync)
+			assert.is_nil(servers[2].sync)
+			menu[3].idx = 3
+			CatalogManager.editCatalogFromInput(servers, menu, dialogFields(), menu[3])
+			assert.is_nil(servers[2].stream_sync)
+		end)
+
 		it("appends the catalog to the list and to the menu", function()
 			local servers, menu = library({ { title = "Old", url = "http://old.example/opds" } })
 

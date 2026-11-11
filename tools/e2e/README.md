@@ -179,7 +179,7 @@ malformed markers, escaped names, break variants and preserving the raw content/
 ### Streaming resume
 
 ```bash
-EMULATE_READER_W=600 EMULATE_READER_H=800 tools/e2e/catalog/run.sh streamloading,streamresume,customheaders
+EMULATE_READER_W=600 EMULATE_READER_H=800 tools/e2e/catalog/run.sh streamsync,streamloading,streamresume,customheaders
 ```
 
 `streamresume` uses actual KOReader image decoding, painting, book/download dialogs and settings storage
@@ -200,6 +200,21 @@ This measures emulator timer responsiveness, not physical e-reader latency or fa
 It checks key/pan cancellation, external loading-widget dismissal, suspend, watchdog timeout, replacement,
 close, initial suspend and fork failure. Previous images/progress survive cancellation; stale results do
 not replace the requested page. All child processes must be collected without temporary image files.
+The background-worker checks also verify that a nonmodal progress job does not trap viewer input,
+can run alongside a page turn, and can be cancelled without closing the reader.
+
+`streamsync` exercises the default-off catalog checkbox and its confirmation, actual forked workers,
+provider serialization, painted-page writes, conflict choices, failed-image adoption, API-unavailable
+local reading, persisted pending state, reopening and nonmodal-write suspension/reaping. The transport
+intercepts only a dedicated fixture namespace; its progress state is shared through a file in the
+validated harness temporary directory. **All progress writes are fake**, never sent to real accounts.
+It also captures `stream_sync_opt_in.png` and `stream_sync_conflict.png`.
+
+Provider specs verify Kavita's current and v0.8.8 cursor/parent-ID contracts and Komga's OPDS 1.2 image
+route with page-based REST progress. They cover final-page completion, rewinds, preflight conflicts,
+post-write confirmation, uncertain-write recovery, count/identity changes, malformed credentials and
+nonredirecting source-scoped requests. Coordinator specs cover coalescing, older acknowledgements,
+authentication-context changes and cancellation. These do not claim server-side compare-and-swap.
 
 The ImageViewer initialization/painting hooks were checked against KOReader v2025.10 source; native runs
 use the installed emulator. PSE conventions are from the

@@ -459,8 +459,9 @@ travels unencrypted. [SECURITY.md](SECURITY.md) has the details and explains how
 - Large catalogs may take time to load initially, and Grid View performance varies with the device
 - OPDS 2.0 catalogs that need an authentication document or OAuth are not supported; only username and
   password (Basic) logins are
-- Two-way streaming progress synchronization is not yet available. Development builds support local,
-  standard PSE and normalized Kavita resume; see the [streaming guide](docs/wiki/Kavita.md#resume-in-development-builds).
+- v1.5.0 has no two-way progress synchronization. Development builds support local/PSE resume and
+  [opt-in Kavita/Komga page-stream synchronization](docs/wiki/Kavita.md#two-way-progress-in-development-builds).
+  Downloaded books are not synchronized, and the server APIs cannot guarantee atomic conflict detection.
 - The `SERIES:` line that Calibre and Calibre-Web add to descriptions stays in the description, next to the
   Series row
 - Update release notes are shown as plain Markdown text

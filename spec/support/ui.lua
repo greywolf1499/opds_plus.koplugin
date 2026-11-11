@@ -77,6 +77,7 @@ function M.new()
 	function ui.TrapWidget:handleEvent() end
 	function ui.TrapWidget:onCloseWidget() end
 	ui.ConfirmBox = widget_class("ConfirmBox")
+	ui.ButtonDialog = widget_class("ButtonDialog")
 	ui.SpinWidget = widget_class("SpinWidget")
 	ui.InputDialog = widget_class("InputDialog", {
 		-- What the user typed, which a test sets as `typed`; the field starts with `input`
@@ -126,6 +127,7 @@ function M.new()
 		["ui/widget/infomessage"] = ui.InfoMessage,
 		["ui/widget/trapwidget"] = ui.TrapWidget,
 		["ui/widget/confirmbox"] = ui.ConfirmBox,
+		["ui/widget/buttondialog"] = ui.ButtonDialog,
 		["ui/widget/spinwidget"] = ui.SpinWidget,
 		["ui/widget/inputdialog"] = ui.InputDialog,
 		["ui/widget/textviewer"] = ui.TextViewer,

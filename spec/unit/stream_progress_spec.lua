@@ -1,0 +1,110 @@
+local helper = require("helper")
+
+describe("Streaming progress reconciliation", function()
+    local Progress, provider, settings, progress, saved
+    local function remote(page, modified)
+        return { position = page, page = page, completed = page == 10, modified = modified or "before" }
+    end
+    before_each(function()
+        helper.reset()
+        Progress = helper.load("core.stream_progress")
+        local Provider = helper.load("services.stream_provider", {
+            socketutil = require("support.socketutil").new(),
+            ["socket.http"] = require("support.fake_http").new(),
+        })
+        provider = Provider.new(
+            "https://library.example/opds/v1.2/books/book/pages/{pageNumber}", 10,
+            "https://library.example/opds/v1.2/").value
+        settings, saved = {}, 0
+        progress = Progress.new(settings, "book", 10, function() saved = saved + 1 end)
+    end)
+    after_each(helper.reset)
+
+    it("pulls remote changes unless both sides changed from the acknowledged baseline", function()
+        assert.equals("remote", progress:resolve(remote(3), provider))
+        progress:recordPage(3)
+        progress:acknowledge(remote(3), 3)
+        assert.equals("remote", progress:resolve(remote(5, "new"), provider))
+        progress:recordPage(4)
+        assert.equals("local", progress:resolve(remote(3), provider))
+        assert.equals("conflict", progress:resolve(remote(5, "new"), provider))
+        assert.equals("equal", progress:resolve(remote(4, "new"), provider))
+    end)
+
+    it("does not mistake an old write acknowledgement for the newest painted page", function()
+        progress:recordPage(3)
+        progress:acknowledge(remote(3), 3)
+        progress:recordPage(7)
+        progress:recordPage(8)
+        progress:acknowledge(remote(7, "written"), 7)
+        assert.equals(8, progress:page())
+        assert.is_true(progress:pending())
+        assert.equals("local", progress:resolve(remote(7, "written"), provider))
+        progress:flush()
+        assert.equals(8, settings.stream_progress.book.page)
+        assert.equals(7, settings.stream_progress.book.sync.local_page)
+        assert.equals(1, saved)
+    end)
+
+    it("retains a local rewind until the chosen remote image is actually painted", function()
+        progress:recordPage(7)
+        progress:acknowledge(remote(7), 7)
+        progress:recordPage(2)
+        progress:adopt(remote(5, "other"))
+        progress:flush()
+        assert.equals(2, settings.stream_progress.book.page)
+        assert.is_true(progress:pending())
+        local reopened = Progress.new(settings, "book", 10, function() end)
+        assert.equals("conflict", reopened:resolve(remote(5, "other"), provider))
+        progress:recordPage(5)
+        assert.equals(5, progress:page())
+        assert.is_false(progress:pending())
+        assert.equals("other", settings.stream_progress.book.sync.remote.modified)
+    end)
+
+    it("requires a choice for older local positions without a baseline, instead of taking the maximum", function()
+        progress:recordPage(2)
+        assert.equals("conflict", progress:resolve(remote(9), provider))
+        progress:keepLocal(remote(9))
+        assert.equals("local", progress:resolve(remote(9), provider))
+        assert.is_true(progress:pending())
+        assert.equals(2, progress:page())
+    end)
+
+    it("retains valid local positions while refusing malformed saved baselines", function()
+        settings.stream_progress = { book = {
+            page = 4, sync = { local_page = 4, remote = { position = -1, page = 4, completed = false } },
+        } }
+        local reopened = Progress.new(settings, "book", 10, function() end)
+        assert.equals(4, reopened:page())
+        assert.equals("conflict", reopened:resolve(remote(5), provider))
+        assert.is_true(require("logger").logged("warn", "invalid saved stream synchronization baseline"))
+        assert.is_false(reopened:recordPage(11))
+        assert.equals(4, reopened:page())
+    end)
+
+    it("preserves local progress but never reuses a different authentication baseline", function()
+        progress = Progress.new(settings, "book", 10, function() end, "account-a")
+        progress:recordPage(3)
+        progress:acknowledge(remote(3), 3)
+        progress:recordPage(5)
+        local same = Progress.new(settings, "book", 10, function() end, "account-a")
+        assert.equals("local", same:resolve(remote(3), provider))
+        local changed = Progress.new(settings, "book", 10, function() end, "account-b")
+        assert.equals(5, changed:page())
+        assert.equals("conflict", changed:resolve(remote(3), provider))
+    end)
+
+    it("does not grant overwrite permission for a chosen local page that never paints", function()
+        progress:recordPage(3)
+        progress:acknowledge(remote(3), 3)
+        progress:keepLocal(remote(7, "other"), 5)
+        progress:flush()
+        local reopened = Progress.new(settings, "book", 10, function() end)
+        assert.equals(3, reopened:page())
+        assert.equals("remote", reopened:resolve(remote(7, "other"), provider))
+        progress:recordPage(5)
+        assert.equals("local", progress:resolve(remote(7, "other"), provider))
+        assert.is_true(progress:pending())
+    end)
+end)
