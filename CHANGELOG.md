@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-11
+
+**Update from within KOReader**: **OPDS Plus Catalog → Settings → Updates → Check for updates**, or install by hand.
+Neighboring-cover prefetch and streaming progress writes are both **off by default**.
+OAuth login and downloaded-book progress synchronization are not included.
+
 ### Added
 
 - **Authentication Discovery**: Recognize OPDS authentication documents in protected responses or at a direct address, including advertised HTTP/Atom/OPDS 2 links. Show provider information, Basic field labels and unsupported-flow explanations in a scrollable viewer. Public catalogs keep their entries and offer an explicit information action. Linked discovery uses verified same-origin HTTPS without catalog credentials, custom headers or redirects. Existing Basic/self-signed catalogs are unchanged; OAuth login remains gated.
@@ -246,6 +252,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 - Derivative of KOReader's built-in OPDS plugin with major UI/UX enhancements.
 - Licensed under AGPLv3 consistent with KOReader.
 
+[Unreleased]: https://github.com/greywolf1499/opds_plus.koplugin/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/greywolf1499/opds_plus.koplugin/releases/tag/v1.6.0
 [1.5.0]: https://github.com/greywolf1499/opds_plus.koplugin/releases/tag/v1.5.0
 [1.4.0]: https://github.com/greywolf1499/opds_plus.koplugin/releases/tag/v1.4.0
 [1.3.1]: https://github.com/greywolf1499/opds_plus.koplugin/releases/tag/v1.3.1

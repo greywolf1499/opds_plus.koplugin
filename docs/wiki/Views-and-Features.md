@@ -31,7 +31,7 @@ Tapping a book opens its details: cover, authors, series and number, publisher, 
 description and the formats you can download, when the catalog provides them. From there you can download a
 format, choose the folder, change the file name, or view the cover.
 
-Development builds remove a leading Calibre-style `SERIES:` metadata line from the description only when
+OPDS Plus removes a leading Calibre-style `SERIES:` metadata line from the description only when
 its name and number match the series field. Rating/tags and the story text remain; a series mentioned in
 prose, later in the description, or with different metadata is kept. The same text is used in download
 information and when saving a new description. Existing downloaded-book descriptions are not rewritten.
@@ -51,7 +51,7 @@ Under **Cover Settings**:
   covers are kept, and clears the cache.
 - **Parallel Cover Downloads** (on by default): download several covers at once in the background. Turn it off if
   covers stop loading or the device runs low on memory.
-- **Prefetch Neighboring Covers** (development builds, off by default): once the visible covers are ready and
+- **Prefetch Neighboring Covers** (off by default): once the visible covers are ready and
   input is idle, cache covers for one neighboring display page, following the last navigation direction
   (initially forward). Requires caching and parallel downloads. It shares the two-worker limit, does not decode
   or paint speculative covers, and never fetches a catalog page just to discover more cover links.
@@ -62,7 +62,7 @@ Warming stops when the page, view or catalog changes, a dialog covers the browse
 Disabling prefetch, caching or parallel downloads also cancels it. Devices that cannot start background
 processes skip warming instead of fetching synchronously.
 
-Development builds retain up to 8 MiB of decoded covers per browser, separate from the disk cache.
+OPDS Plus retains up to 8 MiB of decoded covers per browser, separate from the disk cache.
 Images still used on screen or by a dialog are never evicted, so they can exceed that budget.
 Older, unused covers are decoded again from disk when needed (or downloaded if disk caching is off).
 Replacing the listing or closing its browser releases unused images. This does not cap KOReader's total RAM.
@@ -77,7 +77,7 @@ Replacing the listing or closing its browser releases unused images. This does n
 - **Search** and **facets** (filters such as genre, with their counts) are in the menu at the top left when the
   catalog offers them.
 
-In development builds, catalog requests, parsing and mapping run in the background. Tap or press a key while
+Catalog requests, parsing and mapping run in the background. Tap or press a key while
 **Loading catalog...** is shown to cancel without replacing the current listing or changing its page or
 history. A new navigation request or closing the browser also cancels old work, including a request still
 waiting for Wi-Fi. Catalog pages are fetched sequentially as needed; results are not truncated.
@@ -100,6 +100,8 @@ one `Name: value` per line.
 - `Host`, `Content-Length`, `Connection` and `Accept-Encoding` can't be set. An `Authorization` header replaces
   the catalog's username and password.
 - Headers are saved as plain text in `opdsplus.lua`, like passwords.
+- Linked [authentication-document discovery](OPDS-2.0#authentication-discovery) sends neither catalog
+  credentials nor custom headers.
 
 ## Sync
 
@@ -112,6 +114,10 @@ Sync downloads new books from the catalogs that have **Sync catalog** ticked in 
 
 Both actions are also in KOReader's gesture manager as **OPDS Plus: Sync all catalogs** and **OPDS Plus: Force
 sync all catalogs**.
+
+This is separate from the default-off **Sync streaming progress** setting, which synchronizes page positions
+for supported Kavita/Komga streams. See the [streaming guide](Kavita#two-way-streaming-progress) for consent,
+conflicts and limitations. Downloaded-book reading positions are not synchronized.
 
 ## Keyboard and D-pad
 

@@ -17,16 +17,16 @@ text in `opdsplus.lua`.
 Kavita offers comics, manga and other books as a stream of pages, so you can read them without downloading the
 file. The book's download dialog then shows:
 
-- **Page stream**: opens the stream where you left off in Kavita, or at the first page.
+- **Page stream**: resumes the saved local/catalog position, or checks the server when synchronization is enabled.
 - **Stream from page**: asks for a page number first.
 - **Resume stream from page N**: shown when the catalog says which page you last read.
 
 The book details list the stream as **Stream (N pages)** next to the formats you can download.
 
-Pages are fetched one at a time as you turn them, with the catalog's custom headers. If Kavita's reply about
-your progress is missing or cannot be read, the stream starts at the first page.
+Pages are fetched one at a time as you turn them, with the catalog's custom headers.
+The resume and synchronization rules below apply from version 1.6.0.
 
-### Resume in development builds
+### Resume
 
 The default **Stream / Page stream** action first uses the position saved on this device, then the
 catalog's standard PSE `lastRead` position. Only a recognized Kavita stream without either position needs
@@ -45,7 +45,7 @@ position for up to 500 books is retained, scoped by catalog, account and feed id
 stream URL when the feed has no identity). Older entries are evicted first. Stored keys are hashed;
 this is not encryption of the settings file or catalog credentials.
 
-Kavita's OPDS image endpoint itself can update progress when an image is fetched. Development builds
+Kavita's OPDS image endpoint itself can update progress when an image is fetched. OPDS Plus 1.6.0 and later
 instead use its read-only `/api/Reader/image` endpoint, including PDF image extraction, without falling
 back to the writing endpoint. A failed page is reported and does not advance local progress.
 Server writes require the separate opt-in below. Downloaded EPUBs and other local documents are not synchronized.
@@ -61,7 +61,7 @@ Image decoding and drawing still happen on the UI thread, so this is not a guara
 
 ![Cancellable loading over a synthetic page in the emulator](https://raw.githubusercontent.com/greywolf1499/opds_plus.koplugin/main/.github/screenshots/stream_loading.png)
 
-### Two-way progress in development builds
+### Two-way streaming progress
 
 Long-press the catalog, choose **Edit**, enable **Sync streaming progress**, and save. This is **off by
 default** and separate from **Sync catalog**, which downloads books. Saving an enabled catalog asks

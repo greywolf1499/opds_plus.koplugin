@@ -11,7 +11,7 @@
 | Cannot get catalog. Server response status: … | The server answered with an error. Try again later, or check the server's log. |
 | Cannot get catalog. Server refuses to serve uncompressed content. | The server, or a proxy in front of it, only sends compressed pages. Change its configuration to allow uncompressed replies. |
 | Insecure HTTPS → HTTP downgrade attempted by redirect | An `https` address was redirected to `http`. OPDS Plus refuses this; tell the server's administrator, or use the address it redirects to if you trust the network. |
-| Background catalog loading is unavailable. Load in the foreground instead? | Development builds could not start a background worker. Cancel to keep browsing, or choose **Load** knowing input will pause until the request finishes. Changing the cover-download setting does not affect this. |
+| Background catalog loading is unavailable. Load in the foreground instead? | A background worker could not start. Cancel to keep browsing, or choose **Load** knowing input will pause until the request finishes. Changing the cover-download setting does not affect this. |
 | Catalog loading failed. Please try again. | The background worker failed or returned no usable result. Retry, and include the corresponding log lines if it recurs. |
 
 ## A server behind Cloudflare Access or another gateway
@@ -25,21 +25,21 @@ own headers. Add them in the catalog's **Edit** dialog under **Headers**: see
 - **No covers at all**: some catalogs don't provide cover images. If a catalog that has covers shows none, turn
   off **Settings → Cover Settings → Parallel Cover Downloads** and open the page again.
 - **Old covers**: **Settings → Cover Settings → Advanced → Clear Cover Cache**.
-- **Covers reload after changing a login or headers** (development builds): caches are separated by
+- **Covers reload after changing a login or headers**: caches are separated by
   authentication context. Old unscoped cover entries are ignored; normal cache limits still apply.
   Header changes can also invalidate other catalogs' entries because redirects may use those headers.
 - **Slow keys while covers arrive**: keep **Parallel Cover Downloads** enabled if your device supports it.
-  Development builds yield between cover updates and pause new decoding briefly during key/touch activity;
+  OPDS Plus yields between cover updates and pauses new decoding briefly during key/touch activity;
   downloads already in progress continue. A single slow decode or screen refresh still takes time.
   With parallel downloads disabled, a network request can still block input.
-- **Neighboring covers are not prefetched** (development builds): this is off by default. Enable **Prefetch
+- **Neighboring covers are not prefetched**: this is off by default. Enable **Prefetch
   Neighboring Covers**, **Enable Cover Cache** and **Parallel Cover Downloads**. Warming only runs while the
   cover view is foreground, its visible covers are ready, and input is idle. It is skipped when background
   processes are unavailable; normal visible-cover loading still has its serial fallback.
 
 ## Downloads
 
-- **Some queued downloads have no saved catalog origin** (development builds): these entries predate
+- **Some queued downloads have no saved catalog origin**: these entries predate
   credential-origin tracking. Their saved username and password are withheld rather than sent to an
   unverified destination. Public downloads and destination-specific custom headers still work. Remove
   and re-add entries from their catalog if they need Basic authentication.

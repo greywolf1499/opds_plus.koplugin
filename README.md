@@ -11,7 +11,7 @@
 
 # OPDS Plus - Enhanced OPDS Browser for KOReader
 
-**Version:** 1.5.0
+**Version:** 1.6.0
 
 **OPDS Plus** is a feature-rich enhancement of KOReader's built-in OPDS catalog browser, providing visual book cover displays, multiple viewing modes, and extensive customization options for browsing online book catalogs.
 
@@ -28,6 +28,8 @@
 - **Keyboard and D-pad Navigation**: Browse catalogs on devices with hardware keys, without the touchscreen
 - **Custom HTTP Headers**: Send extra headers to a catalog's server, for catalogs behind Cloudflare Access (Zero Trust) or a similar gateway
 - **Cover Quality + Cache**: Improved cover rendering pipeline with disk-backed caching
+- **Page-stream Resume and Sync**: Remember displayed pages locally; optionally synchronize supported Kavita and Komga streams with per-catalog consent and conflict choices. See the [streaming guide](docs/wiki/Kavita.md#two-way-streaming-progress)
+- **Authentication Discovery**: Explain catalog login methods without automatically opening advertised login endpoints; OAuth login remains unsupported
 
 ### 🖼️ List View
 - Book covers displayed alongside title and author information
@@ -78,7 +80,7 @@
 |                       **Book Details**                        |                      **Updates**                       |
 | :-----------------------------------------------------------: | :----------------------------------------------------: |
 |    ![Book Details](.github/screenshots/book_details.png)     | ![Update Available](.github/screenshots/update_available.png) |
-|         *Author, series, language, formats and more*          |        *Formatted notes (development builds)*        |
+|         *Author, series, language, formats and more*          |        *Formatted release notes*        |
 
 |                     **OPDS 2.0 Shelves**                      |                   **Facets**                    |
 | :-----------------------------------------------------------: | :---------------------------------------------: |
@@ -137,12 +139,12 @@ updating, and setting up Calibre-Web, Kavita and Komga.
 
 From 1.4.0 on, OPDS Plus updates itself: open **OPDS Plus Catalog → Settings → Updates** and tap **Check for updates**. It shows what is new and installs it when you tap **Install**; restart KOReader when asked. **Roll back to previous version** puts the version before the update back. Versions before 1.4.0 can't update themselves, so install 1.4.0 by hand once, as above.
 
-Development builds format release notes with headings, lists and emphasis, including on KOReader v2025.10.
+From 1.6.0, release notes use headings, lists and emphasis, including on KOReader v2025.10.
 Use page keys or touch scrolling for long notes. **Install**, **Skip this version** and **Later** work as before.
 If formatting fails, choose **View as plain text** to read the original notes. Links and remote images in notes
 are not opened or fetched.
 
-Development builds also check for updates in the background. A manual check shows a cancellable status;
+Update checks run in the background. A manual check shows a cancellable status;
 automatic checks yield to input without losing the key or gesture. Cancelled or watchdog-aborted checks do not
 change **Last checked**, and can be retried on the next catalog open. Automatic checks never turn Wi-Fi on.
 If background workers are unavailable, only a manual check offers an explicit, blocking foreground option.
@@ -175,7 +177,7 @@ A plugin folder that is a link, or has a `.git` folder in it (Method 2), is a de
 3. Tap a book to view details and download options
 4. Downloaded books are saved to your configured download directory
 
-Development builds also omit a duplicate leading Calibre-style `SERIES:` line from descriptions when its
+OPDS Plus omits a duplicate leading Calibre-style `SERIES:` line from descriptions when its
 name and number match the book's series field. Other metadata and prose stay intact; descriptions already
 saved with downloaded books are not rewritten.
 
@@ -186,7 +188,7 @@ On devices with hardware keys, you can browse without the touchscreen:
 - **Back**: goes up one catalog level, and closes the browser from the top level. In the book info dialog it closes the dialog
 - **Home**: closes the browser
 
-#### Catalog loading (development builds)
+#### Catalog loading (New in 1.6.0)
 
 Catalog requests, parsing and mapping run in a background process. While **Loading catalog...** is shown,
 tap or press a key to cancel; the current listing, page and navigation history stay in place.
@@ -222,7 +224,7 @@ Access settings from: **OPDS Plus Catalog → Settings**
 - **Parallel Cover Downloads**:
   - Enabled (default): downloads several covers at once, in background processes, so pages of covers fill in faster and a slow server does not freeze the screen.
   - Disabled: downloads covers one at a time. Turn this off if covers stop loading or the device runs low on memory.
-- **Prefetch Neighboring Covers** (development builds, off by default):
+- **Prefetch Neighboring Covers** (new in 1.6.0, off by default):
   - While the current page is ready and input is idle, cache covers for one neighboring display page in the last navigation direction (initially forward).
   - Requires **Enable Cover Cache** and **Parallel Cover Downloads**. It downloads bytes only, without decoding images or repainting, and shares the two-worker limit with visible covers.
   - Changing pages, views or catalogs, opening book details, or closing the browser cancels obsolete warming. It does not fetch another catalog page just to find covers.
@@ -234,7 +236,7 @@ Access settings from: **OPDS Plus Catalog → Settings**
   - Cache TTL (minutes)
   - Clear Cover Cache
 
-Development builds also limit retained decoded covers to 8 MiB per browser, independently of the disk
+OPDS Plus limits retained decoded covers to 8 MiB per browser, independently of the disk
 cache size. Visible images and open dialogs keep their buffers even if they exceed that budget.
 Evicted covers are decoded again from the disk cache, or fetched again if disk caching is disabled.
 This is not a limit on KOReader's total RAM use.
@@ -328,17 +330,18 @@ CF-Access-Client-Secret: <your client secret>
 The button shows how many headers the catalog has, such as **Headers (2)**.
 
 - The headers go with everything the plugin asks that server for: catalog pages, covers, downloads, sync and Kavita page streaming.
+- Linked authentication-document discovery is deliberately anonymous: it sends neither catalog credentials nor custom headers.
 - They are only sent to the catalog's own server, meaning the same scheme, host and port. `http` and `https`, or two different ports, count as different servers. A request that is redirected to another server is followed without them. Catalogs on the same server share their headers: the first catalog in the list that has headers decides what is sent to that server.
 - Headers the plugin has to control itself, such as `Host`, `Content-Length`, `Connection` and `Accept-Encoding`, can't be set. A custom `Authorization` header replaces the catalog's username and password.
 - Treat headers like a password. They are saved as plain text in `opdsplus.lua`, so anyone who can read that file can read them.
 
-Development builds also scope the catalog's username and password to its scheme, host and port,
+From 1.6.0, the catalog's username and password are scoped to its scheme, host and port,
 including the **first** request to a linked feed, cover, download or stream. A foreign link does not
 inherit the source login, and saving it as a subcatalog does not copy that login. Destination-specific
 custom headers still apply. Older download-queue entries without a saved catalog origin withhold
 Basic credentials and show a notice; remove and re-add any entries that need authentication.
 
-Feed and cover caches in development builds are separated by authentication context. Changing a
+Feed and cover caches are separated by authentication context. Changing a
 login or custom headers can trigger fresh requests; old unscoped cover entries are no longer read.
 Header changes can invalidate caches for other catalogs too, because redirected requests may use
 those headers. Cache limits and cleanup remain unchanged, and credentials are not stored in cache names.
@@ -366,6 +369,8 @@ opds_plus.koplugin/
 │   ├── navigation_handler.lua
 │   ├── parser.lua
 │   ├── state_manager.lua
+│   ├── stream_progress.lua
+│   ├── stream_sync.lua
 │   ├── sync_manager.lua
 │   ├── mappers/
 │   │   ├── atom.lua
@@ -376,6 +381,8 @@ opds_plus.koplugin/
 ├── models/
 │   └── constants.lua
 ├── services/
+│   ├── authentication.lua
+│   ├── catalog_loader.lua
 │   ├── cover_cache.lua
 │   ├── cover_loader.lua
 │   ├── cover_memory.lua
@@ -383,6 +390,8 @@ opds_plus.koplugin/
 │   ├── image_loader.lua
 │   ├── kavita.lua
 │   ├── ota_updater.lua
+│   ├── stream_loader.lua
+│   ├── stream_provider.lua
 │   └── tls_hostname.lua
 ├── ui/
 │   ├── browser.lua
@@ -391,6 +400,7 @@ opds_plus.koplugin/
 │   │   ├── book_info_dialog.lua
 │   │   ├── download_builder.lua
 │   │   ├── menu_builder.lua
+│   │   ├── release_notes.lua
 │   │   ├── settings_dialogs.lua
 │   │   └── update_dialog.lua
 │   └── menus/
@@ -399,6 +409,7 @@ opds_plus.koplugin/
 │       └── list_menu.lua
 └── utils/
     ├── archive_paths.lua
+    ├── auth_document.lua
     ├── button_dialog_builder.lua
     ├── catalog_utils.lua
     ├── debug.lua
@@ -423,6 +434,7 @@ This file contains:
 - Font settings
 - Grid layout configuration
 - Update settings: whether to check weekly, when the last check was, and a skipped version
+- Local page-stream positions and synchronization baselines, without API tokens
 
 Cached covers are stored in `<KOReader data dir>/cache/opds_plus/`. To remove both, use KOReader's plugin manager and choose **Disable plugin and delete settings** or **Delete plugin and settings**. Downloaded books are never deleted.
 
@@ -457,11 +469,11 @@ travels unencrypted. [SECURITY.md](SECURITY.md) has the details and explains how
 
 - Covers show only when the catalog provides image URLs; some feeds have none
 - Large catalogs may take time to load initially, and Grid View performance varies with the device
-- Development builds recognize OPDS authentication documents and explain available methods without
+- OPDS Plus recognizes authentication documents and explains available methods without
   sending credentials to advertised login endpoints. Existing Basic and custom-header access remains
-  supported. OAuth login is not implemented; see [authentication discovery](docs/wiki/OPDS-2.0.md#authentication-discovery-in-development-builds).
-- v1.5.0 has no two-way progress synchronization. Development builds support local/PSE resume and
-  [opt-in Kavita/Komga page-stream synchronization](docs/wiki/Kavita.md#two-way-progress-in-development-builds).
+  supported. OAuth login is not implemented; see [authentication discovery](docs/wiki/OPDS-2.0.md#authentication-discovery).
+- Local/PSE resume and [opt-in Kavita/Komga page-stream synchronization](docs/wiki/Kavita.md#two-way-streaming-progress)
+  are supported.
   Downloaded books are not synchronized, and the server APIs cannot guarantee atomic conflict detection.
 - The `SERIES:` line that Calibre and Calibre-Web add to descriptions stays in the description, next to the
   Series row

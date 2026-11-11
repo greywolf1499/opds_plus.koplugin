@@ -14,9 +14,9 @@ The update is downloaded from GitHub, its checksum is compared with the one publ
 every file in it is checked before anything is changed. The installed version is then swapped for the new one,
 and kept next to it as `opds_plus.koplugin.bak`.
 
-### Release notes in development builds
+### Formatted release notes
 
-Notes are formatted with headings, lists and emphasis. Current KOReader uses its native Markdown viewer;
+From 1.6.0, notes are formatted with headings, lists and emphasis. Current KOReader uses its native Markdown viewer;
 KOReader v2025.10 uses a compatibility viewer built from its existing Markdown converter and HTML scroller.
 The compatibility viewer keeps the general text viewer's font size and text style.
 Use the page keys or touch scrolling to read long notes. **Install**, **Skip this version** and **Later**
@@ -25,7 +25,7 @@ are unchanged. Links and remote images in notes are not opened or fetched.
 If formatting fails, **View as plain text** opens the complete original notes with the same update controls.
 Cancelling that prompt does not install or skip the release.
 
-![Formatted notes in a development build](https://raw.githubusercontent.com/greywolf1499/opds_plus.koplugin/main/.github/screenshots/update_available.png)
+![Formatted release notes](https://raw.githubusercontent.com/greywolf1499/opds_plus.koplugin/main/.github/screenshots/update_available.png)
 
 ## Weekly check
 
@@ -34,7 +34,7 @@ is at least a week old, it checks for a new release if the device is already onl
 once with a short notice. It never installs anything by itself. A version you skipped is not announced
 again. **About OPDS Plus**, at the bottom of **Settings**, shows when the last check was made.
 
-In development builds, connectivity probes and release requests run in a background worker. Manual checks
+Connectivity probes and release requests run in a background worker. Manual checks
 show a status that you can cancel with a tap or key. An automatic check is invisible; input interrupts it
 and is passed through to the screen underneath. It never turns Wi-Fi on. A manual check retains KOReader's
 usual Wi-Fi prompt/action when offline.
