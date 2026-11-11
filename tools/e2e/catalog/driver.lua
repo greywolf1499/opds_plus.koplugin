@@ -136,17 +136,54 @@ local function count(b)
     return books, thumbs
 end
 
--- Page through the listing exactly like repeatedly tapping the "next page" chevron.
-local function browse_all(b, limit)
-    local taps = 0
-    while taps < limit do
-        local hrefs = b.item_table.hrefs
-        local more_feed = hrefs and hrefs.next
-        if b.page >= b.page_num and not more_feed then break end
-        b:onNextPage()
-        taps = taps + 1
+-- Poll `cond` every 0.5s until it is truthy or `timeout` seconds passed, then call on_done(result).
+local function wait_for(cond, timeout, on_done)
+    local waited = 0
+    local function poll()
+        local ok, res = pcall(cond)
+        if (ok and res) or waited >= timeout then
+            on_done(ok and res or false)
+            return
+        end
+        waited = waited + 0.5
+        UIManager:scheduleIn(0.5, poll)
     end
-    return taps
+    poll()
+end
+
+-- Wait for each requested feed page before sending another navigation action.
+local function browse_all(b, limit, done, on_tap)
+    local taps = 0
+    local pending_tap
+    local browse
+    browse = function()
+        if b._catalog_job then
+            wait_for(function() return not b._catalog_job end, 30, function(ok)
+                if ok then browse() else
+                    emit(current .. ".error", "catalog pagination timed out")
+                    b:cancelCatalogLoad()
+                    done(taps)
+                end
+            end)
+            return
+        end
+        if pending_tap and on_tap then on_tap(taps, false) end
+        pending_tap = false
+        while taps < limit do
+            local hrefs = b.item_table.hrefs
+            if b.page >= b.page_num and not (hrefs and hrefs.next) then break end
+            taps = taps + 1
+            if on_tap then on_tap(taps, true) end
+            b:onNextPage()
+            if b._catalog_job then
+                pending_tap = true
+                return browse()
+            end
+            if on_tap then on_tap(taps, false) end
+        end
+        done(taps)
+    end
+    browse()
 end
 
 local function shot(name)
@@ -179,35 +216,24 @@ local function scenario_steps(sc)
             emit(sc.name .. ".entry_url", entry and entry.url or "nil")
             if entry then b:onMenuSelect(entry) end
         end,
-        function()
+        function(advance)
             emit(sc.name .. ".paths", #b.paths)
-            emit(sc.name .. ".taps", browse_all(b, 200))
-            local books, thumbs = count(b)
-            emit(sc.name .. ".books", books)
-            emit(sc.name .. ".expected_books", sc.expect_books)
-            emit(sc.name .. ".items", #b.item_table)
-            emit(sc.name .. ".with_cover_url", thumbs)
-            emit(sc.name .. ".menu_pages", b.page_num)
-            local pass = books == sc.expect_books and (sc.expect_thumbs == nil or thumbs == sc.expect_thumbs)
-            emit(sc.name .. ".result", pass and "PASS" or "FAIL")
-            shot(sc.name)
+            browse_all(b, 200, function(taps)
+                emit(sc.name .. ".taps", taps)
+                local books, thumbs = count(b)
+                emit(sc.name .. ".books", books)
+                emit(sc.name .. ".expected_books", sc.expect_books)
+                emit(sc.name .. ".items", #b.item_table)
+                emit(sc.name .. ".with_cover_url", thumbs)
+                emit(sc.name .. ".menu_pages", b.page_num)
+                local pass = books == sc.expect_books and (sc.expect_thumbs == nil or thumbs == sc.expect_thumbs)
+                emit(sc.name .. ".result", pass and "PASS" or "FAIL")
+                shot(sc.name)
+                advance()
+            end)
+            return "async"
         end,
     }
-end
-
--- Poll `cond` every 0.5s until it is truthy or `timeout` seconds passed, then call on_done(result).
-local function wait_for(cond, timeout, on_done)
-    local waited = 0
-    local function poll()
-        local ok, res = pcall(cond)
-        if (ok and res) or waited >= timeout then
-            on_done(ok and res or false)
-            return
-        end
-        waited = waited + 0.5
-        UIManager:scheduleIn(0.5, poll)
-    end
-    poll()
 end
 
 -- Tell the mock server to drop a marker line in requests.jsonl so request counts can be split per phase.
@@ -506,14 +532,23 @@ end
 -- Counts feed fetches made by any browser while installed; call restore() to remove the hook.
 local function count_feed_fetches()
     local FeedFetcher = require("core.feed_fetcher")
+    local CatalogLoader = require("services.catalog_loader")
     local orig = FeedFetcher.genItemTableFromURL
+    local orig_start = CatalogLoader.start
     local state = { n = 0 }
     ---@diagnostic disable-next-line: duplicate-set-field
-    FeedFetcher.genItemTableFromURL = function(...)
-        state.n = state.n + 1
-        return orig(...)
+    FeedFetcher.genItemTableFromURL = function(url, user, pass, debug_callback, parser, request_state)
+        if not request_state then state.n = state.n + 1 end
+        return orig(url, user, pass, debug_callback, parser, request_state)
     end
-    function state.restore() FeedFetcher.genItemTableFromURL = orig end
+    ---@diagnostic disable-next-line: duplicate-set-field
+    CatalogLoader.start = function(...)
+        state.n = state.n + 1
+        return orig_start(...)
+    end
+    function state.restore()
+        FeedFetcher.genItemTableFromURL, CatalogLoader.start = orig, orig_start
+    end
     return state
 end
 
@@ -736,39 +771,36 @@ local function prefetch_steps()
         function()
             b:onMenuSelect(find_item(b, "Paged 250 (50 per page)"))
         end,
-        function()
+        function(advance)
             local start = fetches.n
             local screens = b.page_num
             emit("prefetch.perpage", b.perpage)
             emit("prefetch.screens_on_open", screens)
             emit("prefetch.items_on_open", #b.item_table)
-            local per_tap, taps = {}, 0
-            while taps < 80 do
-                local hrefs = b.item_table.hrefs
-                if b.page >= b.page_num and not (hrefs and hrefs.next) then break end
-                local before = fetches.n
-                b:onNextPage()
-                taps = taps + 1
-                per_tap[taps] = fetches.n - before
-            end
-            local first_fetch_tap
-            for tap, n in ipairs(per_tap) do
-                if n > 0 then
-                    first_fetch_tap = tap
-                    break
+            local per_tap = {}
+            browse_all(b, 80, function(taps)
+                local first_fetch_tap
+                for tap, n in ipairs(per_tap) do
+                    if n > 0 then
+                        first_fetch_tap = tap
+                        break
+                    end
                 end
-            end
-            emit("prefetch.taps_to_reach_the_end", taps)
-            emit("prefetch.first_fetch_on_tap", first_fetch_tap)
-            emit("prefetch.feed_fetches", fetches.n - start)
-            emit("prefetch.items_at_end", #b.item_table)
-            -- A tap on page p fetches only while p + 2 > screens, so the first fetch is on tap screens - 1.
-            c.check("first_fetch_is_one_screen_before_the_end",
-                first_fetch_tap == math.max(1, screens - 1), first_fetch_tap)
-            c.check("every_item_reachable", #b.item_table == 250, #b.item_table)
-            c.check("one_fetch_per_feed_page", fetches.n - start == 4, fetches.n - start)
-            local ok = pcall(function() b:onNextPage() end)
-            c.check("tap_at_the_end_returns", ok)
+                emit("prefetch.taps_to_reach_the_end", taps)
+                emit("prefetch.first_fetch_on_tap", first_fetch_tap)
+                emit("prefetch.feed_fetches", fetches.n - start)
+                emit("prefetch.items_at_end", #b.item_table)
+                c.check("first_fetch_is_one_screen_before_the_end",
+                    first_fetch_tap == math.max(1, screens - 1), first_fetch_tap)
+                c.check("every_item_reachable", #b.item_table == 250, #b.item_table)
+                c.check("one_fetch_per_feed_page", fetches.n - start == 4, fetches.n - start)
+                local ok = pcall(function() b:onNextPage() end)
+                c.check("tap_at_the_end_returns", ok)
+                advance()
+            end, function(tap, before)
+                per_tap[tap] = before and fetches.n or fetches.n - per_tap[tap]
+            end)
+            return "async"
         end,
         -- Tiny feed pages: the first open must still fill a few screens, and must stop.
         function()
@@ -778,16 +810,19 @@ local function prefetch_steps()
             b = open_browser()
             b:onMenuSelect(find_item(b, "Mock Tiny Pages"))
         end,
-        function()
+        function(advance)
             emit("prefetch.tiny.screens_on_open", b.page_num)
             emit("prefetch.tiny.items_on_open", #b.item_table)
             emit("prefetch.tiny.fetches_on_open", fetches.n - tiny_before)
             c.check("tiny_pages_fill_a_few_screens", b.page_num >= 3, b.page_num)
-            local ok = pcall(function() browse_all(b, 60) end)
-            c.check("tiny_pages_all_reachable", ok and #b.item_table == 60, #b.item_table)
-            remove_server(plugin(), tiny)
-            fetches.restore()
-            c.finish()
+            browse_all(b, 60, function()
+                c.check("tiny_pages_all_reachable", #b.item_table == 60, #b.item_table)
+                remove_server(plugin(), tiny)
+                fetches.restore()
+                c.finish()
+                advance()
+            end)
+            return "async"
         end,
     }
 end
@@ -975,11 +1010,15 @@ local function nontouch_steps()
             c.check("grid.line_follows_focus", painted_lines() == focused_cells(),
                 painted_lines() .. " vs " .. focused_cells())
         end,
-        function()
+        function(advance)
             local depth = #b.paths
             press(b, "Back")
-            c.check("back.walks_up_one_level", #b.paths == depth - 1 and shown(b),
-                depth .. " -> " .. #b.paths)
+            wait_for(function() return not b._catalog_job end, 10, function(done)
+                c.check("back.walks_up_one_level", done and #b.paths == depth - 1 and shown(b),
+                    depth .. " -> " .. #b.paths)
+                advance()
+            end)
+            return "async"
         end,
         function()
             local guard = 0
@@ -1079,15 +1118,15 @@ end
 local fork_pids = {}
 local real_run_in_subprocess
 
--- Record the PID of every subprocess the loader starts (and pass everything through untouched).
-local function watch_forks()
+-- ImageLoader uses files; Trapper's catalog workers use pipes. Count them only when requested.
+local function watch_forks(include_catalogs)
     local FFIUtil = require("ffi/util")
     if real_run_in_subprocess then return end
     real_run_in_subprocess = FFIUtil.runInSubProcess
     ---@diagnostic disable-next-line: duplicate-set-field
     FFIUtil.runInSubProcess = function(...)
         local pid, fd = real_run_in_subprocess(...)
-        if pid then fork_pids[#fork_pids + 1] = pid end
+        if pid and (include_catalogs or select(2, ...) ~= true) then fork_pids[#fork_pids + 1] = pid end
         return pid, fd
     end
 end
@@ -2215,9 +2254,11 @@ local function defaultcat_steps()
             p:onShowOPDSPlusCatalog()
             fetches.restore()
             b = p.opds_browser
+            c.check("B.one_feed_request", fetches.n == 1, fetches.n)
+        end,
+        function()
             c.check("B.default_opens", opened_target(b), b and (#b.paths .. " path(s)"))
             c.check("B.title_is_the_catalog", b ~= nil and b.catalog_title == target.title, b and b.catalog_title)
-            c.check("B.one_feed_request", fetches.n == 1, fetches.n)
             local sent_credentials = false
             for _, item in ipairs(b and b.item_table or {}) do
                 if item.text and item.text:lower():find("authorization", 1, true) then sent_credentials = true end
@@ -2253,6 +2294,8 @@ local function defaultcat_steps()
             target.is_default = true
             find_menu_entry(p, { "Browse Catalogs" }).callback()
             b = p.opds_browser
+        end,
+        function()
             c.check("D.menu_entry_opens_the_default", opened_target(b))
             close_browser(p)
 
@@ -2273,13 +2316,30 @@ local function defaultcat_steps()
             offline.restore()
             if offline.callback then offline.callback() end
             fetches.restore()
+        end,
+        function()
             c.check("E.opens_once_connected", opened_target(b))
             close_browser(p)
+        end,
+        function()
+            local offline = simulate_offline()
+            local fetches = count_feed_fetches()
+            p:onShowOPDSPlusCatalog()
+            b = p.opds_browser
+            offline.restore()
+            close_browser(p)
+            if offline.callback then offline.callback() end
+            fetches.restore()
+            c.check("E.closed_browser_ignores_late_connection", fetches.n == 0
+                and not b._catalog_job and not p.opds_browser)
+            b:cancelCatalogLoad()
         end,
         -- F: editing the default catalog keeps it the default; deleting it leaves none and the list still works
         function()
             p:onShowOPDSPlusCatalog()
             b = p.opds_browser
+        end,
+        function()
             b:onBack()
             local item = root_item(b, "Mock Default Pick")
             c.check("F.root_item_found", item ~= nil)
@@ -3492,10 +3552,10 @@ local function customheaders_steps()
             first_fork = #fork_pids + 1
             b = open_browser()
             b:onMenuSelect(find_item(b, "Mock Cloudflare"))
-            local books = count(b)
-            c.check("with.feed_lists_the_books", books == 10, books)
-            c.check("with.no_authentication_error", not toast_has("Failed to authenticate"))
-            wait_for(function() return covers_loaded(b) end, 20, function(ok)
+            wait_for(function() return not b._catalog_job and covers_loaded(b) end, 20, function(ok)
+                local books = count(b)
+                c.check("with.feed_lists_the_books", books == 10, books)
+                c.check("with.no_authentication_error", not toast_has("Failed to authenticate"))
                 local want, have = visible_covers(b)
                 c.check("with.parallel_covers_load", ok, have .. "/" .. want)
                 c.check("with.parallel_covers_use_subprocesses", #fork_pids - first_fork + 1 > 0,
@@ -3511,7 +3571,7 @@ local function customheaders_steps()
             first_fork = #fork_pids + 1
             b = open_browser()
             b:onMenuSelect(find_item(b, "Mock Cloudflare"))
-            wait_for(function() return covers_loaded(b) end, 20, function(ok)
+            wait_for(function() return not b._catalog_job and covers_loaded(b) end, 20, function(ok)
                 local want, have = visible_covers(b)
                 c.check("with.serial_covers_load", ok, have .. "/" .. want)
                 c.check("with.serial_covers_use_no_subprocess", #fork_pids - first_fork + 1 == 0,
@@ -3521,10 +3581,12 @@ local function customheaders_steps()
             end)
             return "async"
         end,
-        function(advance)
+        function()
             reset_toasts()
             b = open_browser()
             b:onMenuSelect(find_item(b, "Mock Cloudflare"))
+        end,
+        function(advance)
             b:onMenuSelect(find_item(b, "Book 0003"))
             c.check("with.book_dialog_offers_the_download", tap(b.book_info_dialog, "Download (EPUB)"))
             wait_for(function() return window_has_text("File saved to") end, 20, function(saved)
@@ -3642,6 +3704,8 @@ local function customheaders_steps()
         function()
             b = open_browser()
             b:onMenuSelect(find_item(b, "Mock Cloudflare"))
+        end,
+        function()
             servers_before = #p.servers
             b:addSubCatalog(BASE .. "/cf/feed?sub=1")
             local dialog = window_titled("Add OPDS catalog")
@@ -4277,27 +4341,32 @@ local function opds2_steps()
         download("cbz", "Book 2-0005", "CBZ", ".cbz"),
         function()
             b:onReturn()
+        end,
+        function()
             c.check("back.returns_to_the_start", find_item(b, "Staff picks") ~= nil)
             b:onMenuSelect(find_item(b, "All books"))
         end,
-        function()
+        function(advance)
             local books, thumbs = count(b)
             c.check("paging.first_page", books == 20, books)
             c.check("paging.covers_have_urls", thumbs == 20, thumbs)
             c.check("paging.has_next", b.item_table.hrefs and b.item_table.hrefs.next ~= nil)
             local first = b.item_table[1]
             c.check("paging.series", first and first.series == "Series 1", first and first.series)
-            browse_all(b, 20)
-            books = count(b)
-            c.check("paging.reaches_every_book", books == 60, books)
-            c.check("facets.present", b.facet_groups ~= nil)
-            b:showFacetMenu()
-            local menu = top_window(function(w) return texts(w):find("Fantasy (10)", 1, true) ~= nil end)
-            c.check("facets.menu_shows_counts", menu ~= nil)
-            c.check("facets.marks_the_active_one", menu and texts(menu):find("✓ All (60)", 1, true) ~= nil,
-                menu and texts(menu))
-            local pressed = menu and press_button(menu, "Fantasy (10)")
-            c.check("facets.pressed", pressed == true)
+            browse_all(b, 20, function()
+                books = count(b)
+                c.check("paging.reaches_every_book", books == 60, books)
+                c.check("facets.present", b.facet_groups ~= nil)
+                b:showFacetMenu()
+                local menu = top_window(function(w) return texts(w):find("Fantasy (10)", 1, true) ~= nil end)
+                c.check("facets.menu_shows_counts", menu ~= nil)
+                c.check("facets.marks_the_active_one", menu and texts(menu):find("✓ All (60)", 1, true) ~= nil,
+                    menu and texts(menu))
+                local pressed = menu and press_button(menu, "Fantasy (10)")
+                c.check("facets.pressed", pressed == true)
+                advance()
+            end)
+            return "async"
         end,
         function()
             local books = count(b)
@@ -4512,10 +4581,181 @@ local function shots_steps()
     }
 end
 
+local function catalogprofile_steps()
+    local c = checker("catalogprofile")
+    local FeedFetcher = require("core.feed_fetcher")
+    local Parser = require("core.parser")
+    local Navigation = require("core.navigation_handler")
+    local gettime = require("socket").gettime
+    local p, b
+    local steps = {
+        function()
+            current = "catalogprofile"
+            p = plugin()
+            close_window_with_text("rendered in color")
+            close_window_with_text("cache database")
+            b = open_browser()
+        end,
+    }
+    for _, format in ipairs({ "atom", "opds2" }) do
+        steps[#steps + 1] = function()
+            local url = BASE .. (format == "atom"
+                and "/opds/paged?size=5000&total=5000&delay=1.2"
+                or "/opds2/books?delay=1.2")
+            local start = gettime()
+            local body, headers = FeedFetcher.fetchFeed(url, false)
+            assert(type(body) == "string" and headers, "missing profile feed")
+            emit("catalogprofile." .. format .. ".http_ms", math.floor((gettime() - start) * 1000))
+            if format == "opds2" then
+                -- The server's JSON fixture has 20 publications; expand only the CPU/serialization sample.
+                local feed = Parser:parse(body, headers["content-type"])
+                for index = 21, 5000 do feed.publications[index] = feed.publications[(index - 1) % 20 + 1] end
+                body = require("json").encode(feed)
+            end
+            emit("catalogprofile." .. format .. ".payload_bytes", #body)
+            start = gettime()
+            local parsed = Parser:parse(body, headers["content-type"])
+            emit("catalogprofile." .. format .. ".decode_ms", math.floor((gettime() - start) * 1000))
+            start = gettime()
+            local items = Navigation.genItemTableFromCatalog(parsed, url, require("core.browser_context").fromBrowser(b))
+            emit("catalogprofile." .. format .. ".map_ms", math.floor((gettime() - start) * 1000))
+            c.check(format .. ".all_entries_preserved", #items == 5000, #items)
+            start = gettime()
+            b:switchItemTable("Catalog profile", items)
+            emit("catalogprofile." .. format .. ".widgets_ms", math.floor((gettime() - start) * 1000))
+            require("services.cover_loader").stopLoading(b)
+        end
+    end
+    steps[#steps + 1] = function()
+        close_browser(p)
+        c.finish()
+    end
+    return steps
+end
+
+local function catalogloading_steps()
+    local c = checker("catalogloading")
+    local gettime = require("socket").gettime
+    local p, b
+    local steps = {
+        function()
+            current = "catalogloading"
+            p = plugin()
+            close_window_with_text("rendered in color")
+            close_window_with_text("cache database")
+            b = open_browser()
+        end,
+        function(advance)
+            local last, max_gap, ticks = gettime(), 0, 0
+            local pulse
+            pulse = function()
+                local now = gettime()
+                max_gap = math.max(max_gap, now - last)
+                last, ticks = now, ticks + 1
+                UIManager:scheduleIn(0.025, pulse)
+            end
+            UIManager:scheduleIn(0.025, pulse)
+            UIManager:scheduleIn(0.05, function()
+                b:openCatalog({ text = "Large slow catalog",
+                    url = BASE .. "/opds/paged?size=5000&total=5000&delay=1.2" })
+            end)
+            wait_for(function() return #b.item_table == 5000 end, 15, function(done)
+                max_gap = math.max(max_gap, gettime() - last)
+                UIManager:unschedule(pulse)
+                require("services.cover_loader").stopLoading(b)
+                emit("catalogloading.ui_max_gap_ms", math.floor(max_gap * 1000))
+                c.check("loads_all_entries", done and #b.item_table == 5000, #b.item_table)
+                c.check("ui_remains_responsive", max_gap < 0.35 and ticks > 3, max_gap)
+                advance()
+            end)
+            return "async"
+        end,
+    }
+    for _, action in ipairs({ "back", "replace", "close" }) do
+        steps[#steps + 1] = function(advance)
+            if action == "back" then
+                b:onGotoPage(3)
+                UIManager:forceRePaint()
+                shot("catalog_before_loading")
+            end
+            watch_forks(true)
+            local first = #fork_pids + 1
+            local old_items, old_paths, old_title = b.item_table, b.paths, b.catalog_title
+            local old_depth = #b.paths
+            local old_page = b.page
+            local old_focus = b:getFocusedItemNumber()
+            b:openCatalog({ text = "Obsolete", url = BASE .. "/opds/paged?size=7&total=7&delay=3" })
+            UIManager:scheduleIn(0.1, function()
+                if action == "back" then
+                    shot("catalog_loading")
+                    local start = gettime()
+                    UIManager:handleInputEvent(require("ui/event"):new("KeyPress", require("device/key"):new("Back", {})))
+                    c.check("back.cancels_promptly", not b._catalog_job and gettime() - start < 0.35)
+                    c.check("back.keeps_listing_and_position", b.item_table == old_items and b.page == old_page
+                        and old_page == 3 and b:getFocusedItemNumber() == old_focus)
+                    c.check("back.keeps_history_and_title", b.paths == old_paths and #b.paths == old_depth
+                        and b.catalog_title == old_title)
+                elseif action == "replace" then
+                    b:openCatalog({ text = "Replacement", url = BASE .. "/opds2/home" })
+                else
+                    close_browser(p)
+                    c.check("close.cancels_request", not b._catalog_job and not p.opds_browser)
+                end
+                wait_for(function() return alive_children(first) == 0 and not b._catalog_job end, 10, function(clean)
+                    c.check(action .. ".reaps_workers", clean)
+                    c.check(action .. ".no_temporary_files", count_lua_tmp() == 0)
+                    if action == "replace" then
+                        c.check("replace.rejects_obsolete_result", find_item(b, "Staff picks") ~= nil
+                            and b.catalog_title == "Replacement")
+                        c.check("replace.adds_only_one_history_entry", #b.paths == old_depth + 1)
+                    elseif action == "back" then
+                        c.check("back.no_late_changes", b.item_table == old_items and #b.paths == old_depth)
+                    else
+                        c.check("close.no_late_changes", b.item_table == old_items and not p.opds_browser)
+                    end
+                    unwatch_forks()
+                    advance()
+                end)
+            end)
+            return "async"
+        end
+    end
+    steps[#steps + 1] = function(advance)
+        b = open_browser()
+        local roots = b.item_table
+        b:openCatalog({ text = "Missing", url = BASE .. "/missing-catalog" })
+        wait_for(function() return not b._catalog_job end, 5, function(done)
+            c.check("error.is_visible", done and window_has_text("Catalog not found"))
+            c.check("error.keeps_root_state", b.item_table == roots and #b.paths == 0 and b.catalog_title == nil)
+            close_window_with_text("Catalog not found")
+            close_window_with_text("Cannot get catalog info")
+            advance()
+        end)
+        return "async"
+    end
+    steps[#steps + 1] = function()
+        local FFIUtil = require("ffi/util")
+        local real_fork = FFIUtil.runInSubProcess
+        ---@diagnostic disable-next-line: duplicate-set-field
+        FFIUtil.runInSubProcess = function() return nil end
+        b:openCatalog({ text = "Foreground fallback", url = BASE .. "/opds/paged?size=30&total=30" })
+        FFIUtil.runInSubProcess = real_fork
+        local prompt = UIManager:getTopmostVisibleWidget()
+        c.check("fork_failure.asks_before_blocking", prompt and prompt.text
+            and prompt.text:find("Background catalog loading is unavailable", 1, true) and #b.paths == 0)
+        c.check("fork_failure.foreground_action_works", press_button(prompt, "Load") and #b.item_table == 30)
+        close_browser(p)
+        c.finish()
+    end
+    return steps
+end
+
 local EXTRA = {
     { name = "shots", steps = shots_steps, explicit = true },
     { name = "opds2", steps = opds2_steps },
     { name = "condget", steps = condget_steps },
+    { name = "catalogprofile", steps = catalogprofile_steps, explicit = true },
+    { name = "catalogloading", steps = catalogloading_steps },
     { name = "cwapaging", steps = cwapaging_steps, explicit = true },
     { name = "cwadownload", steps = cwadownload_steps, explicit = true },
     { name = "filenames", steps = filenames_steps },
@@ -4574,7 +4814,21 @@ local function run_all()
         local function advance()
             if advanced then return end
             advanced = true
-            UIManager:scheduleIn(0.3, nextstep)
+            UIManager:scheduleIn(0.3, function()
+                local p = find_plugin()
+                local browser = p and p.opds_browser
+                if browser and browser._catalog_job then
+                    wait_for(function() return not browser._catalog_job end, 30, function(done)
+                        if not done then
+                            emit(current .. ".error", "catalog loading timed out")
+                            browser:cancelCatalogLoad()
+                        end
+                        nextstep()
+                    end)
+                else
+                    nextstep()
+                end
+            end)
         end
         local ok, res = xpcall(step, debug.traceback, advance)
         if not ok then
@@ -4590,6 +4844,12 @@ end
 UIManager:scheduleIn(3, function()
     if not find_plugin() then
         emit("fatal", "opdsplus plugin instance not found on FileManager")
+        out:close()
+        UIManager:quit(1)
+        return
+    end
+    if plugin():getSetting("ota_auto_check") ~= false then
+        emit("fatal", "catalog kit requires automatic update checks to be disabled")
         out:close()
         UIManager:quit(1)
         return

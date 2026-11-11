@@ -64,7 +64,7 @@ decode, no remaining child and no temporary-file leak. `parcovers` checks parall
 and stale fallback; `parandroid` checks serial fallback. Deterministic scheduler/ownership regressions
 are in `spec/unit/image_loader_spec.lua`, with fake subprocesses and guarded temporary files.
 
-Some scenarios are explicit (only run when named): `shots`, and `cwapaging` and `cwadownload`, which need a
+Some scenarios are explicit (only run when named): `shots`, `catalogprofile`, and `cwapaging` and `cwadownload`, which need a
 Calibre-Web-Automated server (`HARNESS_CWA_URL`, `HARNESS_CWA_USER`, `HARNESS_CWA_PASS`, plus
 `HARNESS_CWA_TOTAL` for `cwapaging`; see the comments above them in `driver.lua`).
 
@@ -114,6 +114,47 @@ The mock server's sleeping handlers can outlive a cancelled client. Concurrency 
 uncancelled batches after earlier server handlers finish, separately from client cleanup. Scheduling specs
 in `spec/unit/cover_loader_spec.lua` cover idle gates, direction resets, modal rearming and avoiding repeated
 warming after completion. These emulator checks do not certify physical e-reader timing.
+
+### Catalog loading
+
+```bash
+tools/e2e/catalog/run.sh catalogloading,condget,opds2,prefetch,defaultcat,customheaders
+tools/e2e/catalog/run.sh catalogprofile  # explicit synchronous stage profiling
+```
+
+`catalogloading` fetches all 5,000 Atom entries from a feed delayed by 1.2 seconds. A 25 ms UI pulse measures
+the largest timer gap, with a 350 ms limit and no truncation allowed. The synchronous baseline at `c4fcb6f`
+had a 1,840 ms gap; background-loading runs measured 77–90 ms, including an isolated cold start at 600×800.
+This measures emulator timer responsiveness, **not physical key/e-ink latency or total loading time**.
+One slow render or a user-selected foreground fallback can still block input.
+
+The scenario sends a real Back key during loading on page 3, checks listing/focus/history preservation,
+replaces a slow request, closes during a request, verifies eventual child reaping and temporary-file cleanup,
+and exercises HTTP failure and an unavailable-worker prompt followed by foreground loading.
+It captures `catalog_before_loading.png` and `catalog_loading.png`; use `HARNESS_SHOTS_OUT` with an existing
+directory to keep them, or `HARNESS_KEEP=1` to keep the private run directory.
+KOReader's Trapper collects cancelled workers after its cleanup grace period, not synchronously at dismissal.
+`defaultcat` also verifies that a late Wi-Fi callback cannot reopen a closed browser. The ordinary navigation
+driver waits for catalog completion, and cover-only worker counts exclude Trapper's piped catalog workers.
+
+`catalogprofile` times HTTP, decoding, mapping and widget creation separately. Baseline stages in milliseconds:
+
+| Sample | HTTP | Decode | Map | Widgets | Payload bytes |
+| --- | --- | --- | --- | --- | --- |
+| Atom, 5,000 entries | 1,213 | 346 | 279 | 7 | 2,527,202 |
+| OPDS 2 CPU sample, 5,000 entries | 1,202 | 71 | 283 | 3 | 2,708,607 |
+
+The JSON HTTP fixture contains **20 publications**, expanded to 5,000 only for CPU profiling; its HTTP
+measurement is not a 5,000-publication download. Fetch/parse/map move to the worker, while returned cache
+validators, remembered Accept refusals and errors are applied in the parent and widgets stay on the UI
+thread. Focused state-transfer and cancellation specs cover those boundaries. The new Trapper/TrapWidget
+methods and serialization interface were also checked against KOReader v2025.10's source; emulator runs use
+the installed version, not a physical minimum-version device.
+
+The kit refuses to start if automatic update checks are enabled. Its seed sets `ota_auto_check = false` at
+the storage root, not in a nested `settings` table. Profiling caught the old seed allowing an unrelated
+blocking updater connectivity probe during cold-start measurements; those mixed measurements are not used
+for the catalog comparison.
 
 ### Screenshots
 

@@ -11,6 +11,8 @@
 | Cannot get catalog. Server response status: … | The server answered with an error. Try again later, or check the server's log. |
 | Cannot get catalog. Server refuses to serve uncompressed content. | The server, or a proxy in front of it, only sends compressed pages. Change its configuration to allow uncompressed replies. |
 | Insecure HTTPS → HTTP downgrade attempted by redirect | An `https` address was redirected to `http`. OPDS Plus refuses this; tell the server's administrator, or use the address it redirects to if you trust the network. |
+| Background catalog loading is unavailable. Load in the foreground instead? | Development builds could not start a background worker. Cancel to keep browsing, or choose **Load** knowing input will pause until the request finishes. Changing the cover-download setting does not affect this. |
+| Catalog loading failed. Please try again. | The background worker failed or returned no usable result. Retry, and include the corresponding log lines if it recurs. |
 
 ## A server behind Cloudflare Access or another gateway
 

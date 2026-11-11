@@ -33,6 +33,8 @@ local FeedFetcher = require("core.feed_fetcher")
 
 -- Import the HTTP client
 local HttpClient = require("services.http_client")
+local CatalogLoader = require("services.catalog_loader")
+local CoverLoader = require("services.cover_loader")
 
 -- Import the catalog manager
 local CatalogManager = require("core.catalog_manager")
@@ -77,6 +79,7 @@ local OPDSBrowser = OPDSCoverMenu:extend {
 }
 
 function OPDSBrowser:init()
+    self:cancelCatalogLoad()
     -- Every browser shares the same live list of catalogs, which holds their custom HTTP headers
     HttpClient.setCatalogs(self.servers)
     self.item_table = self:genItemTableFromRoot()
@@ -109,6 +112,7 @@ function OPDSBrowser:_debugLog(...)
 end
 
 function OPDSBrowser:toggleViewMode()
+    self:cancelCatalogLoad()
     -- Get current mode using StateManager
     local state = StateManager.getInstance()
     local current_mode = state:getDisplayMode()
@@ -256,12 +260,53 @@ function OPDSBrowser:genItemTableFromCatalog(catalog, item_url)
     return item_table
 end
 
-function OPDSBrowser:updateCatalog(item_url, paths_updated)
-    return NavigationHandler.updateCatalog(item_url, self, paths_updated)
+function OPDSBrowser:cancelCatalogLoad()
+    self._catalog_generation = (self._catalog_generation or 0) + 1
+    local job = self._catalog_job
+    self._catalog_job = nil
+    if job and job.worker then job.worker:cancel() end
 end
 
-function OPDSBrowser:appendCatalog(item_url)
-    return NavigationHandler.appendCatalog(item_url, self)
+function OPDSBrowser:onCloseWidget()
+    self:cancelCatalogLoad()
+    return OPDSCoverMenu.onCloseWidget(self)
+end
+
+function OPDSBrowser:loadCatalog(item_url, context, callback)
+    self:cancelCatalogLoad()
+    CoverLoader.stopPrefetch(self)
+    local job = {}
+    self._catalog_job = job
+    job.worker = CatalogLoader.start(item_url, context, function(packet, cancelled)
+        if self._catalog_job ~= job then return end
+        self._catalog_job = nil
+        callback(packet, cancelled)
+    end)
+    return true
+end
+
+function OPDSBrowser:updateCatalog(item_url, paths_updated, options)
+    options = options or {}
+    local context = options.context or BrowserContext.fromBrowser(self)
+    return self:loadCatalog(item_url, context, function(packet)
+        if not packet or (#packet.items == 0 and not packet.facets and not packet.search) then return end
+        if options.paths then self.paths = options.paths end
+        if options.root then
+            self.root_catalog_title = options.root.text
+            self.root_catalog_username = options.root.username
+            self.root_catalog_password = options.root.password
+            self.root_catalog_raw_names = options.root.raw_names
+        end
+        self.catalog_title = options.title or self.catalog_title
+        NavigationHandler.applyCatalog(packet.items, packet.facets, packet.search, item_url, self, paths_updated)
+    end)
+end
+
+function OPDSBrowser:appendCatalog(item_url, done)
+    return self:loadCatalog(item_url, BrowserContext.fromBrowser(self), function(packet, cancelled)
+        local appended = packet and NavigationHandler.appendItems(packet.items, self, self:getFocusedItemNumber())
+        if done then done(appended == true, cancelled) end
+    end)
 end
 
 function OPDSBrowser:searchCatalog(item_url)
@@ -295,6 +340,7 @@ end
 
 -- Menu action on item tap (Download a book / Show subcatalog / Search in catalog)
 function OPDSBrowser:onMenuSelect(item)
+    self:cancelCatalogLoad()
     if item.acquisitions then
         for i = #item.acquisitions, 1, -1 do
             if item.acquisitions[i].href and not item.acquisitions[i].type then
@@ -322,21 +368,31 @@ end
 --- Show the entries of a catalog, or ask for the terms of a search item.
 -- An item of the root list also sets the credentials used for everything below it.
 function OPDSBrowser:openCatalog(item)
-    if #self.paths == 0 then -- root list
-        self.root_catalog_title     = item.text
-        self.root_catalog_username  = item.username
-        self.root_catalog_password  = item.password
-        self.root_catalog_raw_names = item.raw_names
-    end
+    self:cancelCatalogLoad()
+    local generation = self._catalog_generation
+    local root = #self.paths == 0
+    local context = BrowserContext.fromBrowser(self)
+    if root then context.username, context.password = item.username, item.password end
     local connect_callback
     if item.searchable then
         connect_callback = function()
+            if self._catalog_generation ~= generation then return end
+            if root then
+                self.root_catalog_title = item.text
+                self.root_catalog_username = item.username
+                self.root_catalog_password = item.password
+                self.root_catalog_raw_names = item.raw_names
+            end
             self:searchCatalog(item.url)
         end
     else
-        self.catalog_title = item.text or self.catalog_title or self.root_catalog_title
         connect_callback = function()
-            self:updateCatalog(item.url)
+            if self._catalog_generation ~= generation then return end
+            self:updateCatalog(item.url, false, {
+                context = context,
+                title = item.text or self.catalog_title or self.root_catalog_title,
+                root = root and item or nil,
+            })
         end
     end
     NetworkMgr:runWhenConnected(connect_callback)
@@ -413,12 +469,15 @@ end
 
 -- Menu action on return-arrow tap (go to one-level upper catalog)
 function OPDSBrowser:onReturn()
-    table.remove(self.paths)
-    local path = self.paths[#self.paths]
+    if self._catalog_job then
+        self:cancelCatalogLoad()
+        return true
+    end
+    local path = self.paths[#self.paths - 1]
     if path then
-        -- return to last path
-        self.catalog_title = path.title
-        self:updateCatalog(path.url, true)
+        local paths = {}
+        for index = 1, #self.paths - 1 do paths[index] = self.paths[index] end
+        self:updateCatalog(path.url, true, { paths = paths, title = path.title })
     else
         -- return to root path, we simply reinit opdsbrowser
         self:init()
@@ -432,38 +491,41 @@ function OPDSBrowser:onHoldReturn()
     return true
 end
 
--- Fetch more catalog entries when `page` (default: the current one) is close to the last one fetched.
--- Fetching blocks the UI, and a feed page holds several screens, so ask the server only
--- when running out: one page ahead, so the end is not felt. self.page_num comes from menu.lua.
-function OPDSBrowser:fetchAhead(page)
+-- Fetch feed pages sequentially until the requested display page has room ahead.
+function OPDSBrowser:fetchAhead(page, done)
     page = page or self.page
-    while page + 2 > self.page_num do
-        local hrefs = self.item_table.hrefs
-        if hrefs and hrefs.next then
-            if not self:appendCatalog(hrefs.next) then
-                break -- reach end of paging
+    local hrefs = self.item_table.hrefs
+    if page + 2 > self.page_num and hrefs and hrefs.next then
+        self:appendCatalog(hrefs.next, function(appended, cancelled)
+            if appended then
+                self:fetchAhead(page, done)
+            elseif done then
+                done(not cancelled)
             end
-        else
-            break
-        end
+        end)
+    elseif done then
+        done(true)
     end
 end
 
 -- Menu action on next-page chevron tap (request and show more catalog entries)
 function OPDSBrowser:onNextPage(fill_only)
-    self:fetchAhead()
-    if not fill_only then
-        -- We also *do* want to paginate, so call the base class.
-        OPDSCoverMenu.onNextPage(self)
-    end
+    self:cancelCatalogLoad()
+    self:fetchAhead(nil, function(proceed)
+        if proceed and not fill_only then OPDSCoverMenu.onNextPage(self) end
+    end)
     return true
 end
 
 -- The last-page chevron and the page number dialog land on the last page fetched so far. Fetch ahead
 -- for them too, or the next-page chevron stays disabled and the rest of the feed is out of reach.
 function OPDSBrowser:onGotoPage(page)
+    self:cancelCatalogLoad()
     if page >= self.page_num then
-        self:fetchAhead(page)
+        self:fetchAhead(page, function(proceed)
+            if proceed then OPDSCoverMenu.onGotoPage(self, page) end
+        end)
+        return true
     end
     return OPDSCoverMenu.onGotoPage(self, page)
 end

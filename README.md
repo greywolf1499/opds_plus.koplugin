@@ -172,6 +172,13 @@ On devices with hardware keys, you can browse without the touchscreen:
 - **Back**: goes up one catalog level, and closes the browser from the top level. In the book info dialog it closes the dialog
 - **Home**: closes the browser
 
+#### Catalog loading (development builds)
+
+Catalog requests, parsing and mapping run in a background process. While **Loading catalog...** is shown,
+tap or press a key to cancel; the current listing, page and navigation history stay in place.
+If background loading is unavailable, you can cancel or choose **Load** to try in the foreground.
+That fallback pauses input until the request finishes. This is separate from **Parallel Cover Downloads**.
+
 ### Customizing Settings
 
 Access settings from: **OPDS Plus Catalog → Settings**

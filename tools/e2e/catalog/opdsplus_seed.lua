@@ -10,8 +10,6 @@ return {
         },
     },
     ["downloads"] = {},
-    ["settings"] = {
-        ["ota_auto_check"] = false,
-    },
+    ["ota_auto_check"] = false,
     ["pending_syncs"] = {},
 }

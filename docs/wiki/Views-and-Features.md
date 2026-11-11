@@ -72,6 +72,16 @@ Replacing the listing or closing its browser releases unused images. This does n
 - **Search** and **facets** (filters such as genre, with their counts) are in the menu at the top left when the
   catalog offers them.
 
+In development builds, catalog requests, parsing and mapping run in the background. Tap or press a key while
+**Loading catalog...** is shown to cancel without replacing the current listing or changing its page or
+history. A new navigation request or closing the browser also cancels old work, including a request still
+waiting for Wi-Fi. Catalog pages are fetched sequentially as needed; results are not truncated.
+
+If a background process cannot start, the plugin asks before trying in the foreground. **Load** pauses input
+until that request finishes; **Cancel** leaves the current page alone. This is independent of the cover
+download setting. It does not speed up the server itself, and final widget construction still uses the UI
+thread.
+
 ![Facets of a catalog](https://raw.githubusercontent.com/greywolf1499/opds_plus.koplugin/main/.github/screenshots/opds2_facets.png)
 
 ## Custom HTTP headers
