@@ -29,6 +29,10 @@ end
 
 function OPDSCoverMenu:updateItems(select_number)
     CoverLoader.stopLoading(self)
+    if self._cover_memory and self._cover_item_table ~= self.item_table then
+        self._cover_memory:clear()
+    end
+    self._cover_item_table = self.item_table
 
     -- Check if any items have cover URLs
     local has_covers = false
@@ -121,31 +125,8 @@ function OPDSCoverMenu:updateItems(select_number)
 end
 
 function OPDSCoverMenu:onCloseWidget()
-    CoverLoader.stopLoading(self)
-
-    -- Check if we have cover-related items
-    local has_cover_items = false
-    if self.item_table then
-        for _, item in ipairs(self.item_table) do
-            if item.cover_url then
-                has_cover_items = true
-                break
-            end
-        end
-    end
-
-    if has_cover_items then
-        -- Check which mode we're in via StateManager
-        local display_mode = StateManager.getInstance():getDisplayMode()
-
-        if display_mode == "grid" then
-            OPDSGridMenu.onCloseWidget(self)
-        else
-            OPDSListMenu.onCloseWidget(self)
-        end
-    else
-        Menu.onCloseWidget(self)
-    end
+    CoverLoader.cleanup(self)
+    Menu.onCloseWidget(self)
 end
 
 return OPDSCoverMenu

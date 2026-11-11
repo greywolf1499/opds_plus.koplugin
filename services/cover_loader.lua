@@ -9,8 +9,25 @@ local time = require("ui/time")
 local ImageLoader = require("services.image_loader")
 local Debug = require("utils.debug")
 local Constants = require("models.constants")
+local CoverMemory = require("services.cover_memory")
 
 local CoverLoader = {}
+
+function CoverLoader.getMemory(menu)
+	menu._cover_memory = menu._cover_memory or CoverMemory:new()
+	return menu._cover_memory
+end
+
+function CoverLoader.pinWidget(memory, widget)
+	local ImageWidget = require("ui/widget/imagewidget")
+	local release = memory:pin(widget.image)
+	function widget:free()
+		ImageWidget.free(self)
+		self.image = nil
+		release()
+	end
+	return widget
+end
 
 --- Extract unique URLs from items pending cover load
 -- @param items_to_update table Array of {entry, widget} items
@@ -38,8 +55,9 @@ end
 -- @param cover_width number Target cover width
 -- @param cover_height number Target cover height
 -- @param is_current function|nil Guard rejecting callbacks from an old menu generation
+-- @param memory table Decoded buffer owner
 -- @return function Callback for ImageLoader, returning a continuation for duplicate covers
-function CoverLoader.createRenderCallback(items_by_url, cover_width, cover_height, is_current)
+function CoverLoader.createRenderCallback(items_by_url, cover_width, cover_height, is_current, memory)
 	return function(url, content)
 		local items = items_by_url[url]
 		if not items then
@@ -74,8 +92,9 @@ function CoverLoader.createRenderCallback(items_by_url, cover_width, cover_heigh
 				return
 			end
 			entry.lazy_load_cover = false
+			local release
 			if ok and cover_bb then
-				entry.cover_bb = cover_bb
+				release = memory:add(entry, cover_bb)
 				entry.cover_failed = false
 			else
 				Debug.error("CoverLoader:", "Failed to render cover:", tostring(cover_bb))
@@ -85,6 +104,7 @@ function CoverLoader.createRenderCallback(items_by_url, cover_width, cover_heigh
 			-- Update the widget to show the new cover (or error state)
 			widget.entry = entry
 			widget:update()
+			if release then release() end
 			if index < #items then
 				return render_next
 			end
@@ -151,7 +171,8 @@ function CoverLoader.loadVisibleCovers(menu, debug_log)
 		items_by_url,
 		menu.cover_width,
 		menu.cover_height,
-		function() return menu._cover_generation == generation end
+		function() return menu._cover_generation == generation end,
+		CoverLoader.getMemory(menu)
 	)
 
 	-- Load covers asynchronously
@@ -175,19 +196,16 @@ function CoverLoader.loadVisibleCovers(menu, debug_log)
 end
 
 --- Clean up cover loading and free resources
--- @param menu table Menu instance with halt_image_loading and item_table
+-- @param menu table Menu owning the visible widgets and decoded cache
 function CoverLoader.cleanup(menu)
 	CoverLoader.stopLoading(menu)
 
-	-- Free cover image blitbuffers
-	if menu.item_table then
-		for _, entry in ipairs(menu.item_table) do
-			if entry.cover_bb then
-				entry.cover_bb:free()
-				entry.cover_bb = nil
-			end
-		end
+	if menu.item_group then menu.item_group:clear() end
+	if menu._cover_memory then
+		menu._cover_memory:clear()
+		menu._cover_memory = nil
 	end
+	menu._cover_item_table = nil
 end
 
 --- Initialize cover loading state on a menu

@@ -1327,6 +1327,200 @@ local function inputfairness_steps()
     return steps
 end
 
+local function covermemory_steps()
+    local c = checker("covermemory")
+    local Constants = require("models.constants")
+    local CoverCache = require("services.cover_cache")
+    local StateManager = require("core.state_manager")
+    -- Older versions have no budget; compare that baseline with the production limit.
+    local budget = Constants.COVER_CACHE.DECODED_MAX_BYTES or 8 * 1024 * 1024
+    local old_mode, p, b, first_bitmap
+    local items, steps = {}, {}
+
+    local function visible_bounds()
+        return (b.page - 1) * b.perpage + 1, math.min(b.page * b.perpage, #items)
+    end
+    local function loaded()
+        local first, last = visible_bounds()
+        for index = first, last do
+            if not items[index].cover_bb then return false end
+        end
+        return true
+    end
+    local function retained_bytes()
+        local first, last = visible_bounds()
+        local total, visible = 0, 0
+        for index, item in ipairs(items) do
+            if item.cover_bb then
+                local bytes = tonumber(item.cover_bb.stride * item.cover_bb.h)
+                total = total + bytes
+                if index >= first and index <= last then visible = visible + bytes end
+            end
+        end
+        return total, visible
+    end
+    local function image_copies(widget, copies)
+        if widget.image and widget._bb and widget._bb ~= widget.image then
+            copies[#copies + 1] = widget._bb
+        end
+        for _, child in ipairs(widget) do image_copies(child, copies) end
+    end
+
+    steps[#steps + 1] = function()
+        current = "covermemory"
+        p = plugin()
+        close_window_with_text("rendered in color")
+        close_window_with_text("cache database")
+        close_browser(p)
+        old_mode = StateManager.getInstance():getDisplayMode()
+        StateManager.getInstance():setDisplayMode("grid")
+        remove_cache_files()
+        local address = BASE .. "/cover/960.png"
+        local ok, bytes = require("services.http_client").getUrlContent(address)
+        assert(ok, bytes)
+        for index = 1, 96 do
+            local url = address .. "?memory=" .. index
+            items[index] = {
+                text = "Memory " .. index, title = "Memory " .. index, author = "Harness",
+                cover_url = url, image = url, lazy_load_cover = true, acquisitions = {},
+            }
+            assert(CoverCache.put(url, bytes, 0))
+        end
+        b = open_browser()
+        b:switchItemTable("Cover memory", items)
+    end
+    for page = 1, 16 do
+        steps[#steps + 1] = function(advance)
+            if page > 1 then
+                b.page = page
+                b:updateItems()
+            end
+            wait_for(loaded, 10, function(ok)
+                c.check("page" .. page .. ".loaded", ok)
+                local total, visible = retained_bytes()
+                emit("covermemory.page" .. page .. ".decoded_bytes", total)
+                emit("covermemory.page" .. page .. ".visible_bytes", visible)
+                c.check("page" .. page .. ".bounded", total <= math.max(budget, visible), total)
+                if page == 1 then first_bitmap = items[1].cover_bb end
+                advance()
+            end)
+            return "async"
+        end
+    end
+    steps[#steps + 1] = function(advance)
+        c.check("old_page_evicted", items[1].cover_bb == nil)
+        c.check("old_bitmap_freed", first_bitmap and first_bitmap:getAllocated() == 0)
+        server_stats(true)
+        b.page = 1
+        b:updateItems()
+        wait_for(loaded, 10, function(ok)
+            c.check("return_redecodes_from_disk", ok and server_stats(false).requests == 0)
+            local memory = b._cover_memory
+            c.check("owner_tracks_buffers", memory ~= nil)
+            if memory then
+                local before = items[1].cover_bb
+                b:toggleViewMode()
+                close_window_with_text("Switched to")
+                c.check("view_change_reuses_bitmap", items[1].cover_bb == before and before:getAllocated() == 1)
+                b:toggleViewMode()
+                close_window_with_text("Switched to")
+                memory.max_bytes = 256 * 1024 -- Force pressure while the dialog borrows an off-screen cover.
+                memory:_trim()
+            end
+            advance()
+        end)
+        return "async"
+    end
+    steps[#steps + 1] = function(advance)
+        local memory = b._cover_memory
+        if not memory then return end -- Already reported by owner_tracks_buffers.
+        local borrowed = items[1].cover_bb
+        items[1].image = items[1].cover_url .. "&delay=3"
+        local dialog = require("ui.dialogs.book_info_dialog").build(b, items[1])
+        UIManager:show(dialog)
+        b.page = 2
+        b:updateItems()
+        wait_for(loaded, 10, function(ok)
+            c.check("dialog_pins_offscreen_cover", ok and borrowed:getAllocated() == 1)
+            local high_res
+            wait_for(function()
+                for bitmap, record in pairs(memory.records) do
+                    if record.retired then high_res = bitmap; return true end
+                end
+                return false
+            end, 10, function(ready)
+                c.check("dialog_high_resolution_loaded", ready)
+                UIManager:tickAfterNext(function()
+                    local copies = {}
+                    image_copies(dialog, copies)
+                    c.check("dialog_has_measurable_scaled_copy", #copies > 0, #copies)
+                    UIManager:close(dialog)
+                    c.check("dialog_releases_high_resolution", high_res and high_res:getAllocated() == 0)
+                    local freed = true
+                    for _, bitmap in ipairs(copies) do
+                        if bitmap:getAllocated() ~= 0 then freed = false end
+                    end
+                    c.check("dialog_releases_scaled_copies", freed)
+                    c.check("after_dialog_within_budget",
+                        memory.bytes <= math.max(memory.max_bytes, memory.pinned_bytes))
+                    advance()
+                end)
+            end)
+        end)
+        return "async"
+    end
+    steps[#steps + 1] = function(advance)
+        local memory = b._cover_memory
+        if memory then memory.max_bytes = budget end
+        b:toggleViewMode()
+        close_window_with_text("Switched to")
+        UIManager:forceRePaint()
+        local copies = {}
+        image_copies(b.item_group, copies)
+        c.check("menu_has_measurable_scaled_copies", #copies > 0, #copies)
+        b:switchItemTable("Replacement", {})
+        if memory then
+            c.check("catalog_replacement_releases_all", memory.bytes == 0 and next(memory.entries) == nil)
+        end
+        local freed = true
+        for _, bitmap in ipairs(copies) do
+            if bitmap:getAllocated() ~= 0 then freed = false end
+        end
+        c.check("catalog_replacement_releases_scaled_copies", freed)
+        local function finish()
+            close_browser(p)
+            if memory then c.check("close_leaves_no_records", next(memory.records) == nil) end
+            StateManager.getInstance():setDisplayMode(old_mode)
+            remove_cache_files()
+            c.finish()
+            advance()
+        end
+        if not memory then
+            finish()
+        else
+            b:switchItemTable("Borrowed cover", items)
+            wait_for(loaded, 10, function(ok)
+                c.check("borrowed_cover_reloaded", ok)
+                if not ok then return finish() end
+                local borrowed, image = items[1].cover_bb, items[1].image
+                items[1].image = nil
+                local dialog = require("ui.dialogs.book_info_dialog").build(b, items[1])
+                items[1].image = image
+                UIManager:show(dialog)
+                close_browser(p)
+                c.check("dialog_survives_menu_close", borrowed:getAllocated() == 1
+                    and memory.bytes == tonumber(borrowed.stride * borrowed.h))
+                UIManager:forceRePaint()
+                UIManager:close(dialog)
+                c.check("last_borrower_releases_cover", borrowed:getAllocated() == 0 and memory.bytes == 0)
+                finish()
+            end)
+        end
+        return "async"
+    end
+    return steps
+end
+
 local function parcovers_steps()
     local ImageLoader = require("services.image_loader")
     local CoverCache = require("services.cover_cache")
@@ -4107,6 +4301,7 @@ local EXTRA = {
     { name = "listcover", steps = listcover_steps },
     { name = "parcovers", steps = parcovers_steps },
     { name = "inputfairness", steps = inputfairness_steps },
+    { name = "covermemory", steps = covermemory_steps },
     { name = "covergate", steps = covergate_steps },
     { name = "covers", steps = covers_steps },
     { name = "cachelib", steps = cachelib_steps },
