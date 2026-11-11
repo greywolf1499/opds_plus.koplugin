@@ -176,6 +176,7 @@ function BookInfoDialog.build(browser, item)
 	local DownloadManager = require("core.download_manager")
 	local ImageLoader = require("services.image_loader")
 	CoverLoader.defer(browser)
+	CoverLoader.stopPrefetch(browser)
 	local dialog, cover_batch, halt_cover_loading
 	local dialog_closed = false
 

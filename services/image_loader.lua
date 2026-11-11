@@ -14,9 +14,11 @@ if ffi.os == "Linux" then
 end
 
 local ImageLoader = {}
+local active_jobs = 0
 
 local Batch = {
     loading = false,
+    cancelled = false,
     url_map = {},
     callback = nil,
     username = nil,
@@ -71,12 +73,20 @@ local function startFetch(url, username, password)
         os.remove(path)
         return nil
     end
+    active_jobs = active_jobs + 1
     return {
         pid = pid,
         path = path,
         url = url,
         deadline = time.now() + time.s(Constants.TIMEOUTS.IMAGE_MAX_TIME + 5),
     }
+end
+
+local function releaseSlot(job)
+    if not job.slot_released then
+        job.slot_released = true
+        active_jobs = active_jobs - 1
+    end
 end
 
 local function stopFetch(job)
@@ -86,6 +96,7 @@ local function stopFetch(job)
         ffi.C.kill(job.pid, 9)
         FFIUtil.isSubProcessDone(job.pid, true)
     end
+    releaseSlot(job)
     os.remove(job.path)
 end
 
@@ -107,21 +118,25 @@ function Batch:loadImages(urls)
     end
 
     self.loading = #urls > 0
+    self.cancelled = false
     local stop_loading = false
     local next_index = 1
     local jobs = {}
     local ready = {}
     local continuation
+    local pending_fetch
     local delivered = false
     local ttl_seconds = (self.cache_ttl_minutes or Constants.COVER_CACHE.DEFAULT_TTL_MINUTES) * 60
     local max_bytes = (self.cache_max_mb or Constants.COVER_CACHE.DEFAULT_MAX_MB) * 1024 * 1024
 
     local function deliver(url, content)
-        if not stop_loading and content and self.callback then
+        if not stop_loading and content then
             delivered = true
-            local more = self.callback(url, content)
-            if not stop_loading and type(more) == "function" then
-                continuation = more
+            if self.callback then
+                local more = self.callback(url, content)
+                if not stop_loading and type(more) == "function" then
+                    continuation = more
+                end
             end
         end
     end
@@ -129,7 +144,9 @@ function Batch:loadImages(urls)
     local function finish(url, content, stale_content)
         if content then
             if self.cover_cache_enabled ~= false then
-                CoverCache.put(url, content, max_bytes)
+                if not CoverCache.put(url, content, max_bytes) then
+                    Debug.error("ImageLoader:", "Failed to cache cover")
+                end
             end
             deliver(url, content)
         else
@@ -140,10 +157,14 @@ function Batch:loadImages(urls)
 
     -- Downloads run in subprocesses, so a slow server never blocks the UI;
     -- decoding, cache writes and callbacks stay in this process.
-    local poll, after_paint, paint_wrapper
+    local poll, after_paint, paint_wrapper, halt
     local delay
     poll = function()
         if stop_loading then
+            return
+        end
+        if self.can_continue and not self.can_continue() then
+            halt()
             return
         end
 
@@ -153,6 +174,7 @@ function Batch:loadImages(urls)
             local job = jobs[index]
             if FFIUtil.isSubProcessDone(job.pid) then
                 table.remove(jobs, index)
+                releaseSlot(job)
                 ready[#ready + 1] = job
             elseif time.now() > job.deadline then
                 table.remove(jobs, index)
@@ -180,35 +202,42 @@ function Batch:loadImages(urls)
         elseif #ready > 0 then
             local job = table.remove(ready, 1)
             finish(job.url, not job.failed and readFetch(job) or nil, job.stale_content)
-        elseif #jobs + #ready < Constants.IMAGE_LOADER.MAX_PARALLEL and next_index <= #urls then
-            local url = urls[next_index]
-            next_index = next_index + 1
-
-            local stale_content = nil
-            local cached = self.cover_cache_enabled ~= false and CoverCache.get(url, ttl_seconds)
-            if cached and not cached.stale then
-                Debug.log("ImageLoader:", "Cover cache hit:", url)
-                deliver(url, cached.content)
-            else
-                if cached and cached.content then
-                    stale_content = cached.content
+        elseif #jobs + #ready < Constants.IMAGE_LOADER.MAX_PARALLEL
+            and (pending_fetch or next_index <= #urls) then
+            if not pending_fetch then
+                local url = urls[next_index]
+                next_index = next_index + 1
+                local cached = self.cover_cache_enabled ~= false and CoverCache.get(url, ttl_seconds)
+                if cached and not cached.stale then
+                    Debug.log("ImageLoader:", "Cover cache hit:", url)
+                    deliver(url, cached.content)
+                else
+                    pending_fetch = { url = url, stale_content = cached and cached.content or nil }
                 end
+            end
+            -- Contention is not a fork failure: wait rather than performing blocking HTTP.
+            if pending_fetch and active_jobs < Constants.IMAGE_LOADER.MAX_PARALLEL then
+                local fetch = pending_fetch
+                pending_fetch = nil
                 Debug.log("ImageLoader:", "Fetching cover with auth:", self.username and "yes" or "no")
-                local job = self.parallel_downloads ~= false and startFetch(url, self.username, self.password)
+                local job = self.parallel_downloads ~= false and startFetch(fetch.url, self.username, self.password)
                 if job then
-                    job.stale_content = stale_content
+                    job.stale_content = fetch.stale_content
                     table.insert(jobs, job)
+                elseif self.prefetch then
+                    Debug.error("ImageLoader:", "Skipping cover prefetch: subprocess unavailable")
+                    next_index = #urls + 1
                 else
                     -- Parallel downloads are off or no subprocess could be started:
                     -- fetch in this process, as before.
                     local success, content = HttpClient.getUrlContent(
-                        url,
+                        fetch.url,
                         Constants.TIMEOUTS.IMAGE_LOAD,
                         Constants.TIMEOUTS.IMAGE_MAX_TIME,
                         self.username,
                         self.password
                     )
-                    finish(url, success and content or nil, stale_content)
+                    finish(fetch.url, success and content or nil, fetch.stale_content)
                     -- The fetch blocked the UI: end this tick so it can run before the next cover.
                     blocked = true
                 end
@@ -218,7 +247,8 @@ function Batch:loadImages(urls)
         if stop_loading then
             return
         end
-        self.loading = #jobs > 0 or #ready > 0 or continuation ~= nil or next_index <= #urls
+        self.loading = #jobs > 0 or #ready > 0 or continuation ~= nil
+            or pending_fetch ~= nil or next_index <= #urls
         if self.loading then
             delay = blocked and Constants.UI_TIMING.IMAGE_BATCH_DELAY or Constants.IMAGE_LOADER.POLL_INTERVAL
             if delivered then
@@ -241,11 +271,13 @@ function Batch:loadImages(urls)
         UIManager:nextTick(poll)
     end
 
-    local halt = function()
+    halt = function()
         stop_loading = true
         self.loading = false
+        self.cancelled = true
         self.callback = nil
         continuation = nil
+        pending_fetch = nil
         UIManager:unschedule(poll)
         UIManager:unschedule(after_paint)
         if paint_wrapper then
@@ -297,6 +329,21 @@ function ImageLoader:loadImages(
     batch.callback = callback
     local halt = batch:loadImages(urls)
     return batch, halt
+end
+
+--- Warm disk-cache bytes only; unsupported subprocesses never fall back to blocking HTTP.
+function ImageLoader:prefetch(urls, username, password, cache_max_mb, cache_ttl_minutes, can_continue)
+    local batch = Batch:new {
+        prefetch = true,
+        username = username,
+        password = password,
+        cover_cache_enabled = true,
+        parallel_downloads = true,
+        cache_max_mb = cache_max_mb,
+        cache_ttl_minutes = cache_ttl_minutes,
+        can_continue = can_continue,
+    }
+    return batch, batch:loadImages(urls)
 end
 
 --- Clear disk cover cache.

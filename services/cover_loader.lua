@@ -118,9 +118,89 @@ function CoverLoader.defer(menu)
 	if menu._cover_batch then
 		menu._cover_batch:defer()
 	end
+	if menu._cover_prefetch_batch then
+		menu._cover_prefetch_batch:defer()
+	end
+	if UIManager:getTopmostVisibleWidget() == menu then
+		CoverLoader.schedulePrefetch(menu)
+	end
+end
+
+function CoverLoader.stopPrefetch(menu)
+	if menu._scheduled_cover_prefetch then
+		UIManager:unschedule(menu._scheduled_cover_prefetch)
+		menu._scheduled_cover_prefetch = nil
+	end
+	if menu._halt_cover_prefetch then
+		menu._halt_cover_prefetch()
+		menu._halt_cover_prefetch = nil
+	end
+	menu._cover_prefetch_batch = nil
+end
+
+local function prefetchEnabled(menu)
+	local settings = menu.settings
+	return settings and settings.cover_prefetch_enabled == true
+		and settings.cover_cache_enabled ~= false and settings.cover_parallel_downloads ~= false
+end
+
+function CoverLoader.schedulePrefetch(menu)
+	if not menu._last_mode_had_covers then
+		menu._cover_prefetch_context = nil
+		return
+	end
+	local previous = menu._cover_prefetch_context
+	local direction = 1
+	if previous and previous.items == menu.item_table and previous.perpage == menu.perpage
+		and previous.mode == menu._last_display_mode then
+		direction = previous.direction
+		if menu.page > previous.page then direction = 1 end
+		if menu.page < previous.page then direction = -1 end
+	end
+	menu._cover_prefetch_context = {
+		items = menu.item_table, page = menu.page, perpage = menu.perpage,
+		mode = menu._last_display_mode, direction = direction,
+	}
+	if not prefetchEnabled(menu) or menu._scheduled_cover_prefetch
+		or (menu._cover_prefetch_batch and not menu._cover_prefetch_batch.cancelled) then
+		return
+	end
+	local neighbor = menu.page + direction
+	if neighbor < 1 or neighbor > math.ceil(#menu.item_table / menu.perpage) then return end
+	local items = {}
+	for index = (neighbor - 1) * menu.perpage + 1, math.min(neighbor * menu.perpage, #menu.item_table) do
+		items[#items + 1] = { entry = menu.item_table[index] }
+	end
+	local urls = CoverLoader.extractUniqueUrls(items)
+	if #urls == 0 then return end
+
+	local generation = menu._cover_generation
+	local function can_continue()
+		return menu._cover_generation == generation and prefetchEnabled(menu)
+			and UIManager:getTopmostVisibleWidget() == menu
+	end
+	local start_when_idle
+	start_when_idle = function()
+		menu._scheduled_cover_prefetch = nil
+		if not can_continue() then return end
+		if CoverLoader.hasPendingItems(menu) or (menu._cover_batch and menu._cover_batch.loading)
+			or time.now() < (menu._cover_pause_until or 0) then
+			menu._scheduled_cover_prefetch = start_when_idle
+			UIManager:scheduleIn(Constants.IMAGE_LOADER.INPUT_QUIET_TIME, start_when_idle)
+			return
+		end
+		local settings = menu.settings
+		local batch, halt = ImageLoader:prefetch(urls, menu.root_catalog_username, menu.root_catalog_password,
+			settings.cover_cache_max_mb, settings.cover_cache_ttl_minutes, can_continue)
+		menu._cover_prefetch_batch = batch
+		menu._halt_cover_prefetch = halt
+	end
+	menu._scheduled_cover_prefetch = start_when_idle
+	UIManager:scheduleIn(Constants.IMAGE_LOADER.INPUT_QUIET_TIME, start_when_idle)
 end
 
 function CoverLoader.stopLoading(menu)
+	CoverLoader.stopPrefetch(menu)
 	menu._cover_generation = (menu._cover_generation or 0) + 1
 	if menu._scheduled_cover_load then
 		UIManager:unschedule(menu._scheduled_cover_load)
@@ -206,6 +286,7 @@ function CoverLoader.cleanup(menu)
 		menu._cover_memory = nil
 	end
 	menu._cover_item_table = nil
+	menu._cover_prefetch_context = nil
 end
 
 --- Initialize cover loading state on a menu

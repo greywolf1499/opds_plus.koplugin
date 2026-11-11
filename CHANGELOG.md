@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ### Added
 
+- **Neighboring Cover Prefetch**: An off-by-default Cover Settings option warms the disk cache for one neighboring display page while the current covers are ready and input is idle. It requires caching and parallel downloads, never decodes or draws speculative images, and cancels on navigation, dialogs and close. Thanks to @iav for the prefetch work proposed in issue #117.
 - **User Guide**: The [wiki](https://github.com/greywolf1499/opds_plus.koplugin/wiki) explains installing and updating OPDS Plus, its views and settings, setting up Calibre-Web, Kavita and Komga, OPDS 2.0 catalogs, and what to do about each error message.
 
 ### Changed
@@ -17,8 +18,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ### Fixed
 
+- **Shared Cover Workers**: Visible and prefetched covers share a two-worker limit rather than starting two workers per batch. If subprocesses are unavailable, speculative warming is skipped instead of falling back to blocking network requests.
 - **Decoded Cover Memory**: Keep an 8 MiB least-recently-used cover budget instead of retaining every visited page. Visible and dialog-borrowed images stay pinned, even when they exceed that budget. Release high-resolution dialog images and widget-scaled copies when their users close or are rebuilt.
-- **Cover Loading and Keys**: Yield between cover decodes and widget updates, including cache hits and repeated cover URLs. Key and touch activity postpones expensive cover work without killing and restarting downloads. Thanks to @iav for the input-deferral work behind issue #117; neighboring-page cover prefetch remains a separate follow-up.
+- **Cover Loading and Keys**: Yield between cover decodes and widget updates, including cache hits and repeated cover URLs. Key and touch activity postpones expensive cover work without killing and restarting downloads. Thanks to @iav for the input-deferral work behind issue #117.
 - **Closing Book Details**: Cancel a pending high-resolution cover when its dialog closes, instead of decoding it later or repainting a replacement dialog.
 - **Invalid Book Addresses**: Empty download, cover and page-stream addresses report an error instead of crashing or opening a broken viewer. An invalid download address leaves any existing destination file untouched.
 - **Update Validation**: If the staged version file becomes unreadable during validation, the update reports the failure and keeps the installed plugin instead of throwing a Lua error.

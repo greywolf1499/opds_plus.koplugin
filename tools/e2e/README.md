@@ -94,6 +94,27 @@ redecoding and list/grid reuse, verifies actual freeing of high-resolution and s
 a dialog after its underlying menu closes. Catalog replacement and the final close leave no owned buffers
 or stale-entry registry. Fake-buffer eviction and pinning tests live in `spec/unit/cover_memory_spec.lua`.
 
+### Neighboring-cover prefetch
+
+```bash
+tools/e2e/catalog/run.sh coverprefetch
+```
+
+`coverprefetch` verifies the default-off setting and its menu toggle, waits for visible work, and warms just
+one neighboring display page. On the default six-cover grid, a duplicate URL and one fresh cached cover
+leave four network requests. Warming causes no decode or menu repaint, and opening that page then uses only
+the cache. Disabling disk caching or parallel downloads prevents speculative requests.
+
+The scenario cancels active warming on reversal, layout/catalog change, dialog opening and close, checking
+owned child reaping and temporary-file cleanup. Concurrent visible and speculative batches share at most
+two workers. Injected temporary-name and subprocess failures produce two expected `OPDS+ ERROR` warnings:
+neither may fall back to synchronous speculative HTTP. These warnings are not Lua crashes.
+
+The mock server's sleeping handlers can outlive a cancelled client. Concurrency is therefore measured on
+uncancelled batches after earlier server handlers finish, separately from client cleanup. Scheduling specs
+in `spec/unit/cover_loader_spec.lua` cover idle gates, direction resets, modal rearming and avoiding repeated
+warming after completion. These emulator checks do not certify physical e-reader timing.
+
 ### Screenshots
 
 ```bash

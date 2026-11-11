@@ -1665,6 +1665,229 @@ local function find_menu_entry(p, path)
     return entry
 end
 
+local function coverprefetch_steps()
+    local c = checker("coverprefetch")
+    local ImageLoader = require("services.image_loader")
+    local CoverCache = require("services.cover_cache")
+    local CoverLoader = require("services.cover_loader")
+    local StateManager = require("core.state_manager")
+    local RenderImage = require("ui/renderimage")
+    local p, b, entry, old_mode, perpage
+    local items, previous, steps = {}, {}, {}
+    local settings = { "cover_prefetch_enabled", "cover_cache_enabled", "cover_parallel_downloads" }
+
+    local function loaded()
+        local want, have = visible_covers(b)
+        return want > 0 and have == want
+    end
+    local function warmed()
+        return b._cover_prefetch_batch and not b._cover_prefetch_batch.loading
+    end
+    local function toggle()
+        entry.callback()
+        close_window_with_text("Neighboring cover prefetch")
+    end
+
+    steps[#steps + 1] = function(advance)
+        current = "coverprefetch"
+        p = plugin()
+        close_window_with_text("rendered in color")
+        close_window_with_text("cache database")
+        close_browser(p)
+        for _, name in ipairs(settings) do previous[name] = p:getSetting(name) end
+        old_mode = StateManager.getInstance():getDisplayMode()
+        StateManager.getInstance():setDisplayMode("grid")
+        entry = assert(find_menu_entry(p, { "Settings", "Cover Settings", "Prefetch Neighboring Covers" }))
+        c.check("default_off", p:getSetting("cover_prefetch_enabled") == false and not entry.checked_func())
+        p:saveSetting("cover_cache_enabled", true)
+        p:saveSetting("cover_parallel_downloads", true)
+        remove_cache_files()
+        local address = BASE .. "/cover/980.png"
+        local ok, bytes = require("services.http_client").getUrlContent(address)
+        assert(ok, bytes)
+        for index = 1, 36 do
+            local url = address .. "?neighbor=" .. index .. "&delay=0.15"
+            items[index] = {
+                text = "Neighbor " .. index, title = "Neighbor " .. index, author = "Harness",
+                cover_url = url, image = url, lazy_load_cover = true, acquisitions = {},
+            }
+        end
+        b = open_browser()
+        b:switchItemTable("Neighbor covers", items)
+        perpage = b.perpage
+        assert(perpage >= 3 and perpage * 3 <= #items, "fixture needs three display pages")
+        items[perpage + 2].cover_url = items[perpage + 1].cover_url
+        items[perpage + 2].image = items[perpage + 1].image
+        for index = 1, perpage + 1 do assert(CoverCache.put(items[index].cover_url, bytes, 0)) end
+        server_stats(true)
+        watch_forks()
+        wait_for(loaded, 10, function(ready)
+            c.check("visible_covers_loaded", ready)
+            UIManager:scheduleIn(0.75, function()
+                c.check("default_no_speculative_requests", server_stats(false).requests == 0)
+                advance()
+            end)
+        end)
+        return "async"
+    end
+    steps[#steps + 1] = function(advance)
+        toggle()
+        c.check("toggle_persists_opt_in", p:getSetting("cover_prefetch_enabled") == true and entry.checked_func())
+        local real_prefetch, real_render, real_dirty = ImageLoader.prefetch, RenderImage.renderImageData, UIManager.setDirty
+        local renders, paints = 0, 0
+        local snapshot, neighbor_urls
+        ---@diagnostic disable-next-line: duplicate-set-field
+        RenderImage.renderImageData = function(self, ...)
+            renders = renders + 1
+            return real_render(self, ...)
+        end
+        ---@diagnostic disable-next-line: duplicate-set-field
+        UIManager.setDirty = function(self, widget, ...)
+            if widget == b or widget == b.show_parent then paints = paints + 1 end
+            return real_dirty(self, widget, ...)
+        end
+        ---@diagnostic disable-next-line: duplicate-set-field
+        ImageLoader.prefetch = function(self, urls, ...)
+            c.check("foreground_finishes_first", loaded() and not (b._cover_batch and b._cover_batch.loading))
+            snapshot, neighbor_urls = { renders = renders, paints = paints }, urls
+            return real_prefetch(self, urls, ...)
+        end
+        c.check("browser_is_foreground", UIManager:getTopmostVisibleWidget() == b)
+        b:updateItems()
+        wait_for(warmed, 10, function(ready)
+            ImageLoader.prefetch, RenderImage.renderImageData, UIManager.setDirty = real_prefetch, real_render, real_dirty
+            c.check("warming_finishes", ready)
+            c.check("no_decode_or_repaint", snapshot and renders == snapshot.renders and paints == snapshot.paints,
+                renders .. " renders / " .. paints .. " dirty calls")
+            c.check("deduplicates_one_neighbor", neighbor_urls and #neighbor_urls == perpage - 1)
+            c.check("skips_fresh_cache", server_stats(false).requests == perpage - 2, server_stats(false).requests)
+            local cached, undecoded = true, true
+            for index = perpage + 1, perpage * 2 do
+                if not CoverCache.get(items[index].cover_url) then cached = false end
+                if items[index].cover_bb then undecoded = false end
+            end
+            c.check("neighbor_cached_but_not_decoded", cached and undecoded)
+            c.check("does_not_warm_further_pages", CoverCache.get(items[perpage * 2 + 1].cover_url) == nil)
+            toggle()
+            c.check("toggle_persists_off", p:getSetting("cover_prefetch_enabled") == false and not entry.checked_func())
+            server_stats(true)
+            b:onNextPage()
+            wait_for(loaded, 10, function(visible)
+                c.check("warmed_page_uses_cache", visible and server_stats(false).requests == 0)
+                advance()
+            end)
+        end)
+        return "async"
+    end
+    for _, setting in ipairs({ "cover_cache_enabled", "cover_parallel_downloads" }) do
+        steps[#steps + 1] = function(advance)
+            p:saveSetting("cover_prefetch_enabled", true)
+            p:saveSetting(setting, false)
+            server_stats(true)
+            b:updateItems()
+            UIManager:scheduleIn(0.75, function()
+                c.check(setting .. ".no_warming", server_stats(false).requests == 0
+                    and not b._scheduled_cover_prefetch and not b._cover_prefetch_batch)
+                p:saveSetting(setting, true)
+                advance()
+            end)
+            return "async"
+        end
+    end
+    for _, action in ipairs({ "reverse", "layout", "catalog", "dialog", "close" }) do
+        steps[#steps + 1] = function(advance)
+            StateManager.getInstance():setDisplayMode("grid")
+            b:switchItemTable("Neighbor covers", items)
+            b.page = 2
+            for index = perpage * 2 + 1, perpage * 3 do
+                items[index].cover_url = BASE .. "/cover/980.png?cancel=" .. index .. "&delay=1.5"
+            end
+            local first, files_before = #fork_pids + 1, count_lua_tmp()
+            b:updateItems()
+            wait_for(function() return b._cover_prefetch_batch and alive_children(first) > 0 end, 10, function(started)
+                c.check(action .. ".starts_warming", started)
+                local batch = b._cover_prefetch_batch
+                if action == "reverse" then
+                    b:onPrevPage()
+                elseif action == "layout" then
+                    b:toggleViewMode()
+                    close_window_with_text("Switched to")
+                elseif action == "catalog" then
+                    b:switchItemTable("Replacement", {})
+                elseif action == "dialog" then
+                    local dialog = require("ui.dialogs.book_info_dialog").build(b, items[perpage + 1])
+                    UIManager:show(dialog)
+                    UIManager:close(dialog)
+                else
+                    close_browser(p)
+                end
+                c.check(action .. ".cancels_batch", batch and batch.cancelled and not batch.loading)
+                c.check(action .. ".reaps_children", alive_children(first) == 0)
+                c.check(action .. ".cleans_tempfiles", count_lua_tmp() == files_before)
+                CoverLoader.stopLoading(b)
+                c.check(action .. ".cleans_timers", not b._scheduled_cover_prefetch and not b._scheduled_cover_load)
+                advance()
+            end)
+            return "async"
+        end
+    end
+    steps[#steps + 1] = function(advance)
+        -- Cancelled clients do not cancel the mock server's sleeping handlers.
+        wait_for(function() return server_stats(false).inflight == 0 end, 5, function(quiet)
+            c.check("cancelled_server_requests_settle", quiet)
+            server_stats(true)
+            local first, delivered = #fork_pids + 1, 0
+            local foreground = ImageLoader:loadImages(slow_cover_urls(990, 3, 0.3),
+                function() delivered = delivered + 1 end)
+            local urls = slow_cover_urls(993, 3, 0.3)
+            local background = ImageLoader:prefetch(urls)
+            wait_for(function() return not foreground.loading and not background.loading end, 10, function(done)
+                local stats = server_stats(false)
+                c.check("shared_budget_completes_both_batches", done and delivered == 3 and stats.requests == 6)
+                c.check("shared_budget_never_exceeds_two", stats.max_inflight <= 2, stats.max_inflight)
+                c.check("shared_budget_uses_subprocesses", #fork_pids - first + 1 == 6)
+                c.check("shared_budget_reaps_all_workers", alive_children(first) == 0 and count_lua_tmp() == 0)
+                local cached = true
+                for _, url in ipairs(urls) do if not CoverCache.get(url) then cached = false end end
+                c.check("shared_budget_warms_cache", cached)
+                advance()
+            end)
+        end)
+        return "async"
+    end
+    for _, failure in ipairs({ "tmpname", "fork" }) do
+        steps[#steps + 1] = function(advance)
+            local FFIUtil = require("ffi/util")
+            local real_tmp, real_fork = os.tmpname, FFIUtil.runInSubProcess
+            server_stats(true)
+            if failure == "tmpname" then
+                ---@diagnostic disable-next-line: duplicate-set-field
+                os.tmpname = function() error("injected unavailable temporary path") end
+            else
+                ---@diagnostic disable-next-line: duplicate-set-field
+                FFIUtil.runInSubProcess = function() return nil end
+            end
+            local batch = ImageLoader:prefetch(slow_cover_urls(998, 2, 0.1))
+            wait_for(function() return not batch.loading end, 5, function(done)
+                os.tmpname, FFIUtil.runInSubProcess = real_tmp, real_fork
+                c.check(failure .. ".no_blocking_fallback", done and server_stats(false).requests == 0)
+                c.check(failure .. ".no_temporary_files", count_lua_tmp() == 0)
+                advance()
+            end)
+            return "async"
+        end
+    end
+    steps[#steps + 1] = function()
+        unwatch_forks()
+        close_browser(p)
+        for _, name in ipairs(settings) do p:saveSetting(name, previous[name]) end
+        StateManager.getInstance():setDisplayMode(old_mode)
+        remove_cache_files()
+        c.finish()
+    end
+    return steps
+end
+
 local function covergate_steps()
     local c = checker("covergate")
     local ImageLoader = require("services.image_loader")
@@ -4302,6 +4525,7 @@ local EXTRA = {
     { name = "parcovers", steps = parcovers_steps },
     { name = "inputfairness", steps = inputfairness_steps },
     { name = "covermemory", steps = covermemory_steps },
+    { name = "coverprefetch", steps = coverprefetch_steps },
     { name = "covergate", steps = covergate_steps },
     { name = "covers", steps = covers_steps },
     { name = "cachelib", steps = cachelib_steps },

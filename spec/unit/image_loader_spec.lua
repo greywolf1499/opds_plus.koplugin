@@ -4,6 +4,7 @@ local ui_stub = require("support.ui")
 describe("ImageLoader scheduling", function()
 	local ImageLoader, ui, clock, directory
 	local children, paths, cached, writes, requests, kills, next_pid
+	local can_fork, cache_ok, errors
 
 	local function step()
 		local task = table.remove(ui.scheduled, 1)
@@ -30,6 +31,7 @@ describe("ImageLoader scheduling", function()
 		directory = helper.tmpdir()
 		ui = ui_stub.new()
 		clock, next_pid = 0, 0
+		can_fork, cache_ok, errors = true, true, {}
 		children, paths, cached, writes, requests, kills = {}, {}, {}, {}, {}, {}
 		helper.global("os", setmetatable({
 			tmpname = function()
@@ -58,6 +60,7 @@ describe("ImageLoader scheduling", function()
 			},
 			["ffi/util"] = {
 				runInSubProcess = function(work)
+					if not can_fork then return nil end
 					next_pid = next_pid + 1
 					children[next_pid] = { work = work }
 					return next_pid
@@ -80,7 +83,14 @@ describe("ImageLoader scheduling", function()
 			},
 			["services.cover_cache"] = {
 				get = function(url) return cached[url] end,
-				put = function(url, content) writes[#writes + 1] = { url, content } end,
+				put = function(url, content)
+					writes[#writes + 1] = { url, content }
+					return cache_ok
+				end,
+			},
+			["utils.debug"] = {
+				log = function() end,
+				error = function(...) errors[#errors + 1] = { ... } end,
 			},
 		})
 	end)
@@ -184,6 +194,80 @@ describe("ImageLoader scheduling", function()
 		assert.equals(2, #requests)
 		assert.equals(2, #stamps)
 		assert.is_true(stamps[2] - stamps[1] >= 0.2)
+	end)
+
+	it("shares worker slots across batches and releases them on reap and cancellation", function()
+		local first, halt_first = ImageLoader:loadImages({ "A", "B" }, function() end)
+		local second, halt_second = ImageLoader:loadImages({ "C", "D" }, function() end)
+		for _ = 1, 4 do step() end
+		assert.equals(2, next_pid)
+		assert.equals(0, #requests, "slot contention must not fall back to blocking HTTP")
+		complete(1)
+		for _ = 1, 20 do
+			if next_pid == 3 then break end
+			step()
+		end
+		assert.equals(3, next_pid)
+		halt_first()
+		halt_second()
+		assert.is_false(first.loading)
+		assert.is_false(second.loading)
+		assert.same({}, ui.scheduled)
+		local fresh, halt_fresh = ImageLoader:loadImages({ "E", "F" }, function() end)
+		step()
+		step()
+		assert.equals(5, next_pid)
+		halt_fresh()
+		assert.is_false(fresh.loading)
+	end)
+
+	it("prefetches only missing bytes without a render callback", function()
+		cached.A = { content = "cached A" }
+		local batch = ImageLoader:prefetch({ "A", "B" })
+		for _ = 1, 20 do
+			if children[1] then break end
+			step()
+		end
+		assert.equals(1, next_pid)
+		assert.is_nil(batch.callback)
+		complete(1)
+		finish(batch)
+		assert.same({ "B" }, requests)
+		assert.same({ { "B", "downloaded B" } }, writes)
+	end)
+
+	it("never falls back to synchronous HTTP for speculative covers", function()
+		can_fork = false
+		local batch = ImageLoader:prefetch({ "A", "B" })
+		finish(batch)
+		assert.equals(0, next_pid)
+		assert.same({}, requests)
+		assert.same({}, writes)
+		assert.equals(1, #errors)
+		assert.is_false(helper.fs.exists(paths[1]))
+	end)
+
+	it("cancels speculative children when their owner no longer allows warming", function()
+		local current = true
+		local batch = ImageLoader:prefetch({ "A", "B" }, nil, nil, nil, nil, function() return current end)
+		step()
+		current = false
+		step()
+		assert.is_false(batch.loading)
+		assert.is_true(batch.cancelled)
+		assert.same({ 1 }, kills)
+		assert.same({}, ui.scheduled)
+		assert.is_false(helper.fs.exists(paths[1]))
+	end)
+
+	it("reports a cache-write failure during prefetch", function()
+		cache_ok = false
+		local batch = ImageLoader:prefetch({ "A" })
+		step()
+		complete(1)
+		finish(batch)
+		assert.equals(1, #errors)
+		assert.matches("Failed to cache cover", errors[1][2], 1, true)
 	end)
 
 	it("renders duplicate URLs one at a time and rejects stale continuations", function()
