@@ -127,7 +127,7 @@ function AtomMapper.map(catalog, item_url, browser_context, debug_callback)
 						})
 						-- PSE streaming
 					elseif link.rel == browser_context.stream_rel then
-						local count, last_read = CatalogUtils.extractPSEStreamInfo(link)
+						local count, last_read = CatalogUtils.extractPSEStreamInfo(link, link_href)
 						if count then
 							table.insert(item.acquisitions, {
 								type      = link.type,

@@ -490,6 +490,36 @@ describe("CatalogUtils", function()
 	end)
 
 	describe("extractPSEStreamInfo", function()
+		it("normalizes Kavita cursors without advancing completed chapters", function()
+			local href = "https://library.example/proxy/api/opds/secret/image?chapterId=42&pageNumber={pageNumber}"
+			for _, case in ipairs({ { 0, 1 }, { 1, 2 }, { 6, 7 }, { 7, 7 }, { 99, 7 } }) do
+				local count, page = CatalogUtils.extractPSEStreamInfo({
+					href = href, ["pse:count"] = "7", ["pse:lastRead"] = tostring(case[1]),
+				})
+				assert.equals(7, count)
+				assert.equals(case[2], page)
+			end
+		end)
+
+		it("uses the resolved Kavita URL but leaves standard and malformed positions alone", function()
+			local link = { href = "image?chapterId=42", ["pse:count"] = "7", ["pse:lastRead"] = "3" }
+			local base = "https://library.example/proxy/api/opds/secret/"
+			assert.equals(4, select(2, CatalogUtils.extractPSEStreamInfo(link, base .. link.href)))
+			for _, href in ipairs({
+				"https://library.example/opds/v1.2/books/book/pages/{pageNumber}",
+				"https://library.example/stream?next=/api/opds/secret/image?chapterId=42",
+				base .. "image?chapterId=invalid",
+			}) do
+				assert.equals(3, select(2, CatalogUtils.extractPSEStreamInfo(link, href)))
+			end
+			for _, value in ipairs({ -1, 1.5, "invalid", math.huge }) do
+				link["pse:lastRead"] = value
+				assert.is_nil(select(2, CatalogUtils.extractPSEStreamInfo(link, base .. link.href)))
+			end
+			link["pse:lastRead"] = nil
+			assert.is_nil(select(2, CatalogUtils.extractPSEStreamInfo(link, base .. link.href)))
+		end)
+
 		it("reads the page count and the last page read", function()
 			local link = { href = "/stream/{pageNumber}", ["pse:count"] = "12", ["pse:lastRead"] = "3" }
 			local count, last_read = CatalogUtils.extractPSEStreamInfo(link)

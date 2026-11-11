@@ -1,7 +1,6 @@
 local http = require("socket.http")
 local HttpClient = require("services.http_client")
 local CatalogUtils = require("utils.catalog_utils")
-local UriTemplate = require("utils.uri_template")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
 local JsonDecode = require("utils.json_decode")
@@ -18,27 +17,9 @@ local _ = require("gettext")
 
 local OPDSPSE = { MAX_SAVED_STREAMS = 500 }
 
-local function kavitaStream(remote_url)
-    local parsed = type(remote_url) == "string" and url.parse(remote_url)
-    if not parsed or not parsed.host or (parsed.scheme ~= "http" and parsed.scheme ~= "https") then
-        return nil
-    end
-    local prefix, api_key = (parsed.path or ""):match("^(.-)/api/opds/([^/]+)/image$")
-    if not prefix then return nil end
-    local chapter = parsed.query and ("&" .. parsed.query):match("&chapterId=([^&]+)")
-    if not chapter or not chapter:match("^%d+$") or not CatalogUtils.pageNumber(chapter) then
-        return nil, "Invalid Kavita chapter identity"
-    end
-    return {
-        base = url.build { scheme = parsed.scheme, authority = parsed.authority, path = prefix },
-        api_key = UriTemplate.expand("{key}", { key = url.unescape(api_key) }),
-        chapter = chapter,
-    }
-end
-
 -- This function attempts to pull chapter progress from Kavita.
 function OPDSPSE:getLastPage(remote_url, username, password, basic_auth_origin)
-    local provider, err = kavitaStream(remote_url)
+    local provider, err = CatalogUtils.parseKavitaStream(remote_url)
     if not provider then
         if err then logger.warn("OPDSPSE:getLastPage:", err) end
         logger.dbg("OPDSPSE:getLastPage: no Kavita progress endpoint")
@@ -186,7 +167,7 @@ function OPDSPSE:streamPages(remote_url, count, continue, username, password, la
         UIManager:show(InfoMessage:new { text = _("Invalid stream URL.") })
         return
     end
-    local provider, provider_error = kavitaStream(remote_url)
+    local provider, provider_error = CatalogUtils.parseKavitaStream(remote_url)
     if provider_error then
         logger.warn("OPDSPSE:", provider_error)
         UIManager:show(InfoMessage:new { text = _("Invalid stream URL.") })

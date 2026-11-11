@@ -3,6 +3,8 @@
 
 local util = require("util")
 local logger = require("logger")
+local socket_url = require("socket.url")
+local UriTemplate = require("utils.uri_template")
 
 local CatalogUtils = {}
 
@@ -270,9 +272,27 @@ function CatalogUtils.pageNumber(value)
 	return number and number >= 1 and number <= 9007199254740991 and number % 1 == 0 and number or nil
 end
 
+function CatalogUtils.parseKavitaStream(remote_url)
+	local parsed = type(remote_url) == "string" and socket_url.parse(remote_url)
+	if not parsed or not parsed.host or (parsed.scheme ~= "http" and parsed.scheme ~= "https") then
+		return nil
+	end
+	local prefix, api_key = (parsed.path or ""):match("^(.-)/api/opds/([^/]+)/image$")
+	if not prefix then return nil end
+	local chapter = parsed.query and ("&" .. parsed.query):match("&chapterId=([^&]+)")
+	if not chapter or not chapter:match("^%d+$") or not CatalogUtils.pageNumber(chapter) then
+		return nil, "Invalid Kavita chapter identity"
+	end
+	return {
+		base = socket_url.build { scheme = parsed.scheme, authority = parsed.authority, path = prefix },
+		api_key = UriTemplate.expand("{key}", { key = socket_url.unescape(api_key) }),
+		chapter = chapter,
+	}
+end
+
 --- Extract a valid count and bounded one-based last_read from PSE attributes.
-function CatalogUtils.extractPSEStreamInfo(link)
-	local count, last_read
+function CatalogUtils.extractPSEStreamInfo(link, stream_url)
+	local count, last_read, raw_last_read
 
 	for k, v in pairs(link) do
 		if type(k) == "string" then
@@ -280,8 +300,9 @@ function CatalogUtils.extractPSEStreamInfo(link)
 				count = CatalogUtils.pageNumber(v)
 				if not count then logger.warn("OPDS+ invalid PSE page count") end
 			elseif k:sub(-9) == ":lastRead" then
+				raw_last_read = tonumber(v)
 				last_read = CatalogUtils.pageNumber(v)
-				if not last_read and tonumber(v) ~= 0 then
+				if not last_read and raw_last_read ~= 0 then
 					logger.warn("OPDS+ invalid PSE resume position")
 				end
 			end
@@ -292,6 +313,14 @@ function CatalogUtils.extractPSEStreamInfo(link)
 	if last_read and last_read > count then
 		logger.warn("OPDS+ PSE resume position exceeds page count")
 		last_read = count
+	end
+	-- Kavita publishes its zero-based cursor, but uses the page count for completed chapters.
+	if CatalogUtils.parseKavitaStream(stream_url or link.href) then
+		if raw_last_read == 0 then
+			last_read = 1
+		elseif last_read and last_read < count then
+			last_read = last_read + 1
+		end
 	end
 	return count, last_read
 end

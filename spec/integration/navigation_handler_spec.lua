@@ -288,6 +288,17 @@ describe("NavigationHandler.genItemTableFromCatalog", function()
 			items = from_fixture("komga_pse.xml", "https://komga.example.org/opds/v1.2/series/42")
 		end)
 
+		it("normalizes relative Kavita feed cursors once after resolving the image URL", function()
+			local mapped = from_xml(entry('<link rel="http://vaemendis.net/opds-pse/stream" type="image/jpeg"'
+				.. ' href="/proxy/api/opds/secret/image?chapterId=42&amp;pageNumber={pageNumber}"'
+				.. ' pse:count="7" pse:lastRead="3"/>'))
+			assert.same({
+				type = "image/jpeg",
+				href = "https://library.example.org/proxy/api/opds/secret/image?chapterId=42&pageNumber={pageNumber}",
+				count = 7, last_read = 4,
+			}, mapped[1].acquisitions[1])
+		end)
+
 		it("offers the download and the stream of a book", function()
 			assert.same({
 				{
