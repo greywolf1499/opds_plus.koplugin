@@ -142,6 +142,11 @@ Use page keys or touch scrolling for long notes. **Install**, **Skip this versio
 If formatting fails, choose **View as plain text** to read the original notes. Links and remote images in notes
 are not opened or fetched.
 
+Development builds also check for updates in the background. A manual check shows a cancellable status;
+automatic checks yield to input without losing the key or gesture. Cancelled or watchdog-aborted checks do not
+change **Last checked**, and can be retried on the next catalog open. Automatic checks never turn Wi-Fi on.
+If background workers are unavailable, only a manual check offers an explicit, blocking foreground option.
+
 A plugin folder that is a link, or has a `.git` folder in it (Method 2), is a development install: update it with `git pull` instead.
 
 ### Troubleshooting Installation
@@ -260,7 +265,7 @@ This is not a limit on KOReader's total RAM use.
 
 #### Updates (New in 1.4.0)
 - **Check for updates**: asks GitHub for the latest release, and offers **Install**, **Skip this version** (the weekly check then stays quiet about it) or **Later**.
-- **Automatic update check (weekly)**: enabled by default. At most once a week, when you open OPDS Plus and the device is already online, it checks for a new release and tells you once with a short notice. It never installs anything by itself.
+- **Automatic update check (weekly)**: enabled by default. When you open OPDS Plus and the last completed check is at least a week old, it checks for a new release if the device is already online and tells you once with a short notice. It never installs anything by itself.
 - **Roll back to previous version**: available after an update. Puts the previous version back and keeps the newer one, so you can switch again.
 - **Allow updating a development install**: for a plugin folder that is a link or a git checkout. A linked folder is moved aside as the backup; the folder it points to is not changed.
 - **About OPDS Plus**, at the bottom of **Settings**, shows when the last check was made.

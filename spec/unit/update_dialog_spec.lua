@@ -70,9 +70,9 @@ describe("UpdateDialog", function()
 		function network:isOnline()
 			return self.online
 		end
-		function network:runWhenOnline(callback)
+		function network:beforeWifiAction(callback)
 			self.ran = self.ran + 1
-			callback()
+			self.callback = callback
 		end
 		socketutil = socketutil_stub.new()
 		local stubs = {
@@ -85,6 +85,19 @@ describe("UpdateDialog", function()
 		for name, value in pairs(ui.stubs) do
 			stubs[name] = value
 		end
+		stubs["ui/widget/trapwidget"] = {
+			new = function(_self, options)
+				options.dismiss_callback = function() end
+				return options
+			end,
+			onCloseWidget = function() end,
+			_dismissAndResend = function(self, kind, event)
+				self.dismiss_callback()
+				ui.UIManager:close(self)
+				if self.resend_event then ui.replayed = { kind, event } end
+				return true
+			end,
+		}
 		UpdateDialog = helper.load("ui.dialogs.update_dialog", stubs)
 		OtaUpdater = require("services.ota_updater")
 		OtaUpdater.restart_pending = false
@@ -113,9 +126,9 @@ describe("UpdateDialog", function()
 			assert.matches("1.4.0 is available", ui:last().text)
 
 			assert.is_false(UpdateDialog.autoCheck(plugin, NOW + WEEK - 1))
-			local shown = #ui.shown
+			local shown = #ui:texts()
 			assert.is_true(UpdateDialog.autoCheck(plugin, NOW + WEEK))
-			assert.equal(shown, #ui.shown)
+			assert.equal(shown, #ui:texts())
 		end)
 
 		it("sends the stored ETag and skipped version", function()
@@ -124,7 +137,7 @@ describe("UpdateDialog", function()
 			updater.answers.check = { { status = "not_modified" } }
 			UpdateDialog.autoCheck(plugin, NOW)
 			assert.same({ etag = '"e0"', skipped_version = "1.3.5" }, updater:called("check")[1].args[1])
-			assert.equal(0, #ui.shown)
+			assert.same({}, ui:texts())
 		end)
 
 		it("uses short timeouts and puts them back", function()
@@ -141,13 +154,15 @@ describe("UpdateDialog", function()
 			assert.is_false(UpdateDialog.autoCheck(plugin, NOW))
 			plugin.settings.ota_auto_check = nil
 			network.online = false
-			assert.is_false(UpdateDialog.autoCheck(plugin, NOW))
+			assert.is_true(UpdateDialog.autoCheck(plugin, NOW))
 			network.online, network.connected = true, false
-			assert.is_false(UpdateDialog.autoCheck(plugin, NOW))
+			assert.is_true(UpdateDialog.autoCheck(plugin, NOW))
 			network.connected = true
 			OtaUpdater.restart_pending = true
 			assert.is_false(UpdateDialog.autoCheck(plugin, NOW))
 			assert.equal(0, #updater:called("check"))
+			assert.equal(0, network.ran)
+			assert.is_nil(plugin.settings.ota_last_check)
 		end)
 
 		it("checks again when the clock went backwards", function()
@@ -159,8 +174,170 @@ describe("UpdateDialog", function()
 		it("only logs errors", function()
 			updater.answers.check = { nil, E.NETWORK }
 			assert.is_true(UpdateDialog.autoCheck(plugin, NOW))
-			assert.equal(0, #ui.shown)
+			assert.same({}, ui:texts())
 			assert.equal(NOW, plugin.settings.ota_last_check)
+		end)
+	end)
+
+	describe("background checks", function()
+		local workers
+		local function finish(index, packet)
+			local ok, err = coroutine.resume(workers[index].co, true, packet)
+			assert(ok, err)
+		end
+
+		before_each(function()
+			workers = {}
+			ui.Trapper.wrap = function(_self, run)
+				local co = coroutine.create(run)
+				local ok, err = coroutine.resume(co)
+				assert(ok, err)
+			end
+			ui.Trapper.dismissableRunInSubprocess = function(_self, run, widget)
+				local co = coroutine.running()
+				workers[#workers + 1] = { co = co, run = run, widget = widget }
+				widget.dismiss_callback = function()
+					local ok, err = coroutine.resume(co, false)
+					assert(ok, err)
+				end
+				return coroutine.yield()
+			end
+		end)
+
+		it("defers probes and requests, publishing settings only after the parent receives a result", function()
+			local probes = 0
+			network.isOnline = function() probes = probes + 1; return true end
+			updater.answers.check = { { status = "update", release = RELEASE, etag = '"fresh"' } }
+			assert.is_true(UpdateDialog.autoCheck(plugin))
+			assert.is_false(UpdateDialog.autoCheck(plugin))
+			assert.equal(0, probes)
+			assert.equal(0, #updater:called("check"))
+			assert.equal(1, #workers)
+			local packet = workers[1].run()
+			assert.equal(1, probes)
+			assert.same({}, plugin.settings)
+			finish(1, packet)
+			assert.equal('"fresh"', plugin.settings.ota_etag)
+			assert.equal(RELEASE.version, plugin.settings.ota_notified_version)
+			assert.is_nil(UpdateDialog._check_job)
+		end)
+
+		it("replaces automatic work with one manual owner and rejects its obsolete result", function()
+			updater.answers.check = { { status = "update", release = RELEASE, etag = '"old"' } }
+			UpdateDialog.autoCheck(plugin)
+			local packet = workers[1].run()
+			workers[1].widget.dismiss_callback = function() end -- delayed worker cancellation
+			UpdateDialog.checkNow(plugin)
+			UpdateDialog.checkNow(plugin)
+			assert.equal(2, #workers)
+			finish(1, packet)
+			assert.same({}, plugin.settings)
+			assert.same(workers[2].widget, UpdateDialog._check_job.widget)
+			finish(2, { checked = true, result = { status = "up_to_date", etag = '"new"' } })
+			assert.equal('"new"', plugin.settings.ota_etag)
+			assert.is_nil(plugin.settings.ota_notified_version)
+		end)
+
+		it("forwards the input that interrupts an automatic check without marking it checked", function()
+			for index, kind in ipairs({ "KeyPress", "KeyRepeat", "Gesture" }) do
+				UpdateDialog.autoCheck(plugin)
+				local event = { ges = "pan" }
+				workers[index].widget:handleEvent({ handler = "on" .. kind, args = { event } })
+				assert.same({ kind, event }, ui.replayed)
+				assert.same({}, plugin.settings)
+				assert.same({}, ui:texts())
+				assert.is_nil(UpdateDialog._check_job)
+			end
+		end)
+
+		it("bounds a stalled worker and explains a manual timeout", function()
+			UpdateDialog.checkNow(plugin)
+			UpdateDialog._check_job.timeout()
+			assert.is_nil(UpdateDialog._check_job)
+			assert.same({}, plugin.settings)
+			assert.matches("Could not reach GitHub", ui:last().text)
+			assert.equal("dead", coroutine.status(workers[1].co))
+		end)
+
+		it("does not run a deferred Wi-Fi callback after cancellation", function()
+			network.connected = false
+			UpdateDialog.checkNow(plugin)
+			finish(1, workers[1].run())
+			assert.equal(1, network.ran)
+			assert.equal(0, #updater:called("check"))
+			local callback = network.callback
+			UpdateDialog.cancelCheck()
+			network.connected = true
+			callback()
+			assert.equal(1, #workers)
+			assert.same({}, plugin.settings)
+		end)
+
+		it("keeps the manual Wi-Fi action in the parent and checks after connection", function()
+			network.connected = false
+			updater.answers.check = { { status = "up_to_date" } }
+			UpdateDialog.checkNow(plugin)
+			local packet = workers[1].run()
+			assert.equal(0, network.ran)
+			finish(1, packet)
+			assert.equal(1, network.ran)
+			network.connected = true
+			network.callback()
+			assert.equal(2, #workers)
+			assert.is_nil(plugin.settings.ota_last_check)
+			finish(2, workers[2].run())
+			assert.is_number(plugin.settings.ota_last_check)
+			assert.matches("is up to date", ui:last().text)
+		end)
+
+		it("rechecks current skip preferences and ignores results after an install", function()
+			UpdateDialog.autoCheck(plugin)
+			plugin.settings.ota_skipped_version = RELEASE.version
+			finish(1, { checked = true, result = { status = "update", release = RELEASE } })
+			assert.is_nil(plugin.settings.ota_notified_version)
+			plugin.settings.ota_last_check = nil
+			UpdateDialog.autoCheck(plugin)
+			OtaUpdater.restart_pending = true
+			finish(2, { checked = true, result = { status = "up_to_date" } })
+			assert.is_nil(plugin.settings.ota_last_check)
+		end)
+
+		it("reports missing or malformed worker output instead of claiming up to date", function()
+			UpdateDialog.checkNow(plugin)
+			finish(1, nil)
+			assert.matches("could not be read", ui:last().text)
+			UpdateDialog.checkNow(plugin)
+			finish(2, { checked = true, result = { status = "update" } })
+			assert.matches("could not be read", ui:last().text)
+		end)
+
+		it("never blocks an automatic check and asks before a manual foreground fallback", function()
+			ui.Trapper.dismissableRunInSubprocess = function() return false end
+			UpdateDialog.autoCheck(plugin)
+			assert.same({}, ui:texts())
+			assert.is_nil(UpdateDialog._check_job)
+			UpdateDialog.checkNow(plugin)
+			local stale = ui:last()
+			assert.matches("Input will pause", stale.text)
+			UpdateDialog.cancelCheck()
+			stale.ok_callback()
+			assert.equal(0, #updater:called("check"))
+			updater.answers.check = { { status = "up_to_date" } }
+			UpdateDialog.checkNow(plugin)
+			ui:last().ok_callback()
+			assert.equal(1, #updater:called("check"))
+			assert.matches("is up to date", ui:last().text)
+		end)
+
+		it("coalesces scheduled checks and invalidates their callbacks on cancellation", function()
+			UpdateDialog.scheduleAutoCheck(plugin)
+			local old = UpdateDialog._scheduled_check
+			UpdateDialog.scheduleAutoCheck(plugin)
+			assert.equal(1, #ui.scheduled)
+			old()
+			assert.equal(0, #workers)
+			UpdateDialog.cancelCheck()
+			assert.equal(0, #ui.scheduled)
 		end)
 	end)
 

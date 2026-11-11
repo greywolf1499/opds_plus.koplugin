@@ -10,6 +10,7 @@ local InfoMessage = require("ui/widget/infomessage")
 local NetworkMgr = require("ui/network/manager")
 local Notification = require("ui/widget/notification")
 local TextViewer = require("ui/widget/textviewer")
+local TrapWidget = require("ui/widget/trapwidget")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
 local socketutil = require("socketutil")
@@ -33,6 +34,7 @@ UpdateDialog.NOTIFIED = "ota_notified_version"
 UpdateDialog.ALLOW_DEV = "ota_allow_dev"
 
 local CANCELLED = "cancelled"
+local check_generation = 0
 
 --- An updater for the running plugin
 -- @return table|nil updater, or nil and an error code
@@ -107,20 +109,179 @@ function UpdateDialog.restartGate()
 	return true
 end
 
--- Checks with short timeouts, keeping what the answer says for the next check
-local function runCheck(plugin, updater, state, now)
+-- Only plain data crosses the worker boundary. Settings and dialogs stay in the parent.
+local function prepareCheck(updater, state)
 	socketutil:set_timeout(Constants.OTA.CHECK_BLOCK_TIMEOUT, Constants.OTA.CHECK_TOTAL_TIMEOUT)
-	local ok, result, err, detail = pcall(updater.check, updater, state)
+	local ok, packet = pcall(function()
+		local connected = not not NetworkMgr:isConnected()
+		if not connected or not NetworkMgr:isOnline() then
+			return { offline = true, connected = connected }
+		end
+		local result, err, detail = updater:check(state)
+		return { checked = true, result = result, error = err, detail = detail }
+	end)
 	socketutil:reset_timeout()
 	if not ok then
-		logger.warn("OPDS+ OTA: check raised", result)
-		return nil, E.NETWORK
+		return { error = E.NETWORK, detail = packet }
 	end
-	plugin:saveSetting(UpdateDialog.LAST_CHECK, now or os.time())
-	if result and result.etag then
-		plugin:saveSetting(UpdateDialog.ETAG, result.etag)
+	return packet
+end
+
+function UpdateDialog.cancelCheck()
+	check_generation = check_generation + 1
+	if UpdateDialog._scheduled_check then
+		UIManager:unschedule(UpdateDialog._scheduled_check)
+		UpdateDialog._scheduled_check = nil
 	end
-	return result, err, detail
+	if UpdateDialog._check_job then UpdateDialog._check_job:cancel() end
+end
+
+local function startCheck(plugin, automatic, now)
+	local updater, new_err = UpdateDialog.newUpdater(plugin)
+	if not updater then
+		logger.warn("OPDS+ OTA: cannot initialize check", new_err)
+		if not automatic then showError(new_err) end
+		return false
+	end
+	check_generation = check_generation + 1
+	local generation = check_generation
+	local job = { running = true, automatic = automatic }
+	local widget = TrapWidget:new {
+		text = not automatic and _("Checking for updates... (tap or press a key to cancel)") or nil,
+		resend_event = automatic,
+	}
+	local state = automatic and {
+		etag = plugin:getSetting(UpdateDialog.ETAG),
+		skipped_version = plugin:getSetting(UpdateDialog.SKIPPED),
+	} or {}
+	job.widget = widget
+	UpdateDialog._check_job = job
+
+	function job:cancel()
+		if self.cancelled then return end
+		self.cancelled = true
+		if UpdateDialog._check_job == self then UpdateDialog._check_job = nil end
+		UIManager:unschedule(self.timeout)
+		if self.running then widget.dismiss_callback() end
+		if self.fallback then UIManager:close(self.fallback) end
+	end
+	function widget:_dismissAndResend(...)
+		job.cancelled = true
+		return TrapWidget._dismissAndResend(self, ...)
+	end
+	function widget:handleEvent(event)
+		-- The native trap lists only some gestures; automatic checks must also yield pan and repeat events.
+		if automatic and (event.handler == "onKeyPress" or event.handler == "onKeyRepeat"
+			or event.handler == "onGesture") then
+			return self:_dismissAndResend(event.handler:sub(3), event.args[1])
+		end
+		return TrapWidget.handleEvent(self, event)
+	end
+	function widget:onCloseWidget()
+		if job.running then job:cancel() end
+		return TrapWidget.onCloseWidget(self)
+	end
+
+	local function failed(err, detail)
+		logger.warn("OPDS+ OTA: update check failed", err, detail)
+		if not automatic then showError(err, detail, type(detail) == "table" and detail or nil) end
+	end
+	local function deliver(packet)
+		if UpdateDialog._check_job ~= job then return end
+		UpdateDialog._check_job = nil
+		if job.cancelled or generation ~= check_generation or OtaUpdater.restart_pending then return end
+		if type(packet) ~= "table" then
+			failed(E.BAD_RESPONSE, "No result from update worker")
+			return
+		end
+		if packet.offline then
+			if not automatic then
+				if not packet.connected then
+					NetworkMgr:beforeWifiAction(function()
+						if generation == check_generation and not OtaUpdater.restart_pending then
+							UpdateDialog.checkNow(plugin)
+						end
+					end)
+				else
+					NetworkMgr:beforeWifiAction()
+				end
+			end
+			return
+		end
+		if packet.checked then plugin:saveSetting(UpdateDialog.LAST_CHECK, now or os.time()) end
+		local result = packet.result
+		if not result then
+			failed(packet.error or E.BAD_RESPONSE, packet.detail)
+			return
+		end
+		if type(result) ~= "table" or (result.status ~= "update" and result.status ~= "skipped"
+			and result.status ~= "up_to_date" and result.status ~= "not_modified") then
+			failed(E.BAD_RESPONSE, "Invalid update worker result")
+			return
+		end
+		if (result.status == "update" or result.status == "skipped")
+			and (type(result.release) ~= "table" or type(result.release.version) ~= "string"
+				or type(result.release.notes) ~= "string") then
+			failed(E.BAD_RESPONSE, "Invalid release from update worker")
+			return
+		end
+		if result.etag then plugin:saveSetting(UpdateDialog.ETAG, result.etag) end
+		if automatic then
+			if result.status == "update" and plugin:getSetting(UpdateDialog.AUTO_CHECK) ~= false
+				and plugin:getSetting(UpdateDialog.SKIPPED) ~= result.release.version
+				and plugin:getSetting(UpdateDialog.NOTIFIED) ~= result.release.version then
+				plugin:saveSetting(UpdateDialog.NOTIFIED, result.release.version)
+				UIManager:show(Notification:new {
+					text = T(_("OPDS Plus %1 is available. Install it from Settings → Updates."), result.release.version),
+				})
+			end
+		elseif result.status == "update" or result.status == "skipped" then
+			UpdateDialog.showRelease(plugin, updater, result.release)
+		else
+			UIManager:show(InfoMessage:new {
+				text = T(_("OPDS Plus %1 is up to date."), updater.current_version),
+				timeout = 3,
+			})
+		end
+	end
+	job.timeout = function()
+		if UpdateDialog._check_job ~= job then return end
+		job:cancel()
+		failed(E.NETWORK, "Update check timed out")
+	end
+	Trapper:wrap(function()
+		UIManager:show(widget)
+		if not automatic then UIManager:forceRePaint() end
+		UIManager:scheduleIn(Constants.OTA.CHECK_TOTAL_TIMEOUT, job.timeout)
+		local completed, packet = Trapper:dismissableRunInSubprocess(function()
+			return prepareCheck(updater, state)
+		end, widget)
+		job.running = false
+		UIManager:unschedule(job.timeout)
+		UIManager:close(widget)
+		if job.cancelled then
+			if UpdateDialog._check_job == job then UpdateDialog._check_job = nil end
+		elseif completed then
+			deliver(packet)
+		elseif automatic then
+			UpdateDialog._check_job = nil
+			failed(E.NETWORK, "Could not start update worker")
+		else
+			logger.warn("OPDS+ OTA: could not start update worker")
+			job.fallback = ConfirmBox:new {
+				text = _("Background update checking is unavailable. Check in the foreground instead? Input will pause until checking finishes."),
+				ok_text = _("Check"),
+				ok_callback = function()
+					if not job.cancelled and generation == check_generation then
+						deliver(prepareCheck(updater, state))
+					end
+				end,
+				cancel_callback = function() job:cancel() end,
+			}
+			UIManager:show(job.fallback)
+		end
+	end)
+	return true
 end
 
 --- Installs a release: preflight, download in a subprocess the user can cancel, then verify and swap here,
@@ -129,6 +290,7 @@ function UpdateDialog.install(plugin, updater, release)
 	if UpdateDialog.restartGate() then
 		return
 	end
+	UpdateDialog.cancelCheck()
 	local ready, err, detail = updater:preflight(release, { allow_dev = plugin:getSetting(UpdateDialog.ALLOW_DEV) == true })
 	if not ready then
 		showError(err, detail, release)
@@ -218,75 +380,41 @@ function UpdateDialog.checkNow(plugin)
 	if UpdateDialog.restartGate() then
 		return
 	end
-	local updater, new_err = UpdateDialog.newUpdater(plugin)
-	if not updater then
-		showError(new_err)
-		return
-	end
-	NetworkMgr:runWhenOnline(function()
-		local info = InfoMessage:new({ text = _("Checking for updates…") })
-		UIManager:show(info)
-		UIManager:forceRePaint()
-		local result, err, detail = runCheck(plugin, updater, {})
-		UIManager:close(info)
-		if not result then
-			showError(err, detail, type(detail) == "table" and detail or nil)
-		elseif result.status == "update" or result.status == "skipped" then
-			UpdateDialog.showRelease(plugin, updater, result.release)
-		else
-			UIManager:show(InfoMessage:new({
-				text = T(_("OPDS Plus %1 is up to date."), updater.current_version),
-				timeout = 3,
-			}))
-		end
-	end)
+	if UpdateDialog._check_job and not UpdateDialog._check_job.automatic then return end
+	UpdateDialog.cancelCheck()
+	startCheck(plugin, false)
 end
 
 --- The weekly check: only when it is on, a week has passed and the device is already online. Errors are
 -- only logged; a new version is announced once, with a toast.
 -- @param now number|nil os.time(), for specs
--- @return boolean whether a check was made
+-- @return boolean whether a background check was started
 function UpdateDialog.autoCheck(plugin, now)
 	now = now or os.time()
-	if plugin:getSetting(UpdateDialog.AUTO_CHECK) == false or OtaUpdater.restart_pending then
+	if plugin:getSetting(UpdateDialog.AUTO_CHECK) == false or OtaUpdater.restart_pending or UpdateDialog._check_job then
 		return false
 	end
 	local last = tonumber(plugin:getSetting(UpdateDialog.LAST_CHECK)) or 0
 	if last <= now and now - last < Constants.OTA.CHECK_INTERVAL_SECONDS then
 		return false
 	end
-	if not NetworkMgr:isConnected() or not NetworkMgr:isOnline() then
-		return false
-	end
-	local updater = UpdateDialog.newUpdater(plugin)
-	if not updater then
-		return false
-	end
-	local result, err, detail = runCheck(plugin, updater, {
-		etag = plugin:getSetting(UpdateDialog.ETAG),
-		skipped_version = plugin:getSetting(UpdateDialog.SKIPPED),
-	}, now)
-	if not result then
-		logger.info("OPDS+ OTA: automatic check failed", err, detail)
-		return true
-	end
-	if result.status == "update" and plugin:getSetting(UpdateDialog.NOTIFIED) ~= result.release.version then
-		plugin:saveSetting(UpdateDialog.NOTIFIED, result.release.version)
-		UIManager:show(Notification:new({
-			text = T(_("OPDS Plus %1 is available. Install it from Settings → Updates."), result.release.version),
-		}))
-	end
-	return true
+	return startCheck(plugin, true, now)
 end
 
 --- Schedules the weekly check once the catalog is on screen
 function UpdateDialog.scheduleAutoCheck(plugin)
-	UIManager:scheduleIn(Constants.OTA.AUTO_CHECK_DELAY_SECONDS, function()
+	if UpdateDialog._scheduled_check then UIManager:unschedule(UpdateDialog._scheduled_check) end
+	local scheduled
+	scheduled = function()
+		if UpdateDialog._scheduled_check ~= scheduled then return end
+		UpdateDialog._scheduled_check = nil
 		local ok, err = pcall(UpdateDialog.autoCheck, plugin)
 		if not ok then
 			logger.warn("OPDS+ OTA: automatic check raised", err)
 		end
-	end)
+	end
+	UpdateDialog._scheduled_check = scheduled
+	UIManager:scheduleIn(Constants.OTA.AUTO_CHECK_DELAY_SECONDS, scheduled)
 end
 
 --- "Roll back to previous version"
@@ -294,6 +422,7 @@ function UpdateDialog.rollback(plugin)
 	if UpdateDialog.restartGate() then
 		return
 	end
+	UpdateDialog.cancelCheck()
 	local updater, new_err = UpdateDialog.newUpdater(plugin)
 	if not updater then
 		showError(new_err)

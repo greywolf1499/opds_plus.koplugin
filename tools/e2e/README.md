@@ -154,7 +154,8 @@ the installed version, not a physical minimum-version device.
 The kit refuses to start if automatic update checks are enabled. Its seed sets `ota_auto_check = false` at
 the storage root, not in a nested `settings` table. Profiling caught the old seed allowing an unrelated
 blocking updater connectivity probe during cold-start measurements; those mixed measurements are not used
-for the catalog comparison.
+for the catalog comparison. Update checks are now covered by the dedicated asynchronous-check assertions
+in the OTA kit; the catalog seed remains off to keep that kit independent of GitHub.
 
 ### Series descriptions
 
@@ -205,6 +206,14 @@ EMULATE_READER_W=600 EMULATE_READER_H=800 EMULATE_READER_DPI=167 tools/e2e/ota/r
 
 The compatibility path is run on the installed emulator; its production APIs are also checked against
 v2025.10 source. This does not claim a physical-device run or an entire v2025.10 binary/runtime test.
+
+For update-check responsiveness, the kit injects a 400 ms connectivity probe and a 600 ms release request.
+Both automatic and manual entry points must return within 350 ms, a 20 ms UI timer must keep ticking
+without a gap above 350 ms, and recorded process IDs must place both operations in children. Small-screen
+runs measured 56–79 ms maximum timer gaps. These are emulator results, not e-reader latency claims.
+The kit also checks duplicate suppression, parent-side settings, key and pan replay on automatic cancellation,
+offline no-wake behavior, cancellation by the plugin's suspend hook and collection of every owned worker.
+It never sends a real device/host suspend event. A retained run includes `update_checking.png`.
 
 ## opds
 
