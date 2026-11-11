@@ -23,6 +23,7 @@ local T = require("ffi/util").template
 local Constants = require("models.constants")
 local HttpClient = require("services.http_client")
 local FileUtils = require("utils.file_utils")
+local RequestHeaders = require("utils.request_headers")
 local StateManager = require("core.state_manager")
 
 local DownloadManager = {}
@@ -133,6 +134,8 @@ end
 function DownloadManager.downloadFile(browser, local_path, remote_url, username, password, caller_callback, options)
 	logger.dbg("Downloading file", local_path, "from", remote_url)
 	local code, headers, status, info
+	local basic_auth_origin = options and options.basic_auth_origin
+	if basic_auth_origin == nil then basic_auth_origin = browser.root_catalog_url or false end
 	local parsed = type(remote_url) == "string" and url.parse(remote_url)
 	if not parsed or not parsed.host then
 		logger.warn("DownloadManager:downloadFile: invalid download URL")
@@ -164,6 +167,7 @@ function DownloadManager.downloadFile(browser, local_path, remote_url, username,
 			user     = username,
 			password = password,
 		}, {
+			basic_auth_origin = basic_auth_origin,
 			sink = function()
 				---@type file*?
 				local handle = file
@@ -227,9 +231,14 @@ end
 -- @param caller_callback function|nil Callback function on success
 -- @param options table|nil Optional extras, see downloadFile
 function DownloadManager.checkDownloadFile(browser, local_path, remote_url, username, password, caller_callback, options)
+	local download_options = {}
+	for key, value in pairs(options or {}) do download_options[key] = value end
+	if download_options.basic_auth_origin == nil then
+		download_options.basic_auth_origin = browser.root_catalog_url or false
+	end
 	local function download()
 		UIManager:scheduleIn(Constants.UI_TIMING.DOWNLOAD_SCHEDULE_DELAY, function()
-			DownloadManager.downloadFile(browser, local_path, remote_url, username, password, caller_callback, options)
+			DownloadManager.downloadFile(browser, local_path, remote_url, username, password, caller_callback, download_options)
 		end)
 		UIManager:show(InfoMessage:new {
 			text = _("Downloading…"),
@@ -254,6 +263,14 @@ end
 -- @param browser table OPDSBrowser instance
 -- @return number Count of successfully downloaded files
 function DownloadManager.downloadDownloadList(browser)
+	for __, item in ipairs(browser.downloads) do
+		if not item.basic_auth_origin and (item.username or item.password) then
+			UIManager:show(InfoMessage:new {
+				text = _("Some queued downloads have no saved catalog origin. Their username and password will not be sent. If authentication is required, remove these entries and add them again from their catalog."),
+			})
+			break
+		end
+	end
 	local info = InfoMessage:new { text = _("Downloading… (tap to cancel)") }
 	UIManager:show(info)
 	UIManager:forceRePaint()
@@ -262,7 +279,7 @@ function DownloadManager.downloadDownloadList(browser)
 		local dl = {}
 		for _, item in ipairs(browser.downloads) do
 			if DownloadManager.downloadFile(browser, item.file, item.url, item.username, item.password, nil,
-				{ description = item.info }) then
+				{ description = item.info, basic_auth_origin = item.basic_auth_origin or false }) then
 				dl[item.file] = true
 			end
 		end
@@ -322,7 +339,7 @@ function DownloadManager.downloadPendingSyncs(browser, dl_list)
 						table.insert(dupe_list, item)
 					else
 						if DownloadManager.downloadFile(browser, item.file, item.url, item.username, item.password, nil,
-							{ description = item.info }) then
+							{ description = item.info, basic_auth_origin = item.catalog or false }) then
 							dl[item.file] = true
 						end
 					end
@@ -390,6 +407,7 @@ end
 -- @param browser table OPDSBrowser instance
 -- @param download_item table Item with file, url, username, password, info, catalog
 function DownloadManager.addToDownloadQueue(browser, download_item)
+	download_item.basic_auth_origin = RequestHeaders.originKey(browser.root_catalog_url) or false
 	table.insert(browser.downloads, download_item)
 	StateManager.getInstance():markDirty()
 end

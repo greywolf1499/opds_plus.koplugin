@@ -251,6 +251,50 @@ describe("HttpClient.request", function()
 	end)
 
 	describe("credentials", function()
+		it("scopes the first request to the supplied catalog origin, not its target", function()
+			for _, target in ipairs({
+				"https://b.example/book", "https://a.example:8443/book", "http://a.example/book",
+			}) do
+				http:on(target, { code = 200 })
+				HttpClient.request({ url = target, user = "reader", password = "secret" },
+					{ basic_auth_origin = "https://a.example/opds" })
+				local request = http.requests[#http.requests]
+				assert.is_nil(request.user, target)
+				assert.is_nil(request.password, target)
+			end
+			http:on("https://a.example/book", { code = 200 })
+			HttpClient.request({ url = "https://a.example/book", user = "reader", password = "secret" },
+				{ basic_auth_origin = "https://A.Example:443/opds?key=example" })
+			assert.equals("reader", http.requests[4].user)
+			assert.equals("secret", http.requests[4].password)
+			HttpClient.request({ url = "https://a.example/book", user = "reader", password = "secret" },
+				{ basic_auth_origin = false })
+			assert.is_nil(http.requests[5].user)
+			assert.is_nil(http.requests[5].password)
+		end)
+
+		it("keeps Basic provenance separate from provider tokens and destination headers on every hop", function()
+			HttpClient.setCatalogs({
+				{ url = "https://b.example/opds", headers = { { name = "X-Access", value = "destination" } } },
+			})
+			http:on("https://b.example/book", redirect(302, "https://a.example/book"))
+			http:on("https://a.example/book", redirect(302, "https://c.example/book"))
+			http:on("https://c.example/book", { code = 200 })
+			HttpClient.request({
+				url = "https://b.example/book", user = "reader", password = "secret",
+				headers = { Authorization = "Bearer provider" },
+			}, { basic_auth_origin = "https://a.example/opds" })
+			assert.is_nil(http.requests[1].user)
+			assert.equals("Bearer provider", http.requests[1].headers.Authorization)
+			assert.equals("destination", http.requests[1].headers["X-Access"])
+			assert.equals("reader", http.requests[2].user)
+			assert.is_nil(http.requests[2].headers.Authorization)
+			assert.is_nil(http.requests[2].headers["X-Access"])
+			assert.is_nil(http.requests[3].user)
+			assert.is_nil(http.requests[3].password)
+			assert.is_nil(http.requests[3].headers.Authorization)
+		end)
+
 		it("sends Basic credentials again when the redirect stays on the same origin", function()
 			http:on("https://a.example/opds", redirect(301, "/opds/"))
 			http:on("https://a.example/opds/", { code = 200 })

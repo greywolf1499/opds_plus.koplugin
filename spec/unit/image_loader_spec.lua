@@ -4,7 +4,7 @@ local ui_stub = require("support.ui")
 describe("ImageLoader scheduling", function()
 	local ImageLoader, ui, clock, directory
 	local children, paths, cached, writes, requests, kills, next_pid
-	local can_fork, cache_ok, errors
+	local can_fork, cache_ok, errors, fetch_content
 
 	local function step()
 		local task = table.remove(ui.scheduled, 1)
@@ -33,6 +33,10 @@ describe("ImageLoader scheduling", function()
 		clock, next_pid = 0, 0
 		can_fork, cache_ok, errors = true, true, {}
 		children, paths, cached, writes, requests, kills = {}, {}, {}, {}, {}, {}
+		fetch_content = function(url)
+			requests[#requests + 1] = url
+			return true, "downloaded " .. url
+		end
 		helper.global("os", setmetatable({
 			tmpname = function()
 				local path = directory .. "/image-" .. (#paths + 1)
@@ -76,10 +80,7 @@ describe("ImageLoader scheduling", function()
 				end,
 			},
 			["services.http_client"] = {
-				getUrlContent = function(url)
-					requests[#requests + 1] = url
-					return true, "downloaded " .. url
-				end,
+				getUrlContent = function(...) return fetch_content(...) end,
 			},
 			["services.cover_cache"] = {
 				get = function(url) return cached[url] end,
@@ -96,6 +97,38 @@ describe("ImageLoader scheduling", function()
 	end)
 
 	after_each(helper.reset)
+
+	it("scopes mixed-origin covers in workers, serial loads, fork fallback and prefetch", function()
+		package.loaded["services.http_client"] = nil
+		local http = require("support.fake_http").new()
+		local client = helper.load("services.http_client", {
+			["socket.http"] = http, socketutil = require("support.socketutil").new(),
+		})
+		fetch_content = client.getUrlContent
+		http:on(function() return true end, { code = 200, body = "image" })
+		for _, mode in ipairs({ "worker", "serial", "fallback", "prefetch" }) do
+			can_fork = mode ~= "fallback"
+			local urls = { "https://catalog.example/cover/" .. mode, "https://cdn.example/cover/" .. mode }
+			local batch
+			if mode == "prefetch" then
+				batch = ImageLoader:prefetch(urls, "reader", "secret", nil, nil, nil, "https://catalog.example/opds")
+			else
+				batch = ImageLoader:loadImages(urls, nil, "reader", "secret", false,
+					nil, nil, mode ~= "serial", "https://catalog.example/opds")
+			end
+			step()
+			step()
+			if mode == "worker" or mode == "prefetch" then
+				complete(next_pid - 1)
+				complete(next_pid)
+			end
+			finish(batch)
+			assert.equals("reader", http.requests[#http.requests - 1].user, mode)
+			assert.equals("secret", http.requests[#http.requests - 1].password, mode)
+			assert.is_nil(http.requests[#http.requests].user, mode)
+			assert.is_nil(http.requests[#http.requests].password, mode)
+		end
+	end)
 
 	it("shares one delivery slot between completed children and cache hits", function()
 		cached.C = { content = "cached C" }

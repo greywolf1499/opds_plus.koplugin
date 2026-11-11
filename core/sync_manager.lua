@@ -195,6 +195,7 @@ function SyncManager.fillPendingSyncs(browser, server)
 	browser.root_catalog_raw_names = server.raw_names
 	browser.root_catalog_username  = server.username
 	browser.root_catalog_title     = server.title
+	browser.root_catalog_url       = server.url
 	browser.sync_server            = server
 	browser.sync_server_list       = browser.sync_server_list or {}
 	browser.sync_max_dl            = browser.settings.sync_max_dl or Constants.SYNC.DEFAULT_MAX_DOWNLOADS

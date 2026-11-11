@@ -213,7 +213,8 @@ function BookInfoDialog.build(browser, item)
 	local function showFullCover()
 		if cover_link then
 			OPDSPSE:streamPages(cover_link, 1, false,
-				browser.root_catalog_username, browser.root_catalog_password)
+				browser.root_catalog_username, browser.root_catalog_password, nil,
+				{ basic_auth_origin = browser.root_catalog_url or false })
 		end
 	end
 
@@ -318,7 +319,8 @@ function BookInfoDialog.build(browser, item)
 				browser.settings and browser.settings.cover_cache_enabled ~= false,
 				browser.settings and browser.settings.cover_cache_max_mb,
 				browser.settings and browser.settings.cover_cache_ttl_minutes,
-				browser.settings and browser.settings.cover_parallel_downloads ~= false
+				browser.settings and browser.settings.cover_parallel_downloads ~= false,
+				browser.root_catalog_url or false
 			)
 		end
 	end

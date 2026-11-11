@@ -42,6 +42,7 @@ describe("DownloadManager", function()
 	local function new_browser(fields)
 		local browser = {
 			settings = {},
+			root_catalog_url = CATALOG,
 			downloads = {},
 			sync_server_list = { [CATALOG] = true },
 			updates = 0,
@@ -682,6 +683,16 @@ describe("DownloadManager", function()
 			assert.same({ description = "A desert planet." }, doc_settings.saved[target].custom_props)
 		end)
 
+		it("captures credential provenance before a delayed download and later catalog navigation", function()
+			browser.root_catalog_url = "https://source.example/opds"
+			DownloadManager.checkDownloadFile(browser, target, URL, "reader", "secret")
+			browser.root_catalog_url = CATALOG
+			ui:run_scheduled()
+			assert.equals(BODY, fs.read(target))
+			assert.is_nil(http.requests[1].user)
+			assert.is_nil(http.requests[1].password)
+		end)
+
 		it("asks before it overwrites a file that exists", function()
 			fs.write(target, "old copy")
 
@@ -768,8 +779,13 @@ describe("DownloadManager", function()
 			registry.open_document = function()
 				return book_document({ title = "Dune" })
 			end
-			local a = entry("a.epub", nil, { username = "ann", password = "secret", info = "About A" })
-			browser.downloads = { a, entry("b.epub", nil, { username = "bob", password = "pw" }) }
+			local a = entry("a.epub", nil, {
+				username = "ann", password = "secret", info = "About A", basic_auth_origin = HOST,
+			})
+			browser.downloads = { a, entry("b.epub", nil, {
+				username = "bob", password = "pw", basic_auth_origin = HOST,
+			}) }
+			browser.root_catalog_url = "https://elsewhere.example/opds"
 
 			DownloadManager.downloadDownloadList(browser)
 
@@ -779,6 +795,27 @@ describe("DownloadManager", function()
 			assert.equals("pw", http.requests[2].password)
 			assert.same({ description = "About A" }, doc_settings.saved[a.file].custom_props)
 			assert.is_nil(doc_settings.saved[dir .. "/b.epub"])
+		end)
+
+		it("withholds unproven legacy credentials and explains how to restore authenticated downloads", function()
+			local legacy = entry("legacy.epub", { code = 401 }, { username = "reader", password = "secret" })
+			browser.downloads = { legacy }
+			assert.equals(0, DownloadManager.downloadDownloadList(browser))
+			assert.is_nil(http.requests[1].user)
+			assert.is_nil(http.requests[1].password)
+			assert.same({ legacy }, browser.downloads)
+			assert.matches("no saved catalog origin", ui:texts()[1], 1, true)
+		end)
+
+		it("retains a queued book's origin after the browser switches to its foreign download host", function()
+			local queued = entry("foreign.epub", nil, { username = "reader", password = "secret" })
+			browser.root_catalog_url = "https://source.example/opds?apiKey=example"
+			DownloadManager.addToDownloadQueue(browser, queued)
+			assert.equals("https://source.example:443", queued.basic_auth_origin)
+			browser.root_catalog_url = CATALOG
+			assert.equals(1, DownloadManager.downloadDownloadList(browser))
+			assert.is_nil(http.requests[1].user)
+			assert.is_nil(http.requests[1].password)
 		end)
 
 		describe("when the user cancels", function()
@@ -835,6 +872,22 @@ describe("DownloadManager", function()
 			assert.equals("contents of b.epub", fs.read(b.file))
 			assert.same({ "2 books downloaded" }, toasts())
 			assert.equals(1, state.dirty)
+		end)
+
+		it("uses each sync entry's recorded catalog URL, not the currently displayed catalog", function()
+			local other = "https://source.example/opds"
+			browser.root_catalog_url = other
+			browser.sync_server_list[other] = true
+			local list = {
+				entry("same.epub", nil, { username = "reader", password = "secret" }),
+				entry("foreign.epub", nil, { username = "reader", password = "secret", catalog = other }),
+			}
+			DownloadManager.downloadPendingSyncs(browser, list)
+			assert.equals("reader", http.requests[1].user)
+			assert.equals("secret", http.requests[1].password)
+			assert.is_nil(http.requests[2].user)
+			assert.is_nil(http.requests[2].password)
+			assert.same({}, list)
 		end)
 
 		it("leaves books of other catalogs pending", function()
@@ -969,7 +1022,10 @@ describe("DownloadManager", function()
 
 			DownloadManager.addToDownloadQueue(browser, { file = "/books/b.epub" })
 
-			assert.same({ { file = "/books/a.epub" }, { file = "/books/b.epub" } }, browser.downloads)
+			assert.same({
+				{ file = "/books/a.epub" },
+				{ file = "/books/b.epub", basic_auth_origin = HOST .. ":443" },
+			}, browser.downloads)
 			assert.equals(1, state.dirty)
 		end)
 

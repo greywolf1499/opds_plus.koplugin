@@ -47,7 +47,7 @@ function NavigationHandler.updateCatalog(item_url, browser, paths_updated)
 			local items
 			items, facets, search = NavigationHandler.genItemTableFromCatalog(catalog, url, context, debug_callback)
 			return items
-		end
+		end, nil, context.basic_auth_origin
 	)
 
 	return NavigationHandler.applyCatalog(menu_table, facets, search, item_url, browser, paths_updated)
@@ -122,7 +122,7 @@ function NavigationHandler.appendCatalog(item_url, browser)
 			local items, facets, search = NavigationHandler.genItemTableFromCatalog(
 				catalog, url, context, debug_callback)
 			return items
-		end
+		end, nil, context.basic_auth_origin
 	)
 
 	return NavigationHandler.appendItems(menu_table, browser)

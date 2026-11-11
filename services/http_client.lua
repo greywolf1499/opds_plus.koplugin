@@ -49,6 +49,18 @@ function HttpClient.withCustomHeaders(url, headers)
     return RequestHeaders.apply(headers, HttpClient.customHeadersFor(url))
 end
 
+-- Missing provenance is deliberately not inferred from the destination.
+function HttpClient.basicCredentialsFor(url, origin, username, password)
+    local key = RequestHeaders.originKey(origin)
+    if key and RequestHeaders.originKey(url) == key then
+        return username, password
+    end
+    if username or password then
+        logger.dbg("OPDS: withholding Basic credentials outside their catalog origin")
+    end
+    return nil, nil
+end
+
 -- Statuses a redirect is followed for. LuaSocket follows all of them but 308.
 local REDIRECT_STATUSES = {
     [Constants.HTTP_STATUS.MOVED_PERMANENTLY] = true,
@@ -150,8 +162,8 @@ end
 -- LuaSocket builds the request after a redirect from the headers alone. Basic credentials are dropped,
 -- even when the redirect stays on the same server, TLS settings are dropped, and the custom headers of a
 -- catalog go along to wherever the redirect points. Here every hop is built from the original request:
---  * Basic credentials and Authorization, Cookie and Proxy-Authorization headers only go to the origin
---    (scheme, host and port) of the first URL
+--  * Basic credentials only go to their declared catalog origin (the first URL for direct callers)
+--  * Authorization, Cookie and Proxy-Authorization headers only go to the first URL's origin
 --  * the custom headers of a catalog only go to that catalog's origin
 --  * every other option of the request, TLS settings included, is kept
 -- 301, 302, 303, 307 and 308 are followed, for GET and HEAD. A redirect that is not followed is returned
@@ -164,6 +176,8 @@ end
 --   https_only boolean    Refuse every URL that is not https, a redirect to http included
 --   allow_host function   Called with the lower-cased host of every URL; returns false to refuse it
 --   custom_headers boolean  Set false to never add the custom headers of catalogs
+--   basic_auth_origin string|false  Source of user/password; false withholds them. Omit only when
+--                                   credentials were supplied for the request URL itself.
 --   max_bytes number      Refuse a body larger than this (only when the body is kept in memory)
 --   total_timeout boolean Stop a body that outlasts socketutil's total timeout (only when the body is kept in
 --                         memory; a sink of your own decides for itself)
@@ -179,6 +193,8 @@ function HttpClient.request(request, options)
     local http = require("socket.http")
     local max_redirects = options.max_redirects or Constants.MAX_REDIRECTS
     local first_origin = RequestHeaders.originKey(request.url)
+    local basic_origin = options.basic_auth_origin
+    if basic_origin == nil then basic_origin = first_origin end
     local follows = request.source == nil and (request.method == nil or request.method == "GET"
         or request.method == "HEAD")
     local url = request.url
@@ -213,9 +229,7 @@ function HttpClient.request(request, options)
         hop.redirect = false
         hop.sink = sink
         hop.headers = headersForHop(request, url, same_origin, options)
-        if not same_origin then
-            hop.user, hop.password = nil, nil
-        end
+        hop.user, hop.password = HttpClient.basicCredentialsFor(url, basic_origin, request.user, request.password)
 
         local ok, code, headers, status = http.request(hop)
         if not ok then
@@ -245,8 +259,9 @@ end
 -- @param maxtime number|nil Maximum request time (default: Constants.TIMEOUTS.MAX_TIME)
 -- @param username string|nil HTTP auth username
 -- @param password string|nil HTTP auth password
+-- @param basic_auth_origin string|false|nil Catalog origin, false if unknown; nil for direct target credentials
 -- @return Result Result object with content on success, error on failure
-function HttpClient.fetch(url, timeout, maxtime, username, password)
+function HttpClient.fetch(url, timeout, maxtime, username, password, basic_auth_origin)
     local socket = require("socket")
     local socketutil = require("socketutil")
     local socket_url = require("socket.url")
@@ -264,7 +279,7 @@ function HttpClient.fetch(url, timeout, maxtime, username, password)
         method   = "GET",
         user     = username,
         password = password,
-    }, { total_timeout = maxtime ~= nil }))
+    }, { total_timeout = maxtime ~= nil, basic_auth_origin = basic_auth_origin }))
     socketutil:reset_timeout()
     local content = info.body or ""
 
@@ -312,9 +327,10 @@ end
 -- @param maxtime number|nil Maximum request time
 -- @param username string|nil HTTP auth username
 -- @param password string|nil HTTP auth password
+-- @param basic_auth_origin string|false|nil Catalog origin, false if unknown; nil for direct target credentials
 -- @return boolean, string Success flag and content or error message
-local function getUrlContent(url, timeout, maxtime, username, password)
-    local result = HttpClient.fetch(url, timeout, maxtime, username, password)
+local function getUrlContent(url, timeout, maxtime, username, password, basic_auth_origin)
+    local result = HttpClient.fetch(url, timeout, maxtime, username, password, basic_auth_origin)
     return result:unpack()
 end
 

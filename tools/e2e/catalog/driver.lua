@@ -3674,16 +3674,18 @@ local function customheaders_steps()
         end,
         -- Another origin gets none of them; an Authorization header replaces the catalog's basic auth.
         function()
-            local ok, body = HttpClient.getUrlContent(OTHER .. "/opds/echo")
+            local ok, body = HttpClient.getUrlContent(OTHER .. "/opds/echo", nil, nil, "reader", "secret", BASE)
             c.check("scope.other_origin_still_reaches_the_server", ok == true and body:find("Echo request headers", 1, true)
                 ~= nil, ok and "" or body)
             body = ok and body:lower() or ""
             c.check("scope.other_origin_gets_none_of_the_headers", ok == true and not body:find("cf-access", 1, true)
                 and not body:find("x-test-note", 1, true))
+            c.check("scope.initial_foreign_url_gets_no_basic_auth", ok == true
+                and not body:find("authorization:", 1, true))
 
             local live = server_named("Mock Cloudflare").headers
             table.insert(live, { name = "Authorization", value = "Bearer custom-token" })
-            ok, body = HttpClient.getUrlContent(BASE .. "/opds/echo", nil, nil, "reader", "secret")
+            ok, body = HttpClient.getUrlContent(BASE .. "/opds/echo", nil, nil, "reader", "secret", BASE)
             table.remove(live)
             body = ok and body:lower() or ""
             c.check("echo.authorization_header_replaces_basic_auth", body:find("authorization: bearer custom-token", 1, true)
@@ -3691,6 +3693,20 @@ local function customheaders_steps()
             ok, body = HttpClient.getUrlContent(BASE .. "/opds/echo", nil, nil, "reader", "secret")
             body = ok and body:lower() or ""
             c.check("echo.basic_auth_is_unchanged_without_it", body:find("authorization: basic", 1, true) ~= nil)
+        end,
+        function()
+            b = open_browser()
+            b.root_catalog_url = OTHER .. "/previous-catalog"
+            b:openCatalog({
+                url = BASE .. "/opds/echo", text = "Credential scope fixture",
+                username = "reader", password = "secret",
+            })
+        end,
+        function()
+            c.check("scope.new_root_uses_its_own_basic_origin",
+                listing_text():lower():find("authorization: basic", 1, true) ~= nil)
+            c.check("scope.new_root_commits_its_url", b.root_catalog_url == BASE .. "/opds/echo")
+            close_browser(p)
         end,
         -- A catalog added from scratch on another origin sends only its own headers, and the first one keeps its own.
         function()
@@ -3739,6 +3755,7 @@ local function customheaders_steps()
         end,
         function()
             servers_before = #p.servers
+            b.root_catalog_username, b.root_catalog_password = "reader", "secret"
             b:addSubCatalog(BASE .. "/cf/feed?sub=1")
             local dialog = window_titled("Add OPDS catalog")
             c.check("sub.dialog_opens", dialog ~= nil)
@@ -3747,6 +3764,8 @@ local function customheaders_steps()
             c.check("sub.catalog_is_added", #p.servers == servers_before + 1 and added ~= nil
                 and added.url == BASE .. "/cf/feed?sub=1")
             c.check("sub.same_origin_gets_the_headers", added ~= nil and same_headers(added.headers, live.headers))
+            c.check("sub.same_origin_keeps_basic_credentials", added ~= nil
+                and added.username == "reader" and added.password == "secret")
             c.check("sub.headers_are_a_copy", added ~= nil and added.headers ~= live.headers
                 and added.headers[1] ~= live.headers[1])
             if added and added.headers then
@@ -3759,6 +3778,8 @@ local function customheaders_steps()
             c.check("sub.other_origin_is_added", #p.servers == servers_before + 2 and other ~= nil
                 and other.url == OTHER .. "/cf/feed?sub=2")
             c.check("sub.other_origin_gets_no_headers", other ~= nil and other.headers == nil)
+            c.check("sub.other_origin_gets_no_basic_credentials", other ~= nil
+                and other.username == nil and other.password == nil)
             while #p.servers > servers_before do table.remove(p.servers) end
             close_browser(p)
         end,

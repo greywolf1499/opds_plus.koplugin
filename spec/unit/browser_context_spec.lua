@@ -25,6 +25,7 @@ describe("BrowserContext", function()
 			image_rel = "image-rel",
 			root_catalog_username = "ann",
 			root_catalog_password = "secret",
+			root_catalog_url = "https://catalog.example/opds",
 			sync = false,
 			settings = { prefer_large_covers = true, navigation_thumbnails = false },
 		}
@@ -56,6 +57,7 @@ describe("BrowserContext", function()
 				navigation_thumbnails = false,
 				username = "ann",
 				password = "secret",
+				basic_auth_origin = "https://catalog.example:443",
 			}, BrowserContext.fromBrowser(browser))
 		end)
 
@@ -128,7 +130,9 @@ describe("BrowserContext", function()
 			local browser = newBrowser()
 			local expected = BrowserContext.fromBrowser(browser)
 			expected.username, expected.password = "bob", "hunter2"
-			assert.same(expected, BrowserContext.withAuth(browser, "bob", "hunter2"))
+			expected.basic_auth_origin = "https://other.example:443"
+			assert.same(expected, BrowserContext.withAuth(browser, "bob", "hunter2", "https://other.example/feed"))
+			assert.is_false(BrowserContext.withAuth(browser, "bob", "hunter2").basic_auth_origin)
 		end)
 
 		it("uses no credentials when given nil", function()
