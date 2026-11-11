@@ -5013,6 +5013,109 @@ local function streamresume_steps()
     }
 end
 
+local function authentication_steps()
+    local c = checker("authentication")
+    local p, b, real_request, first_fork
+    local address = "https://auth.example.invalid"
+    local document = [[{"id":"https://auth.example.invalid/auth","title":"Fixture Library",
+      "description":"Authentication discovery fixture.",
+      "authentication":[{"type":"http://opds-spec.org/auth/basic","labels":{"login":"Card","password":"PIN"}},
+      {"type":"http://opds-spec.org/auth/oauth/password"}]}]]
+    local function information()
+        local widget = UIManager:getTopmostVisibleWidget()
+        if widget and widget.title == "Authentication information" and type(widget.text) == "string"
+            and widget.text:find("Fixture Library", 1, true) then return widget end
+    end
+    return {
+        function()
+            current = "authentication"
+            mark("authentication")
+            p, b = plugin(), open_browser()
+            close_window_with_text("rendered in color")
+            close_window_with_text("cache database")
+            local http = require("socket.http")
+            real_request = http.request
+            http.request = function(request)
+                if request.url:sub(1, #address + 1) ~= address .. "/" then return real_request(request) end
+                local code, body, headers = 200, document, { ["content-type"] = "application/opds-authentication+json" }
+                if request.url == address .. "/public" then
+                    body = '<feed><title>Public</title><entry><title>Books</title>'
+                        .. '<link href="/books" type="application/atom+xml"/></entry></feed>'
+                    headers = { ["content-type"] = "application/atom+xml", link =
+                        '</auth>; rel="http://opds-spec.org/auth/document"; type="application/opds-authentication+json"' }
+                elseif request.url == address .. "/protected" then
+                    code = 401
+                elseif request.url == address .. "/slow" then
+                    require("socket").sleep(1.2)
+                    code = 401
+                elseif request.url == address .. "/auth" then
+                    assert(request.verify == "peer" and type(request.create) == "function", "unverified discovery")
+                    assert(not request.user and not request.password, "discovery received Basic credentials")
+                    assert(not request.headers.Authorization, "discovery received catalog headers")
+                else
+                    error("unexpected authentication fixture endpoint")
+                end
+                request.sink(body)
+                request.sink(nil)
+                return 1, code, headers, "HTTP/1.1 fixture"
+            end
+            watch_forks(true)
+            first_fork = #fork_pids + 1
+            b:openCatalog({ text = "Discovery fixture", url = address .. "/protected" })
+        end,
+        function(advance)
+            wait_for(information, 10, function(done)
+                local widget = information()
+                c.check("401_document_is_scrollable", done and widget and widget.text:find("Card", 1, true)
+                    and widget.text:find("PIN", 1, true))
+                c.check("unsupported_flow_is_explained", widget and widget.text:find("OAuth login is not supported", 1, true))
+                c.check("authentication_does_not_change_navigation", #b.paths == 0)
+                UIManager:forceRePaint()
+                shot("authentication_information")
+                if widget then UIManager:close(widget) end
+                b:openCatalog({ text = "Public fixture", url = address .. "/public" })
+                advance()
+            end)
+            return "async"
+        end,
+        function(advance)
+            wait_for(function() return b.item_table[2] and b.item_table[2].authentication end, 10, function(done)
+                c.check("public_catalog_remains_available", done and b.item_table[1].text == "Books")
+                c.check("linked_discovery_is_explicit", done and b.item_table[2].text == "Authentication information")
+                b:onMenuSelect(b.item_table[2])
+                advance()
+            end)
+            return "async"
+        end,
+        function(advance)
+            wait_for(information, 10, function(done)
+                c.check("linked_document_uses_worker_and_verified_transport", done)
+                local widget = information()
+                if widget then UIManager:close(widget) end
+                c.check("linked_document_keeps_listing", #b.paths == 1 and b.item_table[1].text == "Books")
+                b:openCatalog({ text = "Slow discovery", url = address .. "/slow" })
+                UIManager:scheduleIn(0.1, function()
+                    b:cancelCatalogLoad()
+                    advance()
+                end)
+            end)
+            return "async"
+        end,
+        function(advance)
+            wait_for(function() return alive_children(first_fork) == 0 end, 10, function(done)
+                c.check("cancel_reaps_workers", done)
+                c.check("cancel_does_not_display_late_authentication", not information() and #b.paths == 1)
+                require("socket.http").request = real_request
+                unwatch_forks()
+                close_browser(p)
+                c.finish()
+                advance()
+            end)
+            return "async"
+        end,
+    }
+end
+
 local function streamsync_steps()
     local c = checker("streamsync")
     local Json = require("rapidjson")
@@ -5461,6 +5564,7 @@ local EXTRA = {
     { name = "catalogloading", steps = catalogloading_steps },
     { name = "streamloading", steps = streamloading_steps },
     { name = "streamsync", steps = streamsync_steps },
+    { name = "authentication", steps = authentication_steps },
     { name = "cwapaging", steps = cwapaging_steps, explicit = true },
     { name = "cwadownload", steps = cwadownload_steps, explicit = true },
     { name = "filenames", steps = filenames_steps },

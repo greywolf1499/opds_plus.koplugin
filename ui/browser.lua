@@ -371,6 +371,9 @@ end
 --- Show the entries of a catalog, or ask for the terms of a search item.
 -- An item of the root list also sets the credentials used for everything below it.
 function OPDSBrowser:openCatalog(item)
+    if item.authentication then
+        return self:loadCatalog(item.authentication.url, { authentication = item.authentication }, function() end)
+    end
     self:cancelCatalogLoad()
     local generation = self._catalog_generation
     local root = #self.paths == 0

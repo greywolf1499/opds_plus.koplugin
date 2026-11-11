@@ -49,6 +49,112 @@ describe("FeedFetcher", function()
 
 	after_each(helper.reset)
 
+	describe("authentication discovery", function()
+		local AUTH = [[{"id":"https://library.example.org/auth","title":"Fixture Library",
+			"authentication":[{"type":"http://opds-spec.org/auth/basic","labels":{"login":"Card","password":"PIN"}},
+			{"type":"http://opds-spec.org/auth/oauth/implicit"}]}]]
+		before_each(function()
+			helper.stub("rapidjson", require("support.json_shims").rapidjson())
+			helper.stub("libs/libkoreader-lfs", { attributes = function() return "file" end })
+		end)
+
+		it("reports 401 authentication documents through cancellable worker state instead of parsing a feed", function()
+			route(URL, { code = 401, headers = { ["Content-Type"] = "application/opds-authentication+json" }, body = AUTH })
+			local state = FeedFetcher.newRequestState(URL)
+			assert.is_nil(FeedFetcher.parseFeed(URL, nil, nil, nil, state))
+			assert.same({}, ui.shown)
+			FeedFetcher.applyRequestState(state)
+			assert.equals("TextViewer", ui:last().kind)
+			assert.matches("Fixture Library", message())
+			assert.matches("Card", message())
+			assert.matches("OAuth login is not supported", message())
+			assert.equals(1, #http.requests)
+			local packet = assert(require("services.catalog_loader").prepare(URL, require("support.context")()))
+			assert.equals(1, #packet.state.errors)
+			assert.is_true(packet.state.errors[1].authentication)
+		end)
+
+		it("retrieves a linked document with verified TLS and no catalog credentials or custom headers", function()
+			HttpClient.setCatalogs({ { url = URL, headers = { { name = "Authorization", value = "Bearer secret" } } } })
+			route(URL, { code = 401, headers = { Link =
+				'</auth>; rel="http://opds-spec.org/auth/document"; type="application/opds-authentication+json"' } })
+			route("https://library.example.org/auth", { body = AUTH })
+			assert.is_nil(FeedFetcher.parseFeed(URL, "reader", "secret"))
+			assert.matches("Fixture Library", message())
+			local request = http.requests[2]
+			assert.is_nil(request.user)
+			assert.is_nil(request.password)
+			assert.is_nil(request.headers.Authorization)
+			assert.equals("peer", request.raw.verify)
+			assert.equals("data/ca-bundle.crt", request.raw.cafile)
+			assert.is_function(request.raw.create)
+			assert.is_false(request.raw.redirect)
+		end)
+
+		it("keeps public catalog entries and exposes authentication as an explicit action", function()
+			route(URL, { body = FEED, headers = { Link =
+				'</auth>; rel="http://opds-spec.org/auth/document"; type="application/opds-authentication+json"' } })
+			local feed = FeedFetcher.parseFeed(URL)
+			local items = require("core.navigation_handler").genItemTableFromCatalog(feed, URL, require("support.context")())
+			assert.equals("A Book", items[1].text)
+			assert.equals("Authentication information", items[2].text)
+			assert.equals("https://library.example.org/auth", items[2].authentication.url)
+			assert.equals(1, #http.requests)
+			route(items[2].authentication.url, { body = AUTH })
+			local packet = assert(require("services.catalog_loader").prepare(items[2].authentication.url,
+				{ authentication = items[2].authentication }))
+			assert.same({}, packet.items)
+			assert.is_true(packet.state.errors[1].authentication)
+			assert.equals(2, #http.requests)
+		end)
+
+		it("refuses cross-origin discovery and missing CA bundles without sending new requests", function()
+			local Auth = require("services.authentication")
+			local document, err = Auth.fetch("https://other.example/auth", URL)
+			assert.is_nil(document)
+			assert.matches("own server", err)
+			document, err = Auth.fetch("http://library.example.org/auth", URL)
+			assert.is_nil(document)
+			assert.matches("HTTPS", err)
+			helper.stub("libs/libkoreader-lfs", { attributes = function() return nil end })
+			document, err = Auth.fetch("https://library.example.org/auth", URL)
+			assert.is_nil(document)
+			assert.matches("trust bundle", err)
+			assert.same({}, http.requests)
+		end)
+
+		it("retains relative discovery links and their redirected base when revalidating a cached feed", function()
+			local destination = "https://library.example.org/library/catalog"
+			route(URL, { code = 302, headers = { location = destination } })
+			route(destination, { body = FEED, headers = { ETag = '"auth-feed"', Link =
+				'<auth.json>; rel="http://opds-spec.org/auth/document"; type="application/opds-authentication+json"' } })
+			local feed = FeedFetcher.parseFeed(URL)
+			assert.same({ url = "https://library.example.org/library/auth.json", source = destination },
+				feed._opdsplus_authentication)
+			route(destination, { code = 304 })
+			local revalidated = FeedFetcher.parseFeed(URL)
+			assert.same(feed._opdsplus_authentication, revalidated._opdsplus_authentication)
+		end)
+
+		it("maps an Atom discovery link parsed by the real XML parser", function()
+			route(URL, { body = FEED:gsub("</feed>",
+				'<link rel="http://opds-spec.org/auth/document" type="application/opds-authentication+json"'
+				.. ' href="/auth"/></feed>') })
+			local feed = FeedFetcher.parseFeed(URL)
+			assert.equals("https://library.example.org/auth", feed._opdsplus_authentication.url)
+			assert.equals(1, #http.requests)
+		end)
+
+		it("never follows an authentication-document redirect to a token endpoint", function()
+			local address = "https://library.example.org/auth"
+			route(address, { code = 302, headers = { location = "https://other.example/token" } })
+			local document, err = require("services.authentication").fetch(address, URL)
+			assert.is_nil(document)
+			assert.matches("securely load", err)
+			assert.equals(1, #http.requests)
+		end)
+	end)
+
 	describe("background request state", function()
 		it("keeps OPDS 2 OpenSearch credentials scoped and its errors in the worker packet", function()
 			helper.stub("rapidjson", require("support.json_shims").rapidjson())
