@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ## [Unreleased]
 
+### Changed
+
+- **Settings Menu Stays Open**: Closing the dialog of a setting (cover cache size and TTL, list cover size, grid layout and borders, title and info fonts and sizes) returns to the menu instead of leaving it closed.
+
 ## [1.6.0] - 2026-11-11
 
 **Update from within KOReader**: **OPDS Plus Catalog → Settings → Updates → Check for updates**, or install by hand.
